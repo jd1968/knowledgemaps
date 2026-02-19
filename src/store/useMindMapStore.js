@@ -42,6 +42,10 @@ export const useMindMapStore = create((set, get) => ({
   autosaveTimer: null,
   fitViewTrigger: 0,
 
+  // ── Submap navigation ─────────────────────────────────────────
+  // Each entry: { mapId, mapName }  — the trail of maps above the current one
+  breadcrumbs: [],
+
   // ── React Flow handlers ───────────────────────────────────────
 
   onNodesChange: (changes) => {
@@ -275,9 +279,10 @@ export const useMindMapStore = create((set, get) => ({
         set({ currentMapId: mapId })
       }
 
-      // Upsert all node content to the nodes table
-      if (nodes.length > 0) {
-        const nodeRows = nodes.map((n) => ({
+      // Upsert node content — skip submap pointer nodes (their content lives in the child map)
+      const contentNodes = nodes.filter((n) => !n.data.isSubmap)
+      if (contentNodes.length > 0) {
+        const nodeRows = contentNodes.map((n) => ({
           id: n.id,
           map_id: mapId,
           user_id: user?.id,
@@ -302,7 +307,7 @@ export const useMindMapStore = create((set, get) => ({
     }
   },
 
-  loadMap: async (mapId) => {
+  loadMap: async (mapId, breadcrumbs = []) => {
     try {
       // Load diagram layout and node content in parallel
       const [mapResult, nodesResult] = await Promise.all([
@@ -331,14 +336,149 @@ export const useMindMapStore = create((set, get) => ({
         selectedNodeId: null,
         saveStatus: 'idle',
         fitViewTrigger: state.fitViewTrigger + 1,
+        breadcrumbs,
       }))
 
-      localStorage.setItem('km_lastMapId', mapId)
+      // Only persist the last-opened map when at the root level
+      if (breadcrumbs.length === 0) {
+        localStorage.setItem('km_lastMapId', mapId)
+      }
       return { success: true }
     } catch (err) {
       console.error('Load failed:', err)
       return { success: false, error: err }
     }
+  },
+
+  // ── Submap ────────────────────────────────────────────────────
+
+  convertToSubmap: async (nodeId) => {
+    const { nodes, edges, currentMapId, currentMapName, isDirty, autosaveTimer } = get()
+    const node = nodes.find((n) => n.id === nodeId)
+    if (!node) return { success: false }
+
+    // Flush any pending autosave for the parent map first
+    if (isDirty && currentMapId) {
+      if (autosaveTimer) clearTimeout(autosaveTimer)
+      await get().saveMap()
+    }
+
+    const nodeLevel = node.data.level
+
+    // Build children map from edges
+    const childrenMap = {}
+    edges.forEach((e) => {
+      if (!childrenMap[e.source]) childrenMap[e.source] = []
+      childrenMap[e.source].push(e.target)
+    })
+
+    // Collect the node + all its descendants
+    const subtreeIds = new Set([nodeId])
+    const collectIds = (id) => {
+      ;(childrenMap[id] || []).forEach((kid) => { subtreeIds.add(kid); collectIds(kid) })
+    }
+    collectIds(nodeId)
+
+    const subtreeNodes = nodes.filter((n) => subtreeIds.has(n.id))
+    const subtreeEdges = edges.filter((e) => subtreeIds.has(e.source) && subtreeIds.has(e.target))
+
+    // Offset positions so the converted node lands at a nice centre
+    const offsetX = 350 - node.position.x
+    const offsetY = 250 - node.position.y
+
+    const submapNodes = subtreeNodes.map((n) => ({
+      ...n,
+      position: { x: n.position.x + offsetX, y: n.position.y + offsetY },
+      data: {
+        ...n.data,
+        level: n.id === nodeId ? 0 : Math.min(Math.max(n.data.level - nodeLevel, 1), 3),
+        // Clear submap pointer fields — nodes are "real" inside the submap
+        isSubmap: undefined,
+        submapId: undefined,
+        collapsed: n.id === nodeId ? false : n.data.collapsed,
+      },
+    }))
+
+    // Strip content from map JSON (content lives in nodes table)
+    const submapMapData = {
+      nodes: submapNodes.map(({ data: { content: _c, ...rest }, ...n }) => ({ ...n, data: rest })),
+      edges: subtreeEdges,
+      parentMapId: currentMapId,
+      parentNodeId: nodeId,
+    }
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+
+      // Create the new submap record
+      const { data: newMap, error: mapErr } = await supabase
+        .from('maps')
+        .insert({ name: node.data.title || 'Submap', data: submapMapData, user_id: user?.id })
+        .select()
+        .single()
+      if (mapErr) throw mapErr
+
+      // Write node content rows for the submap (this moves map_id ownership to the submap)
+      const contentRows = subtreeNodes.map((n) => ({
+        id: n.id,
+        map_id: newMap.id,
+        user_id: user?.id,
+        title: n.data.title || '',
+        content: n.data.content || '',
+      }))
+      const { error: contentErr } = await supabase
+        .from('nodes')
+        .upsert(contentRows, { onConflict: 'id' })
+      if (contentErr) throw contentErr
+
+      // Update parent map in memory: remove descendants, mark node as submap pointer
+      const descendantIds = new Set([...subtreeIds].filter((id) => id !== nodeId))
+      set((state) => ({
+        nodes: state.nodes
+          .filter((n) => !descendantIds.has(n.id))
+          .map((n) =>
+            n.id === nodeId
+              ? { ...n, data: { ...n.data, isSubmap: true, submapId: newMap.id, collapsed: false } }
+              : n
+          ),
+        edges: state.edges.filter(
+          (e) => !descendantIds.has(e.source) && !descendantIds.has(e.target)
+        ),
+        isDirty: true,
+      }))
+
+      // Save the updated parent map immediately
+      await get().saveMap()
+
+      return { success: true, submapId: newMap.id }
+    } catch (err) {
+      console.error('convertToSubmap failed:', err)
+      return { success: false, error: err }
+    }
+  },
+
+  navigateToSubmap: async (submapId) => {
+    const { currentMapId, currentMapName, breadcrumbs, isDirty, autosaveTimer } = get()
+    if (isDirty && currentMapId) {
+      if (autosaveTimer) clearTimeout(autosaveTimer)
+      await get().saveMap()
+    }
+    const newCrumbs = [...breadcrumbs, { mapId: currentMapId, mapName: currentMapName }]
+    return get().loadMap(submapId, newCrumbs)
+  },
+
+  navigateBack: async (targetIndex = null) => {
+    const { breadcrumbs } = get()
+    if (breadcrumbs.length === 0) return
+    let crumb, newCrumbs
+    if (targetIndex !== null) {
+      crumb = breadcrumbs[targetIndex]
+      newCrumbs = breadcrumbs.slice(0, targetIndex)
+    } else {
+      crumb = breadcrumbs[breadcrumbs.length - 1]
+      newCrumbs = breadcrumbs.slice(0, -1)
+    }
+    return get().loadMap(crumb.mapId, newCrumbs)
   },
 
   newMap: () => {

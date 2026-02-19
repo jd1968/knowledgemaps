@@ -199,6 +199,21 @@
   background: #fecaca;
 }
 
+.btn--secondary {
+  background: #f1f5f9;
+  color: #334155;
+  border: 1px solid #e2e8f0;
+}
+
+.btn--secondary:hover:not(:disabled) {
+  background: #e2e8f0;
+}
+
+.btn--secondary:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .icon-btn {
   display: inline-flex;
   align-items: center;
@@ -347,6 +362,32 @@
 .level-badge[data-level='2'] { background: #d1fae5; color: #064e3b; }
 .level-badge[data-level='3'] { background: #ede9fe; color: #3b0764; }
 
+.submap-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 20px;
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.submap-info {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.submap-info p {
+  margin: 0;
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.5;
+}
+
 .sidebar-body {
   flex: 1;
   overflow-y: auto;
@@ -360,6 +401,9 @@
   padding: 10px 14px;
   border-top: 1px solid #f1f5f9;
   flex-shrink: 0;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .field {
@@ -728,6 +772,81 @@
 
 .collapse-all-btn:hover {
   transform: translateX(-50%) scale(1.1);
+}
+
+/* ── Submap open button (always-visible on submap nodes) ─────────── */
+
+.submap-open-btn {
+  position: absolute;
+  right: -15px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  color: #fff;
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  z-index: 10;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  transition: transform 0.12s;
+}
+
+.submap-open-btn:hover {
+  transform: translateY(-50%) scale(1.15);
+}
+
+/* ── Breadcrumb navigation bar ────────────────────────────────────── */
+
+.breadcrumb-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(8px);
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  padding: 5px 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.breadcrumb-entry {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.breadcrumb-item {
+  background: none;
+  border: none;
+  padding: 0;
+  color: #3b82f6;
+  cursor: pointer;
+  font-size: 12px;
+  font-family: inherit;
+  line-height: 1;
+}
+
+.breadcrumb-item:hover {
+  text-decoration: underline;
+}
+
+.breadcrumb-sep {
+  color: #94a3b8;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.breadcrumb-current {
+  color: #0f172a;
+  font-weight: 600;
+  font-size: 12px;
+  line-height: 1;
 }
 
 /* ── Canvas hint ──────────────────────────────────────────────────── */

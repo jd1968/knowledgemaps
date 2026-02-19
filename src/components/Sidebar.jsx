@@ -1,12 +1,13 @@
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import { useMindMapStore } from '../store/useMindMapStore'
 import RichTextEditor from './RichTextEditor'
 
 const LEVEL_LABELS = { 0: 'Root', 1: 'Main Topic', 2: 'Subtopic', 3: 'Detail' }
 
 const Sidebar = () => {
-  const { nodes, selectedNodeId, updateNodeData, deselectNode, deleteNode } =
+  const { nodes, selectedNodeId, updateNodeData, deselectNode, deleteNode, convertToSubmap, navigateToSubmap } =
     useMindMapStore()
+  const [converting, setConverting] = useState(false)
 
   const selectedNode = nodes.find((n) => n.id === selectedNodeId)
 
@@ -37,6 +38,15 @@ const Sidebar = () => {
     }
   }, [selectedNode, selectedNodeId, deleteNode])
 
+  const handleConvertToSubmap = useCallback(async () => {
+    if (!selectedNode) return
+    if (!confirm(`Convert "${selectedNode.data.title}" to a submap?\n\nIts children will be moved into the new map.`)) return
+    setConverting(true)
+    const result = await convertToSubmap(selectedNodeId)
+    setConverting(false)
+    if (!result.success) alert('Failed to convert to submap. Please try again.')
+  }, [selectedNode, selectedNodeId, convertToSubmap])
+
   if (!selectedNode) {
     return (
       <div className="sidebar sidebar--empty">
@@ -45,7 +55,7 @@ const Sidebar = () => {
     )
   }
 
-  const { title, key, level, content } = selectedNode.data
+  const { title, key, level, content, isSubmap, submapId } = selectedNode.data
 
   return (
     <div className="sidebar">
@@ -54,6 +64,7 @@ const Sidebar = () => {
           <span className="level-badge" data-level={Math.min(level, 3)}>
             {LEVEL_LABELS[Math.min(level, 3)] || 'Node'} · L{level}
           </span>
+          {isSubmap && <span className="submap-badge">Submap</span>}
         </div>
         <button
           className="icon-btn"
@@ -82,18 +93,41 @@ const Sidebar = () => {
           <div className="key-display">{key}</div>
         </div>
 
-        <div className="field field--grow">
-          <label className="field-label">Notes</label>
-          <RichTextEditor
-            key={selectedNodeId}
-            content={content}
-            onChange={handleContentChange}
-          />
-        </div>
+        {!isSubmap && (
+          <div className="field field--grow">
+            <label className="field-label">Notes</label>
+            <RichTextEditor
+              key={selectedNodeId}
+              content={content}
+              onChange={handleContentChange}
+            />
+          </div>
+        )}
+
+        {isSubmap && (
+          <div className="submap-info">
+            <p>This node links to a submap. Click the arrow on the node, or the button below, to open it.</p>
+            <button
+              className="btn btn--primary btn--sm"
+              onClick={() => navigateToSubmap(submapId)}
+            >
+              ↗ Open submap
+            </button>
+          </div>
+        )}
       </div>
 
       {level > 0 && (
         <div className="sidebar-footer">
+          {!isSubmap && (
+            <button
+              className="btn btn--secondary btn--sm"
+              onClick={handleConvertToSubmap}
+              disabled={converting}
+            >
+              {converting ? 'Converting…' : '↗ Convert to submap'}
+            </button>
+          )}
           <button className="btn btn--danger btn--sm" onClick={handleDelete}>
             Delete node
           </button>

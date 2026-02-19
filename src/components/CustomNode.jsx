@@ -11,16 +11,25 @@ const LEVEL_CONFIG = {
 
 const getConfig = (level) => LEVEL_CONFIG[Math.min(Math.max(level, 0), 3)]
 
+// Blend a hex colour with white at the given opacity (0–1), returning an opaque rgb()
+const blendWithWhite = (hex, alpha) => {
+  const r = parseInt(hex.slice(1, 3), 16)
+  const g = parseInt(hex.slice(3, 5), 16)
+  const b = parseInt(hex.slice(5, 7), 16)
+  return `rgb(${Math.round(255 * (1 - alpha) + r * alpha)}, ${Math.round(255 * (1 - alpha) + g * alpha)}, ${Math.round(255 * (1 - alpha) + b * alpha)})`
+}
+
 const CustomNode = memo(({ id, data, selected }) => {
   const addChildNode = useMindMapStore((state) => state.addChildNode)
   const updateNodeData = useMindMapStore((state) => state.updateNodeData)
   const setDescendantsCollapsed = useMindMapStore((state) => state.setDescendantsCollapsed)
+  const navigateToSubmap = useMindMapStore((state) => state.navigateToSubmap)
   const pushHistory = useMindMapStore((state) => state.pushHistory)
   const [hovered, setHovered] = useState(false)
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
   const inputRef = useRef(null)
-  const { title, level, l1Color, hasChildren, collapsed, hasCollapsibleDescendants, allDescendantsCollapsed } = data
+  const { title, level, l1Color, hasChildren, collapsed, hasCollapsibleDescendants, allDescendantsCollapsed, isSubmap, submapId } = data
   const cfg = getConfig(level)
   const borderColor = l1Color ?? '#94a3b8'
 
@@ -74,8 +83,8 @@ const CustomNode = memo(({ id, data, selected }) => {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: '#ffffff',
-        border: `2px solid ${borderColor}`,
+        background: isSubmap ? blendWithWhite(borderColor, 0.12) : '#ffffff',
+        border: `2px ${isSubmap ? 'dashed' : 'solid'} ${borderColor}`,
         borderRadius: '10px',
         padding: '10px 14px',
         fontSize: cfg.fontSize,
@@ -128,7 +137,19 @@ const CustomNode = memo(({ id, data, selected }) => {
 
       <Handle type="source" position={Position.Right} style={centerHandle} />
 
-      {level !== 0 && hasChildren && (hovered || collapsed) && !editing && (
+      {isSubmap && submapId && (
+        <button
+          className="submap-open-btn nodrag nopan"
+          title="Open submap"
+          style={{ background: borderColor }}
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); navigateToSubmap(submapId) }}
+        >
+          ↗
+        </button>
+      )}
+
+      {!isSubmap && level !== 0 && hasChildren && (hovered || collapsed) && !editing && (
         <button
           className="collapse-btn nodrag nopan"
           title={collapsed ? 'Expand' : 'Collapse'}
@@ -143,7 +164,7 @@ const CustomNode = memo(({ id, data, selected }) => {
         </button>
       )}
 
-      {hovered && !editing && !collapsed && (
+      {hovered && !editing && !collapsed && !isSubmap && (
         <button
           className="add-child-btn"
           title="Add child node"
@@ -157,7 +178,7 @@ const CustomNode = memo(({ id, data, selected }) => {
         </button>
       )}
 
-      {hovered && hasCollapsibleDescendants && !editing && (
+      {!isSubmap && hovered && hasCollapsibleDescendants && !editing && (
         <button
           className="collapse-all-btn nodrag nopan"
           title={allDescendantsCollapsed ? 'Expand all' : 'Collapse all'}

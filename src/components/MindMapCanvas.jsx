@@ -33,6 +33,31 @@ const L1_PALETTE = [
 
 const ROOT_BORDER = '#64748b' // slate — neutral for the central topic
 
+// Breadcrumb navigation bar — only visible when inside a submap
+const BreadcrumbNav = () => {
+  const breadcrumbs = useMindMapStore((s) => s.breadcrumbs)
+  const currentMapName = useMindMapStore((s) => s.currentMapName)
+  const navigateBack = useMindMapStore((s) => s.navigateBack)
+
+  if (breadcrumbs.length === 0) return null
+
+  return (
+    <Panel position="top-left">
+      <div className="breadcrumb-bar">
+        {breadcrumbs.map((crumb, i) => (
+          <span key={crumb.mapId} className="breadcrumb-entry">
+            <button className="breadcrumb-item" onClick={() => navigateBack(i)}>
+              {crumb.mapName}
+            </button>
+            <span className="breadcrumb-sep">›</span>
+          </span>
+        ))}
+        <span className="breadcrumb-current">{currentMapName}</span>
+      </div>
+    </Panel>
+  )
+}
+
 // Must live inside the ReactFlow tree to access the ReactFlow context
 const FitViewOnLoad = () => {
   const fitViewTrigger = useMindMapStore((s) => s.fitViewTrigger)
@@ -253,6 +278,7 @@ const MindMapCanvas = () => {
             Hover a node and click + to add a child · Drag to lasso-select · Trackpad to pan &amp; zoom
           </div>
         </Panel>
+        <BreadcrumbNav />
         <FitViewOnLoad />
       </ReactFlow>
     </div>
