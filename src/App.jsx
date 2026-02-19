@@ -10,8 +10,15 @@ import { useMindMapStore } from './store/useMindMapStore'
 import './App.css'
 
 function AppInner() {
-  const { undo, redo } = useMindMapStore()
+  const { undo, redo, loadMap } = useMindMapStore()
   const { user, loading } = useAuth()
+
+  // Restore the last viewed map once the user is authenticated
+  useEffect(() => {
+    if (!user) return
+    const lastMapId = localStorage.getItem('km_lastMapId')
+    if (lastMapId) loadMap(lastMapId)
+  }, [user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Global keyboard shortcuts
   useEffect(() => {

@@ -40,6 +40,7 @@ export const useMindMapStore = create((set, get) => ({
   // ── UI state ─────────────────────────────────────────────────
   isMapListOpen: false,
   autosaveTimer: null,
+  fitViewTrigger: 0,
 
   // ── React Flow handlers ───────────────────────────────────────
 
@@ -289,7 +290,7 @@ export const useMindMapStore = create((set, get) => ({
         data: { ...n.data, content: contentById[n.id] ?? '' },
       }))
 
-      set({
+      set((state) => ({
         nodes,
         edges: mapResult.data.data.edges || [],
         currentMapId: mapResult.data.id,
@@ -299,8 +300,10 @@ export const useMindMapStore = create((set, get) => ({
         future: [],
         selectedNodeId: null,
         saveStatus: 'idle',
-      })
+        fitViewTrigger: state.fitViewTrigger + 1,
+      }))
 
+      localStorage.setItem('km_lastMapId', mapId)
       return { success: true }
     } catch (err) {
       console.error('Load failed:', err)

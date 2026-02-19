@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 import {
   ReactFlow,
   Background,
@@ -7,6 +7,7 @@ import {
   BackgroundVariant,
   SelectionMode,
   Panel,
+  useReactFlow,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useMindMapStore } from '../store/useMindMapStore'
@@ -31,6 +32,20 @@ const L1_PALETTE = [
 ]
 
 const ROOT_BORDER = '#64748b' // slate — neutral for the central topic
+
+// Must live inside the ReactFlow tree to access the ReactFlow context
+const FitViewOnLoad = () => {
+  const fitViewTrigger = useMindMapStore((s) => s.fitViewTrigger)
+  const { fitView } = useReactFlow()
+
+  useEffect(() => {
+    if (fitViewTrigger === 0) return
+    const id = requestAnimationFrame(() => fitView({ padding: 0.3, duration: 400 }))
+    return () => cancelAnimationFrame(id)
+  }, [fitViewTrigger, fitView])
+
+  return null
+}
 
 const MindMapCanvas = () => {
   const {
@@ -79,16 +94,50 @@ const MindMapCanvas = () => {
     return parentMap[current] === rootId ? current : null
   }, [parentMap, rootId])
 
-  // Inject l1Color into each node's data (display-layer only, not persisted)
+  // sourceId -> [targetIds] lookup
+  const childrenMap = useMemo(() => {
+    const map = {}
+    edges.forEach(e => {
+      if (!map[e.source]) map[e.source] = []
+      map[e.source].push(e.target)
+    })
+    return map
+  }, [edges])
+
+  // All node IDs that should be hidden (descendants of any collapsed node)
+  const hiddenNodeIds = useMemo(() => {
+    const hidden = new Set()
+    const collect = (nodeId) => {
+      ;(childrenMap[nodeId] || []).forEach(childId => {
+        hidden.add(childId)
+        collect(childId)
+      })
+    }
+    nodes.forEach(node => { if (node.data?.collapsed) collect(node.id) })
+    return hidden
+  }, [nodes, childrenMap])
+
+  // Inject display-only props into node data; apply hidden flag
   const nodesWithColor = useMemo(() =>
     nodes.map(node => {
       const level = node.data?.level ?? 0
       const l1Color = level === 0
         ? ROOT_BORDER
         : (l1ColorMap[getL1Id(node.id)] ?? L1_PALETTE[0])
-      return { ...node, data: { ...node.data, l1Color } }
+      const hasChildren = !!(childrenMap[node.id]?.length)
+      return {
+        ...node,
+        hidden: hiddenNodeIds.has(node.id),
+        data: { ...node.data, l1Color, hasChildren },
+      }
     }),
-    [nodes, l1ColorMap, getL1Id]
+    [nodes, l1ColorMap, getL1Id, childrenMap, hiddenNodeIds]
+  )
+
+  // Hide edges whose target is hidden
+  const edgesWithHidden = useMemo(() =>
+    edges.map(edge => ({ ...edge, hidden: hiddenNodeIds.has(edge.target) })),
+    [edges, hiddenNodeIds]
   )
 
   const onNodeDragStart = useCallback(() => {
@@ -110,7 +159,7 @@ const MindMapCanvas = () => {
     <div style={{ width: '100%', height: '100%' }}>
       <ReactFlow
         nodes={nodesWithColor}
-        edges={edges}
+        edges={edgesWithHidden}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
@@ -153,6 +202,7 @@ const MindMapCanvas = () => {
             Hover a node and click + to add a child · Drag to lasso-select · Trackpad to pan &amp; zoom
           </div>
         </Panel>
+        <FitViewOnLoad />
       </ReactFlow>
     </div>
   )
