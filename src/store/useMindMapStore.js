@@ -117,6 +117,36 @@ export const useMindMapStore = create((set, get) => ({
     get().scheduleAutosave()
   },
 
+  setDescendantsCollapsed: (nodeId, collapse) => {
+    const { edges } = get()
+    const childrenMap = {}
+    edges.forEach(e => {
+      if (!childrenMap[e.source]) childrenMap[e.source] = []
+      childrenMap[e.source].push(e.target)
+    })
+    // Collect the node itself and all descendants that have children
+    const toUpdate = new Set()
+    if (childrenMap[nodeId]?.length) toUpdate.add(nodeId)
+    const collect = (id) => {
+      ;(childrenMap[id] || []).forEach(kid => {
+        if (childrenMap[kid]?.length) toUpdate.add(kid)
+        collect(kid)
+      })
+    }
+    collect(nodeId)
+    if (toUpdate.size === 0) return
+    get().pushHistory()
+    set((state) => ({
+      nodes: state.nodes.map(node =>
+        toUpdate.has(node.id)
+          ? { ...node, data: { ...node.data, collapsed: collapse } }
+          : node
+      ),
+      isDirty: true,
+    }))
+    get().scheduleAutosave()
+  },
+
   deleteNode: (nodeId) => {
     get().pushHistory()
     set((state) => ({

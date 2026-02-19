@@ -14,12 +14,13 @@ const getConfig = (level) => LEVEL_CONFIG[Math.min(Math.max(level, 0), 3)]
 const CustomNode = memo(({ id, data, selected }) => {
   const addChildNode = useMindMapStore((state) => state.addChildNode)
   const updateNodeData = useMindMapStore((state) => state.updateNodeData)
+  const setDescendantsCollapsed = useMindMapStore((state) => state.setDescendantsCollapsed)
   const pushHistory = useMindMapStore((state) => state.pushHistory)
   const [hovered, setHovered] = useState(false)
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
   const inputRef = useRef(null)
-  const { title, level, l1Color, hasChildren, collapsed } = data
+  const { title, level, l1Color, hasChildren, collapsed, hasCollapsibleDescendants, allDescendantsCollapsed } = data
   const cfg = getConfig(level)
   const borderColor = l1Color ?? '#94a3b8'
 
@@ -153,6 +154,21 @@ const CustomNode = memo(({ id, data, selected }) => {
           }}
         >
           +
+        </button>
+      )}
+
+      {hovered && hasCollapsibleDescendants && !editing && (
+        <button
+          className="collapse-all-btn nodrag nopan"
+          title={allDescendantsCollapsed ? 'Expand all' : 'Collapse all'}
+          style={{ background: borderColor }}
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation()
+            setDescendantsCollapsed(id, !allDescendantsCollapsed)
+          }}
+        >
+          {allDescendantsCollapsed ? '▸▸' : '▾▾'}
         </button>
       )}
     </div>

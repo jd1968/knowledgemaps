@@ -703,6 +703,33 @@
   transform: translateY(-50%) scale(1.15);
 }
 
+/* ── Collapse/expand-all button ───────────────────────────────────── */
+
+.collapse-all-btn {
+  position: absolute;
+  bottom: -13px;
+  left: 50%;
+  transform: translateX(-50%);
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 10px;
+  border: 2px solid #fff;
+  color: #fff;
+  font-size: 7px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  z-index: 10;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  transition: transform 0.12s;
+}
+
+.collapse-all-btn:hover {
+  transform: translateX(-50%) scale(1.1);
+}
+
 /* ── Canvas hint ──────────────────────────────────────────────────── */
 
 .canvas-hint {

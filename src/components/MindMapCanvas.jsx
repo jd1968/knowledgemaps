@@ -117,6 +117,55 @@ const MindMapCanvas = () => {
     return hidden
   }, [nodes, childrenMap])
 
+  // Fast node lookup for descendant checks
+  const nodeById = useMemo(() => {
+    const map = {}
+    nodes.forEach(n => { map[n.id] = n })
+    return map
+  }, [nodes])
+
+  // Nodes that have at least one descendant which itself has children (i.e. can offer collapse-all)
+  const hasCollapsibleDescendantsSet = useMemo(() => {
+    const result = new Set()
+    // Walk up from every node-with-children, marking all its ancestors
+    const markAncestors = (nodeId) => {
+      let cur = parentMap[nodeId]
+      while (cur) {
+        if (result.has(cur)) break // already marked, ancestors already done
+        result.add(cur)
+        cur = parentMap[cur]
+      }
+    }
+    nodes.forEach(node => {
+      if (childrenMap[node.id]?.length) markAncestors(node.id)
+    })
+    return result
+  }, [nodes, childrenMap, parentMap])
+
+  // For each node with collapsible descendants, are ALL of those descendants currently collapsed?
+  const allDescendantsCollapsedSet = useMemo(() => {
+    const result = new Set()
+    nodes.forEach(node => {
+      if (!hasCollapsibleDescendantsSet.has(node.id)) return
+      let allCollapsed = true
+      const stack = [...(childrenMap[node.id] || [])]
+      const visited = new Set()
+      outer: while (stack.length > 0) {
+        const curr = stack.pop()
+        if (visited.has(curr)) continue
+        visited.add(curr)
+        const kids = childrenMap[curr] || []
+        if (kids.length > 0 && !nodeById[curr]?.data?.collapsed) {
+          allCollapsed = false
+          break outer
+        }
+        stack.push(...kids)
+      }
+      if (allCollapsed) result.add(node.id)
+    })
+    return result
+  }, [nodes, childrenMap, hasCollapsibleDescendantsSet, nodeById])
+
   // Inject display-only props into node data; apply hidden flag
   const nodesWithColor = useMemo(() =>
     nodes.map(node => {
@@ -125,13 +174,15 @@ const MindMapCanvas = () => {
         ? ROOT_BORDER
         : (l1ColorMap[getL1Id(node.id)] ?? L1_PALETTE[0])
       const hasChildren = !!(childrenMap[node.id]?.length)
+      const hasCollapsibleDescendants = hasCollapsibleDescendantsSet.has(node.id)
+      const allDescendantsCollapsed = allDescendantsCollapsedSet.has(node.id)
       return {
         ...node,
         hidden: hiddenNodeIds.has(node.id),
-        data: { ...node.data, l1Color, hasChildren },
+        data: { ...node.data, l1Color, hasChildren, hasCollapsibleDescendants, allDescendantsCollapsed },
       }
     }),
-    [nodes, l1ColorMap, getL1Id, childrenMap, hiddenNodeIds]
+    [nodes, l1ColorMap, getL1Id, childrenMap, hiddenNodeIds, hasCollapsibleDescendantsSet, allDescendantsCollapsedSet]
   )
 
   // Hide edges whose target is hidden
