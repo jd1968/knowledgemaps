@@ -6,8 +6,6 @@ import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import { existsSync } from 'fs'
 
-//test
-
 dotenv.config()
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
