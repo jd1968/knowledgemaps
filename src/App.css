@@ -533,9 +533,14 @@
   margin-top: 0.6em;
 }
 
-.editor-content .ProseMirror h1 { font-size: 18px; font-weight: 700; }
-.editor-content .ProseMirror h2 { font-size: 15px; font-weight: 700; }
-.editor-content .ProseMirror h3 { font-size: 13px; font-weight: 700; }
+.editor-content .ProseMirror h1 { font-size: 18px; font-weight: 700; margin-top: 36px; }
+.editor-content .ProseMirror h2 { font-size: 15px; font-weight: 700; margin-top: 36px; }
+.editor-content .ProseMirror h3 { font-size: 13px; font-weight: 700; margin-top: 36px; }
+
+/* No top margin when a heading is the very first element */
+.editor-content .ProseMirror > h1:first-child,
+.editor-content .ProseMirror > h2:first-child,
+.editor-content .ProseMirror > h3:first-child { margin-top: 0; }
 
 .editor-content .ProseMirror ul,
 .editor-content .ProseMirror ol {
@@ -1047,8 +1052,8 @@
   background: #fff;
   border-radius: 14px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
-  width: 100%;
-  max-width: 560px;
+  width: 90%;
+  max-width: 1200px;
   max-height: 88vh;
   display: flex;
   flex-direction: column;
@@ -1106,6 +1111,10 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.node-modal-body--view {
+  gap: 72px;
 }
 
 .node-modal-view-title {

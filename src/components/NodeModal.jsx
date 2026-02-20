@@ -77,7 +77,7 @@ export default function NodeModal({ node, onClose }) {
         </div>
 
         {/* Body */}
-        <div className="node-modal-body">
+        <div className={`node-modal-body${isEditing ? '' : ' node-modal-body--view'}`}>
           {isEditing ? (
             <>
               <div className="field">
