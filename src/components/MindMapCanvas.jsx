@@ -34,7 +34,7 @@ const L1_PALETTE = [
 const ROOT_BORDER = '#64748b' // slate — neutral for the central topic
 const DEFAULT_NODE_SIZE = {
   0: { width: 200, height: 200 },
-  1: { width: 170, height: 100 },
+  1: { width: 170, height: 48 },
   2: { width: 150, height: 88 },
   3: { width: 130, height: 76 },
 }

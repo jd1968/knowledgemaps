@@ -4,7 +4,7 @@ import { useMindMapStore } from '../store/useMindMapStore'
 
 const LEVEL_CONFIG = {
   0: { width: 200, height: 200, fontSize: '15px', fontWeight: '700' },
-  1: { width: 170, height: 100, fontSize: '14px', fontWeight: '600' },
+  1: { width: 170, height: null,  fontSize: '14px', fontWeight: '600' },
   2: { width: 150, height: null,  fontSize: '13px', fontWeight: '500' },
   3: { width: 130, height: null,  fontSize: '12px', fontWeight: '400' },
 }
@@ -149,6 +149,7 @@ const CustomNode = memo(({ id, data, selected }) => {
           textAlign: nodeType === 'group' ? 'left' : 'center',
           wordBreak: 'break-word',
           lineHeight: '1.35',
+          position: 'relative',
           pointerEvents: nodeType === 'group' ? 'none' : 'auto',
           ...(nodeType === 'group'
             ? {
@@ -190,27 +191,17 @@ const CustomNode = memo(({ id, data, selected }) => {
               {title || 'Untitled'}
             </span>
           )}
-        </div>
-      )}
-
-{/* Footer — content indicators (folders and submaps only) */}
-      {!editing && nodeType !== 'note' && nodeType !== 'group' && (
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'flex-end',
-          gap: 4,
-          height: 36,
-          flexShrink: 0,
-          padding: '0 8px',
-          background: blendWithWhite(borderColor, 0.12),
-          borderTop: `1px solid ${borderColor}30`,
-          borderRadius: '0 0 8px 8px',
-          fontSize: '24px',
-          lineHeight: 1,
-          pointerEvents: 'none',
-        }}>
-          {hasNotes && <span style={{ color: '#94a3b8' }}>≡</span>}
+          {!editing && hasNotes && nodeType !== 'group' && (
+            <span style={{
+              position: 'absolute',
+              top: '4px',
+              right: '5px',
+              fontSize: '9px',
+              color: `${borderColor}90`,
+              lineHeight: 1,
+              pointerEvents: 'none',
+            }}>≡</span>
+          )}
         </div>
       )}
 

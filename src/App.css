@@ -574,7 +574,7 @@
 .editor-content .ProseMirror {
   outline: none;
   min-height: 120px;
-  font-size: 13px;
+  font-size: 15px;
   line-height: 1.6;
   color: #1e293b;
 }
