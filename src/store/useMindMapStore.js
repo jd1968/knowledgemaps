@@ -312,24 +312,13 @@ export const useMindMapStore = create((set, get) => ({
 
   loadMap: async (mapId, breadcrumbs = []) => {
     try {
-      // Load diagram layout and node content in parallel
-      const [mapResult, nodesResult] = await Promise.all([
-        supabase.from('maps').select('*').eq('id', mapId).single(),
-        supabase.from('nodes').select('id, content, overview').eq('map_id', mapId),
-      ])
+      // Phase 1: load map structure only so the canvas renders immediately
+      const mapResult = await supabase.from('maps').select('*').eq('id', mapId).single()
       if (mapResult.error) throw mapResult.error
-
-      // Build a lookup so we can merge content back into each node
-      const contentById = {}
-      nodesResult.data?.forEach((n) => { contentById[n.id] = { content: n.content, overview: n.overview } })
 
       const nodes = (mapResult.data.data.nodes || []).map((n) => ({
         ...n,
-        data: {
-          ...n.data,
-          content: contentById[n.id]?.content ?? '',
-          overview: contentById[n.id]?.overview ?? '',
-        },
+        data: { ...n.data, content: '', overview: '' },
       }))
 
       set((state) => ({
@@ -350,11 +339,29 @@ export const useMindMapStore = create((set, get) => ({
       if (breadcrumbs.length === 0) {
         localStorage.setItem('km_lastMapId', mapId)
       }
+
+      // Phase 2: load node content in the background — updates hasNotes indicators
+      get()._loadContentForMap(mapId)
+
       return { success: true }
     } catch (err) {
       console.error('Load failed:', err)
       return { success: false, error: err }
     }
+  },
+
+  _loadContentForMap: async (mapId) => {
+    const { data } = await supabase.from('nodes').select('id, content, overview').eq('map_id', mapId)
+    if (!data) return
+    const contentById = {}
+    data.forEach((n) => { contentById[n.id] = { content: n.content || '', overview: n.overview || '' } })
+    set((state) => ({
+      nodes: state.nodes.map((n) => {
+        const c = contentById[n.id]
+        if (!c) return n
+        return { ...n, data: { ...n.data, content: c.content, overview: c.overview } }
+      }),
+    }))
   },
 
   // ── Submap ────────────────────────────────────────────────────

@@ -31,7 +31,7 @@ const CustomNode = memo(({ id, data, selected }) => {
   const [draft, setDraft] = useState('')
   const inputRef = useRef(null)
   const selectTimerRef = useRef(null)
-  const { title, level, l1Color, hasChildren, collapsed, hasCollapsibleDescendants, allDescendantsCollapsed, isSubmap, submapId } = data
+  const { title, level, l1Color, hasChildren, collapsed, hasCollapsibleDescendants, allDescendantsCollapsed, isSubmap, submapId, hasNotes, hasOverview } = data
   const cfg = getConfig(level)
   const borderColor = l1Color ?? '#94a3b8'
 
@@ -100,58 +100,88 @@ const CustomNode = memo(({ id, data, selected }) => {
         width: cfg.width,
         ...(cfg.height ? { height: cfg.height } : {}),
         display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
+        flexDirection: 'column',
         background: isSubmap ? blendWithWhite(borderColor, 0.12) : '#ffffff',
         border: `2px ${isSubmap ? 'dashed' : 'solid'} ${borderColor}`,
         borderRadius: '10px',
-        padding: '10px 14px',
         fontSize: cfg.fontSize,
         fontWeight: cfg.fontWeight,
         color: '#0f172a',
-        textAlign: 'center',
         cursor: editing ? 'text' : 'pointer',
         boxShadow: selected
           ? `0 0 0 3px ${borderColor}40, 0 4px 12px rgba(0,0,0,0.10)`
           : '0 2px 8px rgba(0,0,0,0.08)',
         transition: 'box-shadow 0.15s ease',
         userSelect: 'none',
-        wordBreak: 'break-word',
-        lineHeight: '1.35',
         position: 'relative',
         boxSizing: 'border-box',
       }}
     >
       <Handle type="target" position={Position.Left} style={centerHandle} />
 
-      {editing ? (
-        <input
-          ref={inputRef}
-          className="nodrag nopan"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={commitEdit}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') { e.preventDefault(); commitEdit() }
-            if (e.key === 'Escape') { e.preventDefault(); cancelEdit() }
-            e.stopPropagation() // prevent ReactFlow intercepting Delete/Backspace
-          }}
-          style={{
-            width: '100%',
-            border: 'none',
-            outline: 'none',
-            background: 'transparent',
-            fontSize: 'inherit',
-            fontWeight: 'inherit',
-            color: 'inherit',
-            textAlign: 'center',
-            fontFamily: 'inherit',
-            lineHeight: 'inherit',
-            padding: 0,
-          }}
-        />
-      ) : (
-        <span>{title || 'Untitled'}</span>
+      {/* Header — title */}
+      <div style={{
+        flex: 1,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '10px 14px',
+        textAlign: 'center',
+        wordBreak: 'break-word',
+        lineHeight: '1.35',
+      }}>
+        {editing ? (
+          <input
+            ref={inputRef}
+            className="nodrag nopan"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commitEdit}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') { e.preventDefault(); commitEdit() }
+              if (e.key === 'Escape') { e.preventDefault(); cancelEdit() }
+              e.stopPropagation()
+            }}
+            style={{
+              width: '100%',
+              border: 'none',
+              outline: 'none',
+              background: 'transparent',
+              fontSize: 'inherit',
+              fontWeight: 'inherit',
+              color: 'inherit',
+              textAlign: 'center',
+              fontFamily: 'inherit',
+              lineHeight: 'inherit',
+              padding: 0,
+            }}
+          />
+        ) : (
+          <span>{title || 'Untitled'}</span>
+        )}
+      </div>
+
+      {/* Footer — content indicators */}
+      {!editing && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'flex-end',
+          gap: 4,
+          height: 36,
+          flexShrink: 0,
+          padding: '0 8px',
+          background: blendWithWhite(borderColor, 0.12),
+          borderTop: `1px solid ${borderColor}30`,
+          borderRadius: '0 0 8px 8px',
+          fontSize: '24px',
+          lineHeight: 1,
+          opacity: 0.5,
+          pointerEvents: 'none',
+        }}>
+          {hasOverview && <span title="Has overview">◎</span>}
+          {hasNotes && <span title="Has notes">≡</span>}
+        </div>
       )}
 
       <Handle type="source" position={Position.Right} style={centerHandle} />
