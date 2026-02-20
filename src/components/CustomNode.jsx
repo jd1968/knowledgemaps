@@ -77,7 +77,7 @@ const CustomNode = memo(({ id, data, selected }) => {
     <div
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      onClick={() => selectNode(id)}
+      onClick={(e) => { e.stopPropagation(); selectNode(id) }}
       onDoubleClick={(e) => { e.stopPropagation(); startEditing() }}
       style={{
         width: cfg.width,
