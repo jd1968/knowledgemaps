@@ -1,16 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useMindMapStore } from '../store/useMindMapStore'
 import RichTextEditor from './RichTextEditor'
 
 const LEVEL_LABELS = { 0: 'Root', 1: 'Main Topic', 2: 'Subtopic', 3: 'Detail' }
-
-// Extract H1 text nodes from an HTML string
-function parseH1s(html) {
-  if (!html) return []
-  const doc = new DOMParser().parseFromString(html, 'text/html')
-  return Array.from(doc.querySelectorAll('h1')).map((el) => el.textContent.trim()).filter(Boolean)
-}
 
 const TYPE_LABELS = { folder: 'Folder', group: 'Group', note: 'Note', submap: 'Submap' }
 
@@ -30,17 +23,7 @@ export default function NodeModal({ node, onClose }) {
   const [converting, setConverting] = useState(false)
   const [showConvertMenu, setShowConvertMenu] = useState(false)
 
-  const modalBodyRef = useRef(null)
-
   const hasNotes = content && content !== '<p></p>' && content !== ''
-  const h1s = useMemo(() => parseH1s(content), [content])
-
-  const showNav = !isEditing && h1s.length > 0
-
-  const scrollToH1 = (index) => {
-    const h1Els = modalBodyRef.current?.querySelectorAll('h1')
-    h1Els?.[index]?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }
 
   // Close on Escape
   useEffect(() => {
@@ -123,20 +106,8 @@ export default function NodeModal({ node, onClose }) {
           <button className="icon-btn" onClick={onClose} aria-label="Close">✕</button>
         </div>
 
-        {/* Navigation badges — view mode only */}
-        {showNav && (
-          <div className="node-modal-nav">
-            {h1s.map((text, i) => (
-              <button key={i} className="node-modal-nav-badge" onClick={() => scrollToH1(i)}>
-                {text}
-              </button>
-            ))}
-          </div>
-        )}
-
         {/* Body */}
         <div
-          ref={modalBodyRef}
           className={`node-modal-body${isEditing ? '' : ' node-modal-body--view'}`}
         >
           {isEditing ? (

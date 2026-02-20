@@ -125,9 +125,11 @@ const CustomNode = memo(({ id, data, selected }) => {
         cursor: editing ? 'text' : 'pointer',
         boxShadow: selected
           ? `0 0 0 3px ${borderColor}40, 2px 4px 14px rgba(0,0,0,0.18)`
-          : nodeType === 'note'
-            ? '1px 2px 6px rgba(0,0,0,0.09)'
-            : '0 2px 8px rgba(0,0,0,0.08)',
+          : hovered
+            ? `0 0 0 2px ${borderColor}70, 2px 4px 10px rgba(0,0,0,0.12)`
+            : nodeType === 'note'
+              ? '1px 2px 6px rgba(0,0,0,0.09)'
+              : '0 2px 8px rgba(0,0,0,0.08)',
         transition: 'box-shadow 0.15s ease',
         userSelect: 'none',
         position: 'relative',
