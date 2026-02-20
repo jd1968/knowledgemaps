@@ -326,7 +326,6 @@ const MindMapCanvas = () => {
       const hasCollapsibleDescendants = hasCollapsibleDescendantsSet.has(node.id)
       const allDescendantsCollapsed = allDescendantsCollapsedSet.has(node.id)
       const hasNotes = !!(node.data.content && node.data.content !== '<p></p>' && node.data.content !== '')
-      const hasOverview = !!(node.data.overview && node.data.overview.trim() !== '')
       const groupLayout = groupLayouts[node.id]
       return {
         ...node,
@@ -341,7 +340,6 @@ const MindMapCanvas = () => {
           hasCollapsibleDescendants,
           allDescendantsCollapsed,
           hasNotes,
-          hasOverview,
           groupSize: groupLayout ? { width: groupLayout.width, height: groupLayout.height } : undefined,
         },
       }

@@ -23,10 +23,10 @@ export default function NodeModal({ node, onClose }) {
   const isEditMode       = useMindMapStore((s) => s.isEditMode)
 
   const { id } = node
-  const { title, level, content, overview, isSubmap, submapId, nodeType = 'folder' } = node.data
+  const { title, level, content, isSubmap, submapId, nodeType = 'folder' } = node.data
 
   const [isEditing, setIsEditing] = useState(isEditMode)
-  const [draft, setDraft]         = useState(isEditMode ? { title: title || '', overview: overview || '', content: content || '' } : null)
+  const [draft, setDraft]         = useState(isEditMode ? { title: title || '', content: content || '' } : null)
   const [converting, setConverting] = useState(false)
   const [showConvertMenu, setShowConvertMenu] = useState(false)
 
@@ -35,16 +35,7 @@ export default function NodeModal({ node, onClose }) {
   const hasNotes = content && content !== '<p></p>' && content !== ''
   const h1s = useMemo(() => parseH1s(content), [content])
 
-  // Nav badges: overview for folders/groups, H1s for notes
-  const showNav = !isEditing && (
-    ((nodeType === 'folder' || nodeType === 'group') && overview) ||
-    (nodeType === 'note' && h1s.length > 0)
-  )
-
-  const scrollToOverview = () => {
-    modalBodyRef.current?.querySelector('.node-modal-view-section')
-      ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }
+  const showNav = !isEditing && h1s.length > 0
 
   const scrollToH1 = (index) => {
     const h1Els = modalBodyRef.current?.querySelectorAll('h1')
@@ -67,13 +58,12 @@ export default function NodeModal({ node, onClose }) {
   }, [isEditMode])
 
   const startEdit = () => {
-    setDraft({ title: title || '', overview: overview || '', content: content || '' })
+    setDraft({ title: title || '', content: content || '' })
     setIsEditing(true)
   }
 
   const saveEdit = () => {
-    if (!isEditMode) return
-    if (draft) updateNodeData(id, { title: draft.title, overview: draft.overview, content: draft.content })
+    if (draft) updateNodeData(id, { title: draft.title, content: draft.content })
     onClose()
   }
 
@@ -110,11 +100,11 @@ export default function NodeModal({ node, onClose }) {
     if (newType === 'note') {
       const hasChildren = node.data.hasChildren
       if (hasChildren && !confirm(`"${title}" has children. Converting to Note will prevent adding more children, but existing ones will remain.\n\nContinue?`)) return
-      updateNodeData(id, { nodeType: 'note', overview: '' })
+      updateNodeData(id, { nodeType: 'note' })
     } else if (newType === 'folder') {
-      updateNodeData(id, { nodeType: 'folder', content: '' })
+      updateNodeData(id, { nodeType: 'folder' })
     } else if (newType === 'group') {
-      updateNodeData(id, { nodeType: 'group', content: '' })
+      updateNodeData(id, { nodeType: 'group' })
     }
     setShowConvertMenu(false)
     onClose()
@@ -136,12 +126,7 @@ export default function NodeModal({ node, onClose }) {
         {/* Navigation badges — view mode only */}
         {showNav && (
           <div className="node-modal-nav">
-            {(nodeType === 'folder' || nodeType === 'group') && overview && (
-              <button className="node-modal-nav-badge" onClick={scrollToOverview}>
-                Overview
-              </button>
-            )}
-            {nodeType === 'note' && h1s.map((text, i) => (
+            {h1s.map((text, i) => (
               <button key={i} className="node-modal-nav-badge" onClick={() => scrollToH1(i)}>
                 {text}
               </button>
@@ -167,43 +152,20 @@ export default function NodeModal({ node, onClose }) {
                 />
               </div>
 
-              {(nodeType === 'folder' || nodeType === 'group') && (
-                <div className="field">
-                  <label className="field-label">Overview</label>
-                  <textarea
-                    className="field-input field-textarea"
-                    value={draft.overview}
-                    onChange={(e) => setDraft((d) => ({ ...d, overview: e.target.value }))}
-                    placeholder="Brief overview…"
-                    rows={3}
-                  />
-                </div>
-              )}
-
-              {nodeType === 'note' && (
-                <div className="field field--grow">
-                  <label className="field-label">Notes</label>
-                  <RichTextEditor
-                    key={`edit-${id}`}
-                    content={draft.content}
-                    onChange={(html) => setDraft((d) => ({ ...d, content: html }))}
-                    editable={true}
-                  />
-                </div>
-              )}
+              <div className="field field--grow">
+                <label className="field-label">Notes</label>
+                <RichTextEditor
+                  key={`edit-${id}`}
+                  content={draft.content}
+                  onChange={(html) => setDraft((d) => ({ ...d, content: html }))}
+                  editable={true}
+                />
+              </div>
             </>
           ) : (
             <>
-              {(nodeType === 'folder' || nodeType === 'group') && overview && (
-                <div className="node-modal-view-section">
-                  {isEditMode && <div className="field-label">Overview</div>}
-                  <p className="node-modal-view-text">{overview}</p>
-                </div>
-              )}
-
-              {nodeType === 'note' && hasNotes && (
+              {hasNotes && (
                 <div className="field">
-                  {isEditMode && <div className="field-label">Notes</div>}
                   <RichTextEditor
                     key={`view-${id}`}
                     content={content}

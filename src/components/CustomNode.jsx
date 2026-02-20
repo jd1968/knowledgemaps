@@ -32,7 +32,7 @@ const CustomNode = memo(({ id, data, selected }) => {
   const [draft, setDraft] = useState('')
   const inputRef = useRef(null)
   const selectTimerRef = useRef(null)
-  const { title, level, l1Color, hasChildren, collapsed, hasCollapsibleDescendants, allDescendantsCollapsed, isSubmap, submapId, hasNotes, hasOverview, nodeType, groupSize } = data
+  const { title, level, l1Color, hasChildren, collapsed, hasCollapsibleDescendants, allDescendantsCollapsed, isSubmap, submapId, hasNotes, nodeType, groupSize } = data
   const cfg = getConfig(level)
   const borderColor = l1Color ?? '#94a3b8'
   const width = groupSize?.width ?? cfg.width
@@ -208,7 +208,7 @@ const CustomNode = memo(({ id, data, selected }) => {
           lineHeight: 1,
           pointerEvents: 'none',
         }}>
-          {(hasNotes || hasOverview) && <span style={{ color: '#94a3b8' }}>≡</span>}
+          {hasNotes && <span style={{ color: '#94a3b8' }}>≡</span>}
         </div>
       )}
 

@@ -18,7 +18,6 @@ const initialNodes = [
       level: 0,
       nodeType: 'folder',
       content: '',
-      overview: '',
     },
   },
 ]
@@ -130,7 +129,6 @@ export const useMindMapStore = create((set, get) => ({
         level,
         nodeType: 'folder',
         content: '',
-        overview: '',
       },
     }
     set((state) => ({
@@ -324,7 +322,6 @@ export const useMindMapStore = create((set, get) => ({
           user_id: user?.id,
           title: n.data.title || '',
           content: n.data.content || '',
-          overview: n.data.overview || '',
         }))
         const { error } = await supabase
           .from('nodes')
@@ -356,7 +353,6 @@ export const useMindMapStore = create((set, get) => ({
           ...n.data,
           nodeType: n.data.nodeType ?? (n.data.isSubmap ? 'submap' : 'folder'),
           content: '',
-          overview: '',
         },
       }))
 
@@ -390,15 +386,15 @@ export const useMindMapStore = create((set, get) => ({
   },
 
   _loadContentForMap: async (mapId) => {
-    const { data } = await supabase.from('nodes').select('id, content, overview').eq('map_id', mapId)
+    const { data } = await supabase.from('nodes').select('id, content').eq('map_id', mapId)
     if (!data) return
     const contentById = {}
-    data.forEach((n) => { contentById[n.id] = { content: n.content || '', overview: n.overview || '' } })
+    data.forEach((n) => { contentById[n.id] = n.content || '' })
     set((state) => ({
       nodes: state.nodes.map((n) => {
-        const c = contentById[n.id]
-        if (!c) return n
-        return { ...n, data: { ...n.data, content: c.content, overview: c.overview } }
+        const content = contentById[n.id]
+        if (content === undefined) return n
+        return { ...n, data: { ...n.data, content } }
       }),
     }))
   },
@@ -479,7 +475,6 @@ export const useMindMapStore = create((set, get) => ({
         user_id: user?.id,
         title: n.data.title || '',
         content: n.data.content || '',
-        overview: n.data.overview || '',
       }))
       const { error: contentErr } = await supabase
         .from('nodes')
@@ -544,7 +539,7 @@ export const useMindMapStore = create((set, get) => ({
           id: rootId,
           type: 'mindmap',
           position: { x: 350, y: 250 },
-          data: { title: 'Central Topic', key: rootId, level: 0, content: '', overview: '' },
+          data: { title: 'Central Topic', key: rootId, level: 0, content: '' },
         },
       ],
       edges: [],
@@ -609,7 +604,7 @@ export const useMindMapStore = create((set, get) => ({
       id,
       type: 'mindmap',
       position: { x, y },
-      data: { title: 'New Node', key: id, level: childLevel, nodeType: 'folder', content: '', overview: '' },
+      data: { title: 'New Node', key: id, level: childLevel, nodeType: 'folder', content: '' },
     }
 
     const newEdge = {

@@ -1060,19 +1060,6 @@
   word-break: break-word;
 }
 
-.node-popup-overview {
-  padding: 10px 14px 6px;
-  min-height: 44px;
-  max-height: 130px;
-  overflow-y: auto;
-}
-
-.node-popup-overview p {
-  margin: 0;
-  font-size: 13px;
-  color: #475569;
-  line-height: 1.55;
-}
 
 .node-popup-empty {
   color: #94a3b8 !important;
