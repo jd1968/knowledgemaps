@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ReactFlow,
   Background,
@@ -216,6 +216,11 @@ const MindMapCanvas = () => {
     [edges, hiddenNodeIds]
   )
 
+  // Detect touch-primary devices (phones/tablets). Checked once on mount.
+  const [isTouch] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(hover: none) and (pointer: coarse)').matches
+  )
+
   const onNodeDragStart = useCallback(() => {
     pushHistory()
   }, [pushHistory])
@@ -243,12 +248,14 @@ const MindMapCanvas = () => {
         onSelectionChange={onSelectionChange}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
-        // Miro-style interaction: trackpad pans, left-drag lassos
-        panOnScroll={true}
-        panOnDrag={[1, 2]}
-        selectionOnDrag={true}
+        // Desktop: Miro-style — trackpad pans, left-drag lassos
+        // Touch: single-finger pans, two-finger pinch-zooms
+        panOnScroll={!isTouch}
+        panOnDrag={isTouch ? true : [1, 2]}
+        selectionOnDrag={!isTouch}
         selectionMode={SelectionMode.Partial}
         zoomOnScroll={false}
+        zoomOnPinch={true}
         fitView
         fitViewOptions={{ padding: 0.3 }}
         minZoom={0.2}
@@ -275,7 +282,9 @@ const MindMapCanvas = () => {
         />
         <Panel position="bottom-center">
           <div className="canvas-hint">
-            Hover a node and click + to add a child · Drag to lasso-select · Trackpad to pan &amp; zoom
+            {isTouch
+              ? 'Tap a node to select · Drag to pan · Pinch to zoom'
+              : 'Hover a node and click + to add a child · Drag to lasso-select · Trackpad to pan & zoom'}
           </div>
         </Panel>
         <BreadcrumbNav />
