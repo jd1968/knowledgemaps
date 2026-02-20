@@ -25,6 +25,7 @@ const CustomNode = memo(({ id, data, selected }) => {
   const setDescendantsCollapsed = useMindMapStore((state) => state.setDescendantsCollapsed)
   const navigateToSubmap = useMindMapStore((state) => state.navigateToSubmap)
   const pushHistory = useMindMapStore((state) => state.pushHistory)
+  const selectNode = useMindMapStore((state) => state.selectNode)
   const [hovered, setHovered] = useState(false)
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
@@ -76,6 +77,7 @@ const CustomNode = memo(({ id, data, selected }) => {
     <div
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      onClick={() => selectNode(id)}
       onDoubleClick={(e) => { e.stopPropagation(); startEditing() }}
       style={{
         width: cfg.width,
