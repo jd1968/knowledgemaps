@@ -41,7 +41,7 @@ const DEFAULT_NODE_SIZE = {
 const GROUP_PADDING_X = 16
 const GROUP_PADDING_TOP_WITH_HEADER = 58
 const GROUP_PADDING_TOP_NO_HEADER = 16
-const GROUP_PADDING_BOTTOM = 16
+const GROUP_PADDING_BOTTOM = 24
 
 const getStableNodeSize = (node) => {
   if (node?.data?.nodeType === 'group' && node?.data?.groupSize) {
@@ -313,7 +313,7 @@ const MindMapCanvas = () => {
         x: minX - GROUP_PADDING_X,
         y: minY - topPadding,
         width: Math.max(180, (maxX - minX) + GROUP_PADDING_X * 2),
-        height: Math.max(160, (maxY - minY) + topPadding + GROUP_PADDING_BOTTOM),
+        height: Math.max(80, (maxY - minY) + topPadding + GROUP_PADDING_BOTTOM),
       }
     })
 

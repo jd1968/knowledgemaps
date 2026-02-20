@@ -36,7 +36,7 @@ const CustomNode = memo(({ id, data, selected }) => {
   const cfg = getConfig(level)
   const borderColor = l1Color ?? '#94a3b8'
   const width = groupSize?.width ?? cfg.width
-  const height = groupSize?.height ?? cfg.height
+  const height = groupSize?.height ?? (nodeType === 'note' ? null : cfg.height)
   const showGroupHeader = nodeType === 'group' && !!title?.trim()
 
   const startEditing = useCallback(() => {
@@ -114,7 +114,7 @@ const CustomNode = memo(({ id, data, selected }) => {
             ? 'repeating-linear-gradient(to bottom, #ffffff 0px, #ffffff 17px, #e8edf2 17px, #e8edf2 18px)'
             : '#ffffff',
         border: nodeType === 'note'
-          ? '1px solid #c8cdd5'
+          ? `1px solid ${borderColor}90`
           : nodeType === 'group'
             ? `2px solid ${borderColor}90`
             : `2px ${isSubmap ? 'dashed' : 'solid'} ${borderColor}`,

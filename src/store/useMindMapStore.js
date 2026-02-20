@@ -57,10 +57,10 @@ export const useMindMapStore = create((set, get) => ({
     const { isEditMode } = get()
     const effectiveChanges = isEditMode
       ? changes
-      : changes.filter((c) => c.type === 'select')
+      : changes.filter((c) => c.type === 'select' || c.type === 'dimensions')
     if (effectiveChanges.length === 0) return
 
-    const hasNonSelectChange = effectiveChanges.some((c) => c.type !== 'select')
+    const hasNonSelectChange = effectiveChanges.some((c) => c.type !== 'select' && c.type !== 'dimensions')
 
     // Don't push position changes to history during drag (too noisy)
     // History is pushed in onNodeDragStart instead
