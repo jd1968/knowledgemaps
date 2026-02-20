@@ -31,9 +31,12 @@ const CustomNode = memo(({ id, data, selected }) => {
   const [draft, setDraft] = useState('')
   const inputRef = useRef(null)
   const selectTimerRef = useRef(null)
-  const { title, level, l1Color, hasChildren, collapsed, hasCollapsibleDescendants, allDescendantsCollapsed, isSubmap, submapId, hasNotes, hasOverview, nodeType } = data
+  const { title, level, l1Color, hasChildren, collapsed, hasCollapsibleDescendants, allDescendantsCollapsed, isSubmap, submapId, hasNotes, hasOverview, nodeType, groupSize } = data
   const cfg = getConfig(level)
   const borderColor = l1Color ?? '#94a3b8'
+  const width = groupSize?.width ?? cfg.width
+  const height = groupSize?.height ?? cfg.height
+  const showGroupHeader = nodeType === 'group' && !!title?.trim()
 
   const startEditing = useCallback(() => {
     setDraft(title || '')
@@ -97,18 +100,20 @@ const CustomNode = memo(({ id, data, selected }) => {
         startEditing()
       }}
       style={{
-        width: cfg.width,
-        ...(cfg.height ? { height: cfg.height } : {}),
+        width,
+        ...(height ? { height } : {}),
         display: 'flex',
         flexDirection: 'column',
-        background: isSubmap || nodeType === 'group'
-          ? blendWithWhite(borderColor, 0.08)
+        background: nodeType === 'group'
+          ? 'rgba(15, 23, 42, 0.02)'
+          : isSubmap
+            ? blendWithWhite(borderColor, 0.08)
           : nodeType === 'note'
             ? 'repeating-linear-gradient(to bottom, #fffef5 0px, #fffef5 23px, #e8e0d0 23px, #e8e0d0 24px)'
             : '#ffffff',
         ...(nodeType !== 'note' && {
           border: nodeType === 'group'
-            ? `1.5px solid ${borderColor}60`
+            ? `2px solid ${borderColor}90`
             : `2px ${isSubmap ? 'dashed' : 'solid'} ${borderColor}`,
         }),
         borderRadius: nodeType === 'note' ? '0' : nodeType === 'group' ? '12px' : '10px',
@@ -128,51 +133,62 @@ const CustomNode = memo(({ id, data, selected }) => {
       <Handle type="target" position={Position.Left} style={centerHandle} />
 
       {/* Header — title */}
-      <div style={{
-        flex: 1,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '10px 14px',
-        textAlign: 'center',
-        wordBreak: 'break-word',
-        lineHeight: '1.35',
-      }}>
-        {editing ? (
-          <input
-            ref={inputRef}
-            className="nodrag nopan"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onBlur={commitEdit}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') { e.preventDefault(); commitEdit() }
-              if (e.key === 'Escape') { e.preventDefault(); cancelEdit() }
-              e.stopPropagation()
-            }}
-            style={{
-              width: '100%',
-              border: 'none',
-              outline: 'none',
-              background: 'transparent',
-              fontSize: 'inherit',
-              fontWeight: 'inherit',
-              color: 'inherit',
-              textAlign: 'center',
-              fontFamily: 'inherit',
-              lineHeight: 'inherit',
-              padding: 0,
-            }}
-          />
-        ) : (
-          <span style={nodeType === 'note' && !hasNotes ? { color: '#94a3b8' } : undefined}>
-            {title || 'Untitled'}
-          </span>
-        )}
-      </div>
+      {(nodeType !== 'group' || showGroupHeader) && (
+        <div style={{
+          flex: nodeType === 'group' ? '0 0 auto' : 1,
+          display: 'flex',
+          alignItems: nodeType === 'group' ? 'flex-start' : 'center',
+          justifyContent: nodeType === 'group' ? 'flex-start' : 'center',
+          padding: nodeType === 'group' ? '8px 12px' : '10px 14px',
+          textAlign: nodeType === 'group' ? 'left' : 'center',
+          wordBreak: 'break-word',
+          lineHeight: '1.35',
+          pointerEvents: nodeType === 'group' ? 'none' : 'auto',
+          ...(nodeType === 'group'
+            ? {
+                margin: '6px',
+                borderRadius: '8px',
+                background: 'transparent',
+                border: 'none',
+              }
+            : {}),
+        }}>
+          {editing ? (
+            <input
+              ref={inputRef}
+              className="nodrag nopan"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onBlur={commitEdit}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') { e.preventDefault(); commitEdit() }
+                if (e.key === 'Escape') { e.preventDefault(); cancelEdit() }
+                e.stopPropagation()
+              }}
+              style={{
+                width: '100%',
+                border: 'none',
+                outline: 'none',
+                background: 'transparent',
+                fontSize: 'inherit',
+                fontWeight: 'inherit',
+                color: 'inherit',
+                textAlign: nodeType === 'group' ? 'left' : 'center',
+                fontFamily: 'inherit',
+                lineHeight: 'inherit',
+                padding: 0,
+              }}
+            />
+          ) : (
+            <span style={nodeType === 'note' && !hasNotes ? { color: '#94a3b8' } : undefined}>
+              {title || 'Untitled'}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Footer — content indicators (folders and submaps only) */}
-      {!editing && nodeType !== 'note' && (
+      {!editing && nodeType !== 'note' && nodeType !== 'group' && (
         <div style={{
           display: 'flex',
           alignItems: 'center',

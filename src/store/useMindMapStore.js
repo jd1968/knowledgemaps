@@ -54,7 +54,14 @@ export const useMindMapStore = create((set, get) => ({
     // Don't push position changes to history during drag (too noisy)
     // History is pushed in onNodeDragStart instead
     set((state) => ({
-      nodes: applyNodeChanges(changes, state.nodes),
+      nodes: applyNodeChanges(
+        changes.filter((c) => {
+          if (c.type !== 'position') return true
+          const node = state.nodes.find((n) => n.id === c.id)
+          return node?.data?.nodeType !== 'group'
+        }),
+        state.nodes
+      ),
       isDirty: true,
     }))
     // Debounce autosave (skip for selection-only changes)
@@ -539,6 +546,7 @@ export const useMindMapStore = create((set, get) => ({
     get().pushHistory()
 
     const parentLevel = parent.data.level ?? 0
+    const isGroupParent = parent.data.nodeType === 'group'
     const childLevel = Math.min(parentLevel + 1, 3)
     const NODE_WIDTHS = [190, 160, 135, 115]
     const parentWidth = NODE_WIDTHS[Math.min(parentLevel, 3)]
@@ -551,11 +559,20 @@ export const useMindMapStore = create((set, get) => ({
 
     const hGap = 70
     const vSpacing = 70
+    const groupPaddingX = 24
+    const groupPaddingTop = parent.data.title?.trim() ? 58 : 16
 
-    const x = parent.position.x + parentWidth + hGap
+    let x = parent.position.x + parentWidth + hGap
     let y = parent.position.y
 
-    if (childNodes.length > 0) {
+    if (isGroupParent) {
+      x = parent.position.x + groupPaddingX
+      y = parent.position.y + groupPaddingTop
+      if (childNodes.length > 0) {
+        const sorted = [...childNodes].sort((a, b) => a.position.y - b.position.y)
+        y = sorted[sorted.length - 1].position.y + vSpacing
+      }
+    } else if (childNodes.length > 0) {
       const sorted = [...childNodes].sort((a, b) => a.position.y - b.position.y)
       y = sorted[sorted.length - 1].position.y + vSpacing
     }
@@ -610,6 +627,7 @@ export const useMindMapStore = create((set, get) => ({
 
     const newParentNode = nodes.find(n => n.id === newParentId)
     const newParentLevel = newParentNode?.data?.level ?? 0
+    const isGroupParent = newParentNode?.data?.nodeType === 'group'
 
     // Build new edge list: remove old parent edge, add new one
     const newEdges = [
@@ -632,17 +650,81 @@ export const useMindMapStore = create((set, get) => ({
     }
     assignLevels(nodeId, newParentLevel + 1)
 
-    set(state => ({
-      nodes: state.nodes.map(n =>
-        levelMap[n.id] !== undefined
-          ? { ...n, data: { ...n.data, level: levelMap[n.id] } }
-          : n
-      ),
-      edges: newEdges,
-      isDirty: true,
-    }))
+    set(state => {
+      const groupPaddingX = 24
+      const groupPaddingTop = newParentNode?.data?.title?.trim() ? 58 : 16
+      const vSpacing = 70
+
+      let reparentedNodeY = null
+      if (isGroupParent) {
+        const siblingIds = newEdges
+          .filter(e => e.source === newParentId && e.target !== nodeId)
+          .map(e => e.target)
+        const siblingNodes = state.nodes.filter(n => siblingIds.includes(n.id))
+        reparentedNodeY = siblingNodes.length
+          ? Math.max(...siblingNodes.map(n => n.position.y)) + vSpacing
+          : (newParentNode?.position?.y ?? 0) + groupPaddingTop
+      }
+
+      return {
+        nodes: state.nodes.map(n => {
+          const nextLevel = levelMap[n.id]
+          if (n.id === nodeId && isGroupParent) {
+            return {
+              ...n,
+              position: {
+                x: (newParentNode?.position?.x ?? 0) + groupPaddingX,
+                y: reparentedNodeY ?? n.position.y,
+              },
+              data: {
+                ...n.data,
+                ...(nextLevel !== undefined ? { level: nextLevel } : {}),
+              },
+            }
+          }
+          if (nextLevel !== undefined) {
+            return { ...n, data: { ...n.data, level: nextLevel } }
+          }
+          return n
+        }),
+        edges: newEdges,
+        isDirty: true,
+      }
+    })
 
     get().scheduleAutosave()
+  },
+
+  // ── Move subtree ──────────────────────────────────────────────
+
+  moveSubtreeBy: (rootId, dx, dy, shouldScheduleAutosave = true) => {
+    if (!dx && !dy) return
+    const { edges } = get()
+    const descendants = new Set()
+    const stack = [rootId]
+    while (stack.length) {
+      const current = stack.pop()
+      edges.forEach((e) => {
+        if (e.source === current && !descendants.has(e.target)) {
+          descendants.add(e.target)
+          stack.push(e.target)
+        }
+      })
+    }
+    if (descendants.size === 0) return
+
+    set((state) => ({
+      nodes: state.nodes.map((n) =>
+        descendants.has(n.id)
+          ? {
+              ...n,
+              position: { x: n.position.x + dx, y: n.position.y + dy },
+            }
+          : n
+      ),
+      isDirty: true,
+    }))
+    if (shouldScheduleAutosave) get().scheduleAutosave()
   },
 
   // ── Modal ─────────────────────────────────────────────────────

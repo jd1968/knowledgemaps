@@ -32,6 +32,24 @@ const L1_PALETTE = [
 ]
 
 const ROOT_BORDER = '#64748b' // slate — neutral for the central topic
+const DEFAULT_NODE_SIZE = {
+  0: { width: 200, height: 200 },
+  1: { width: 170, height: 100 },
+  2: { width: 150, height: 88 },
+  3: { width: 130, height: 76 },
+}
+const GROUP_PADDING_X = 16
+const GROUP_PADDING_TOP_WITH_HEADER = 58
+const GROUP_PADDING_TOP_NO_HEADER = 16
+const GROUP_PADDING_BOTTOM = 16
+
+const getStableNodeSize = (node) => {
+  if (node?.data?.nodeType === 'group' && node?.data?.groupSize) {
+    return node.data.groupSize
+  }
+  const level = Math.min(Math.max(node?.data?.level ?? 1, 0), 3)
+  return DEFAULT_NODE_SIZE[level]
+}
 
 // Breadcrumb navigation bar — only visible when inside a submap
 const BreadcrumbNav = () => {
@@ -143,6 +161,8 @@ const MindMapCanvas = () => {
     pushHistory,
     deselectNode,
     reparentNode,
+    moveSubtreeBy,
+    scheduleAutosave,
   } = useMindMapStore()
 
   // targetId -> sourceId lookup
@@ -252,8 +272,51 @@ const MindMapCanvas = () => {
   }, [nodes, childrenMap, hasCollapsibleDescendantsSet, nodeById])
 
   // Inject display-only props into node data; apply hidden flag
-  const nodesWithColor = useMemo(() =>
-    nodes.map(node => {
+  const nodesWithColor = useMemo(() => {
+    const groupChildrenMap = {}
+    nodes.forEach((n) => {
+      if (n.data?.nodeType === 'group') groupChildrenMap[n.id] = []
+    })
+    edges.forEach((e) => {
+      if (groupChildrenMap[e.source]) groupChildrenMap[e.source].push(e.target)
+    })
+
+    const groupLayouts = {}
+    Object.entries(groupChildrenMap).forEach(([groupId, childIds]) => {
+      const groupNode = nodeById[groupId]
+      const hasGroupHeader = !!groupNode?.data?.title?.trim()
+      const topPadding = hasGroupHeader ? GROUP_PADDING_TOP_WITH_HEADER : GROUP_PADDING_TOP_NO_HEADER
+      const visibleChildren = childIds
+        .map((id) => nodeById[id])
+        .filter((n) => n && !hiddenNodeIds.has(n.id))
+
+      if (visibleChildren.length === 0) return
+
+      let minX = Infinity
+      let minY = Infinity
+      let maxX = -Infinity
+      let maxY = -Infinity
+
+      visibleChildren.forEach((child) => {
+        const stableSize = getStableNodeSize(child)
+        const childWidth = stableSize.width
+        const childHeight = child.measured?.height ?? child.height ?? stableSize.height
+
+        minX = Math.min(minX, child.position.x)
+        minY = Math.min(minY, child.position.y)
+        maxX = Math.max(maxX, child.position.x + childWidth)
+        maxY = Math.max(maxY, child.position.y + childHeight)
+      })
+
+      groupLayouts[groupId] = {
+        x: minX - GROUP_PADDING_X,
+        y: minY - topPadding,
+        width: Math.max(180, (maxX - minX) + GROUP_PADDING_X * 2),
+        height: Math.max(160, (maxY - minY) + topPadding + GROUP_PADDING_BOTTOM),
+      }
+    })
+
+    const decoratedNodes = nodes.map(node => {
       const level = node.data?.level ?? 0
       const l1Color = level === 0
         ? ROOT_BORDER
@@ -263,18 +326,57 @@ const MindMapCanvas = () => {
       const allDescendantsCollapsed = allDescendantsCollapsedSet.has(node.id)
       const hasNotes = !!(node.data.content && node.data.content !== '<p></p>' && node.data.content !== '')
       const hasOverview = !!(node.data.overview && node.data.overview.trim() !== '')
+      const groupLayout = groupLayouts[node.id]
       return {
         ...node,
+        ...(groupLayout ? { position: { x: groupLayout.x, y: groupLayout.y } } : {}),
+        zIndex: node.data?.nodeType === 'group' ? 0 : 10,
         hidden: hiddenNodeIds.has(node.id),
-        data: { ...node.data, l1Color, hasChildren, hasCollapsibleDescendants, allDescendantsCollapsed, hasNotes, hasOverview },
+        data: {
+          ...node.data,
+          l1Color,
+          hasChildren,
+          hasCollapsibleDescendants,
+          allDescendantsCollapsed,
+          hasNotes,
+          hasOverview,
+          groupSize: groupLayout ? { width: groupLayout.width, height: groupLayout.height } : undefined,
+        },
       }
-    }),
-    [nodes, l1ColorMap, getL1Id, childrenMap, hiddenNodeIds, hasCollapsibleDescendantsSet, allDescendantsCollapsedSet]
+    })
+
+    // Keep container groups behind regular nodes for consistent child interaction.
+    return decoratedNodes.sort((a, b) => {
+      const aGroup = a.data?.nodeType === 'group' ? 0 : 1
+      const bGroup = b.data?.nodeType === 'group' ? 0 : 1
+      return aGroup - bGroup
+    })
+  }, [nodes, edges, l1ColorMap, getL1Id, childrenMap, hiddenNodeIds, hasCollapsibleDescendantsSet, allDescendantsCollapsedSet, nodeById])
+
+  const groupDropTargets = useMemo(
+    () =>
+      nodesWithColor
+        .filter((n) => n.data?.nodeType === 'group' && !n.hidden)
+        .map((n) => {
+          const size = n.data?.groupSize ?? getStableNodeSize(n)
+          return {
+            id: n.id,
+            x: n.position.x,
+            y: n.position.y,
+            width: size.width,
+            height: size.height,
+          }
+        }),
+    [nodesWithColor]
   )
 
   const displayEdges = useMemo(() =>
-    edges.map(e => ({ ...e, hidden: hiddenNodeIds.has(e.target) })),
-    [edges, hiddenNodeIds]
+    edges.map(e => {
+      const sourceNode = nodeById[e.source]
+      const isGroupConnector = sourceNode?.data?.nodeType === 'group'
+      return { ...e, hidden: hiddenNodeIds.has(e.target) || isGroupConnector }
+    }),
+    [edges, hiddenNodeIds, nodeById]
   )
 
   const [isTouch] = useState(
@@ -282,10 +384,27 @@ const MindMapCanvas = () => {
   )
 
   const containerRef = useRef(null)
+  const dragStartRef = useRef({})
 
-  const onNodeDragStart = useCallback(() => {
+  const onNodeDragStart = useCallback((_, node) => {
+    dragStartRef.current[node.id] = { x: node.position.x, y: node.position.y }
     pushHistory()
   }, [pushHistory])
+
+  const onNodeDrag = useCallback((_, draggedNode) => {
+    if (draggedNode.data?.nodeType !== 'group') return
+    const prev = dragStartRef.current[draggedNode.id]
+    if (!prev) {
+      dragStartRef.current[draggedNode.id] = { x: draggedNode.position.x, y: draggedNode.position.y }
+      return
+    }
+    const dx = draggedNode.position.x - prev.x
+    const dy = draggedNode.position.y - prev.y
+    if (Math.abs(dx) > 0.01 || Math.abs(dy) > 0.01) {
+      moveSubtreeBy(draggedNode.id, dx, dy, false)
+    }
+    dragStartRef.current[draggedNode.id] = { x: draggedNode.position.x, y: draggedNode.position.y }
+  }, [moveSubtreeBy])
 
   // When a node is dropped, check if its centre landed inside a group node.
   // If so, reparent it to that group.
@@ -296,16 +415,18 @@ const MindMapCanvas = () => {
     const cx = draggedNode.position.x + dW / 2
     const cy = draggedNode.position.y + dH / 2
 
-    const target = nodes.find(n => {
-      if (n.id === draggedNode.id || n.data?.nodeType !== 'group') return false
-      const nW = n.measured?.width ?? 0
-      const nH = n.measured?.height ?? 0
-      return cx > n.position.x && cx < n.position.x + nW &&
-             cy > n.position.y && cy < n.position.y + nH
+    const target = groupDropTargets.find((g) => {
+      if (g.id === draggedNode.id) return false
+      return cx > g.x && cx < g.x + g.width &&
+             cy > g.y && cy < g.y + g.height
     })
 
     if (target) reparentNode(draggedNode.id, target.id)
-  }, [nodes, reparentNode])
+
+    if (draggedNode.data?.nodeType === 'group') scheduleAutosave()
+
+    delete dragStartRef.current[draggedNode.id]
+  }, [groupDropTargets, reparentNode, scheduleAutosave])
 
   return (
     <div ref={containerRef} style={{ width: '100%', height: '100%' }}>
@@ -316,6 +437,7 @@ const MindMapCanvas = () => {
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onNodeDragStart={onNodeDragStart}
+        onNodeDrag={onNodeDrag}
         onNodeDragStop={onNodeDragStop}
         onPaneClick={deselectNode}
         nodeTypes={nodeTypes}
