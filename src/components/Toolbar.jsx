@@ -36,6 +36,8 @@ const Toolbar = () => {
     setMapName,
     openMapList,
     currentMapId,
+    isEditMode,
+    toggleEditMode,
   } = useMindMapStore()
   const { user, signOut } = useAuth()
 
@@ -117,7 +119,7 @@ const Toolbar = () => {
         <button
           className="btn btn--ghost btn--sm"
           onClick={undo}
-          disabled={past.length === 0}
+          disabled={!isEditMode || past.length === 0}
           title="Undo (Ctrl+Z)"
         >
           ↩ Undo
@@ -125,10 +127,17 @@ const Toolbar = () => {
         <button
           className="btn btn--ghost btn--sm"
           onClick={redo}
-          disabled={future.length === 0}
+          disabled={!isEditMode || future.length === 0}
           title="Redo (Ctrl+Y / Ctrl+Shift+Z)"
         >
           ↪ Redo
+        </button>
+        <button
+          className={`btn btn--sm ${isEditMode ? 'btn--primary' : 'btn--ghost'}`}
+          onClick={toggleEditMode}
+          title={isEditMode ? 'Disable editing' : 'Enable editing'}
+        >
+          {isEditMode ? 'Edit Mode: On' : 'Edit Mode: Off'}
         </button>
 
         <div className="toolbar-sep" />

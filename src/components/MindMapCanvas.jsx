@@ -163,6 +163,7 @@ const MindMapCanvas = () => {
     reparentNode,
     moveSubtreeBy,
     scheduleAutosave,
+    isEditMode,
   } = useMindMapStore()
 
   // targetId -> sourceId lookup
@@ -388,11 +389,13 @@ const MindMapCanvas = () => {
   const dragStartRef = useRef({})
 
   const onNodeDragStart = useCallback((_, node) => {
+    if (!isEditMode) return
     dragStartRef.current[node.id] = { x: node.position.x, y: node.position.y }
     pushHistory()
-  }, [pushHistory])
+  }, [isEditMode, pushHistory])
 
   const onNodeDrag = useCallback((_, draggedNode) => {
+    if (!isEditMode) return
     if (draggedNode.data?.nodeType !== 'group') return
     const prev = dragStartRef.current[draggedNode.id]
     if (!prev) {
@@ -405,11 +408,12 @@ const MindMapCanvas = () => {
       moveSubtreeBy(draggedNode.id, dx, dy, false)
     }
     dragStartRef.current[draggedNode.id] = { x: draggedNode.position.x, y: draggedNode.position.y }
-  }, [moveSubtreeBy])
+  }, [isEditMode, moveSubtreeBy])
 
   // When a node is dropped, check if its centre landed inside a group node.
   // If so, reparent it to that group.
   const onNodeDragStop = useCallback((_, draggedNode) => {
+    if (!isEditMode) return
     if (draggedNode.data?.level === 0) return // root is not reparentable
     const dW = draggedNode.measured?.width ?? 0
     const dH = draggedNode.measured?.height ?? 0
@@ -427,7 +431,7 @@ const MindMapCanvas = () => {
     if (draggedNode.data?.nodeType === 'group') scheduleAutosave()
 
     delete dragStartRef.current[draggedNode.id]
-  }, [groupDropTargets, reparentNode, scheduleAutosave])
+  }, [groupDropTargets, isEditMode, reparentNode, scheduleAutosave])
 
   return (
     <div ref={containerRef} style={{ width: '100%', height: '100%' }}>
@@ -443,6 +447,9 @@ const MindMapCanvas = () => {
         onPaneClick={deselectNode}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
+        nodesDraggable={isEditMode}
+        nodesConnectable={isEditMode}
+        elementsSelectable
         panOnScroll={!isTouch}
         panOnDrag={isTouch ? true : [1, 2]}
         selectionOnDrag={!isTouch}
@@ -457,7 +464,7 @@ const MindMapCanvas = () => {
           type: 'straight-center',
           style: { stroke: '#94a3b8', strokeWidth: 2 },
         }}
-        deleteKeyCode={['Backspace', 'Delete']}
+        deleteKeyCode={isEditMode ? ['Backspace', 'Delete'] : null}
       >
         <Background
           variant={BackgroundVariant.Dots}
@@ -477,7 +484,9 @@ const MindMapCanvas = () => {
           <div className="canvas-hint">
             {isTouch
               ? 'Tap a node to select · Drag to pan · Pinch to zoom'
-              : 'Hover a node and click + to add a child · Drag to lasso-select · Trackpad to pan & zoom'}
+              : isEditMode
+                ? 'Hover a node and click + to add a child · Drag to lasso-select · Trackpad to pan & zoom'
+                : 'Edit Mode is off · Drag to lasso-select · Trackpad to pan & zoom'}
           </div>
         </Panel>
         <BreadcrumbNav />

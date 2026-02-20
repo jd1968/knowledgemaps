@@ -20,6 +20,7 @@ export default function NodeModal({ node, onClose }) {
   const deselectNode     = useMindMapStore((s) => s.deselectNode)
   const convertToSubmap  = useMindMapStore((s) => s.convertToSubmap)
   const navigateToSubmap = useMindMapStore((s) => s.navigateToSubmap)
+  const isEditMode       = useMindMapStore((s) => s.isEditMode)
 
   const [isEditing, setIsEditing] = useState(false)
   const [draft, setDraft]         = useState(null)
@@ -57,12 +58,21 @@ export default function NodeModal({ node, onClose }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
+  // If edit mode is turned off while the modal is open, force read-only view.
+  useEffect(() => {
+    if (isEditMode) return
+    setIsEditing(false)
+    setShowConvertMenu(false)
+    setDraft(null)
+  }, [isEditMode])
+
   const startEdit = () => {
     setDraft({ title: title || '', overview: overview || '', content: content || '' })
     setIsEditing(true)
   }
 
   const saveEdit = () => {
+    if (!isEditMode) return
     if (draft) updateNodeData(id, { title: draft.title, overview: draft.overview, content: draft.content })
     setIsEditing(false)
     setDraft(null)
@@ -74,24 +84,27 @@ export default function NodeModal({ node, onClose }) {
   }
 
   const handleDelete = useCallback(() => {
+    if (!isEditMode) return
     if (level === 0) { alert('The root node cannot be deleted.'); return }
     if (confirm(`Delete "${title}"?`)) {
       deleteNode(id)
       deselectNode()
       onClose()
     }
-  }, [level, title, id, deleteNode, deselectNode, onClose])
+  }, [isEditMode, level, title, id, deleteNode, deselectNode, onClose])
 
   const handleConvertToSubmap = useCallback(async () => {
+    if (!isEditMode) return
     if (!confirm(`Convert "${title}" to a submap?\n\nIts children will be moved into the new map.`)) return
     setConverting(true)
     const result = await convertToSubmap(id)
     setConverting(false)
     if (!result.success) alert('Failed to convert to submap. Please try again.')
     else onClose()
-  }, [title, id, convertToSubmap, onClose])
+  }, [isEditMode, title, id, convertToSubmap, onClose])
 
   const handleConvertType = useCallback((newType) => {
+    if (!isEditMode) return
     if (newType === nodeType) return
     if (newType === 'submap') { handleConvertToSubmap(); return }
 
@@ -106,7 +119,7 @@ export default function NodeModal({ node, onClose }) {
     }
     setShowConvertMenu(false)
     onClose()
-  }, [nodeType, title, id, node.data.hasChildren, updateNodeData, handleConvertToSubmap, onClose])
+  }, [isEditMode, nodeType, title, id, node.data.hasChildren, updateNodeData, handleConvertToSubmap, onClose])
 
   return createPortal(
     <div
@@ -184,14 +197,14 @@ export default function NodeModal({ node, onClose }) {
             <>
               {(nodeType === 'folder' || nodeType === 'group') && overview && (
                 <div className="node-modal-view-section">
-                  <div className="field-label">Overview</div>
+                  {isEditMode && <div className="field-label">Overview</div>}
                   <p className="node-modal-view-text">{overview}</p>
                 </div>
               )}
 
               {nodeType === 'note' && hasNotes && (
                 <div className="field">
-                  <div className="field-label">Notes</div>
+                  {isEditMode && <div className="field-label">Notes</div>}
                   <RichTextEditor
                     key={`view-${id}`}
                     content={content}
@@ -217,7 +230,7 @@ export default function NodeModal({ node, onClose }) {
 
         {/* Footer */}
         <div className="node-modal-footer">
-          {isEditing ? (
+          {!isEditMode ? null : isEditing ? (
             <>
               <button className="btn btn--secondary btn--sm" onClick={cancelEdit}>
                 Cancel

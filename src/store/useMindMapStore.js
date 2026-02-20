@@ -43,6 +43,10 @@ export const useMindMapStore = create((set, get) => ({
   isMapListOpen: false,
   autosaveTimer: null,
   fitViewTrigger: 0,
+  isEditMode: false,
+
+  setEditMode: (isEditMode) => set({ isEditMode }),
+  toggleEditMode: () => set((state) => ({ isEditMode: !state.isEditMode })),
 
   // ── Submap navigation ─────────────────────────────────────────
   // Each entry: { mapId, mapName }  — the trail of maps above the current one
@@ -51,33 +55,49 @@ export const useMindMapStore = create((set, get) => ({
   // ── React Flow handlers ───────────────────────────────────────
 
   onNodesChange: (changes) => {
+    const { isEditMode } = get()
+    const effectiveChanges = isEditMode
+      ? changes
+      : changes.filter((c) => c.type === 'select')
+    if (effectiveChanges.length === 0) return
+
+    const hasNonSelectChange = effectiveChanges.some((c) => c.type !== 'select')
+
     // Don't push position changes to history during drag (too noisy)
     // History is pushed in onNodeDragStart instead
     set((state) => ({
       nodes: applyNodeChanges(
-        changes.filter((c) => {
+        effectiveChanges.filter((c) => {
           if (c.type !== 'position') return true
           const node = state.nodes.find((n) => n.id === c.id)
           return node?.data?.nodeType !== 'group'
         }),
         state.nodes
       ),
-      isDirty: true,
+      isDirty: hasNonSelectChange ? true : state.isDirty,
     }))
     // Debounce autosave (skip for selection-only changes)
-    const hasNonSelectChange = changes.some((c) => c.type !== 'select')
     if (hasNonSelectChange) get().scheduleAutosave()
   },
 
   onEdgesChange: (changes) => {
+    const { isEditMode } = get()
+    const effectiveChanges = isEditMode
+      ? changes
+      : changes.filter((c) => c.type === 'select')
+    if (effectiveChanges.length === 0) return
+
+    const hasNonSelectChange = effectiveChanges.some((c) => c.type !== 'select')
+
     set((state) => ({
-      edges: applyEdgeChanges(changes, state.edges),
-      isDirty: true,
+      edges: applyEdgeChanges(effectiveChanges, state.edges),
+      isDirty: hasNonSelectChange ? true : state.isDirty,
     }))
-    get().scheduleAutosave()
+    if (hasNonSelectChange) get().scheduleAutosave()
   },
 
   onConnect: (connection) => {
+    if (!get().isEditMode) return
     get().pushHistory()
     set((state) => ({
       edges: addEdge(
@@ -97,6 +117,7 @@ export const useMindMapStore = create((set, get) => ({
   // ── Node CRUD ─────────────────────────────────────────────────
 
   addNode: ({ position, level = 1, title = 'New Node' }) => {
+    if (!get().isEditMode) return null
     get().pushHistory()
     const id = uuidv4()
     const newNode = {
@@ -133,6 +154,7 @@ export const useMindMapStore = create((set, get) => ({
   },
 
   setDescendantsCollapsed: (nodeId, collapse) => {
+    if (!get().isEditMode) return
     const { edges } = get()
     const childrenMap = {}
     edges.forEach(e => {
@@ -163,6 +185,7 @@ export const useMindMapStore = create((set, get) => ({
   },
 
   deleteNode: (nodeId) => {
+    if (!get().isEditMode) return
     get().pushHistory()
     set((state) => ({
       nodes: state.nodes.filter((n) => n.id !== nodeId),
@@ -205,6 +228,7 @@ export const useMindMapStore = create((set, get) => ({
   },
 
   undo: () => {
+    if (!get().isEditMode) return
     const { nodes, edges, past, future } = get()
     if (past.length === 0) return
     const previous = past[past.length - 1]
@@ -222,6 +246,7 @@ export const useMindMapStore = create((set, get) => ({
   },
 
   redo: () => {
+    if (!get().isEditMode) return
     const { nodes, edges, past, future } = get()
     if (future.length === 0) return
     const next = future[0]
@@ -381,6 +406,7 @@ export const useMindMapStore = create((set, get) => ({
   // ── Submap ────────────────────────────────────────────────────
 
   convertToSubmap: async (nodeId) => {
+    if (!get().isEditMode) return { success: false }
     const { nodes, edges, currentMapId, currentMapName, isDirty, autosaveTimer } = get()
     const node = nodes.find((n) => n.id === nodeId)
     if (!node) return { success: false }
@@ -539,6 +565,7 @@ export const useMindMapStore = create((set, get) => ({
   // ── Add child node ────────────────────────────────────────────
 
   addChildNode: (parentId) => {
+    if (!get().isEditMode) return
     const { nodes, edges } = get()
     const parent = nodes.find((n) => n.id === parentId)
     if (!parent) return
@@ -606,6 +633,7 @@ export const useMindMapStore = create((set, get) => ({
   // ── Reparent node (drag-drop into group) ──────────────────────
 
   reparentNode: (nodeId, newParentId) => {
+    if (!get().isEditMode) return
     const { nodes, edges } = get()
 
     // Guard: can't reparent to self
@@ -698,6 +726,7 @@ export const useMindMapStore = create((set, get) => ({
   // ── Move subtree ──────────────────────────────────────────────
 
   moveSubtreeBy: (rootId, dx, dy, shouldScheduleAutosave = true) => {
+    if (!get().isEditMode) return
     if (!dx && !dy) return
     const { edges } = get()
     const descendants = new Set()

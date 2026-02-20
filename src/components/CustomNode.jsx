@@ -26,6 +26,7 @@ const CustomNode = memo(({ id, data, selected }) => {
   const navigateToSubmap = useMindMapStore((state) => state.navigateToSubmap)
   const pushHistory = useMindMapStore((state) => state.pushHistory)
   const selectNode = useMindMapStore((state) => state.selectNode)
+  const isEditMode = useMindMapStore((state) => state.isEditMode)
   const [hovered, setHovered] = useState(false)
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
@@ -95,6 +96,7 @@ const CustomNode = memo(({ id, data, selected }) => {
       }}
       onClick={(e) => e.stopPropagation()}
       onDoubleClick={(e) => {
+        if (!isEditMode) return
         e.stopPropagation()
         clearTimeout(selectTimerRef.current) // cancel pending modal open
         startEditing()
@@ -222,7 +224,7 @@ const CustomNode = memo(({ id, data, selected }) => {
         </button>
       )}
 
-      {!isSubmap && level !== 0 && hasChildren && (hovered || collapsed) && !editing && (
+      {!isSubmap && level !== 0 && hasChildren && (hovered || collapsed) && !editing && isEditMode && (
         <button
           className="collapse-btn nodrag nopan"
           title={collapsed ? 'Expand' : 'Collapse'}
@@ -237,7 +239,7 @@ const CustomNode = memo(({ id, data, selected }) => {
         </button>
       )}
 
-      {!editing && !collapsed && !isSubmap && nodeType !== 'note' && (
+      {!editing && !collapsed && !isSubmap && nodeType !== 'note' && isEditMode && (
         <button
           className="add-child-btn"
           title="Add child node"
@@ -252,7 +254,7 @@ const CustomNode = memo(({ id, data, selected }) => {
         </button>
       )}
 
-      {!isSubmap && hovered && hasCollapsibleDescendants && !editing && (
+      {!isSubmap && hovered && hasCollapsibleDescendants && !editing && isEditMode && (
         <button
           className="collapse-all-btn nodrag nopan"
           title={allDescendantsCollapsed ? 'Expand all' : 'Collapse all'}

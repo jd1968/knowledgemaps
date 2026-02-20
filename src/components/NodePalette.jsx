@@ -1,3 +1,5 @@
+import { useMindMapStore } from '../store/useMindMapStore'
+
 const NODE_TEMPLATES = [
   {
     level: 1,
@@ -25,8 +27,9 @@ const NODE_TEMPLATES = [
   },
 ]
 
-const NodeTemplate = ({ level, label, desc, bg, border, text }) => {
+const NodeTemplate = ({ level, label, desc, bg, border, text, isEditMode }) => {
   const onDragStart = (e) => {
+    if (!isEditMode) return
     e.dataTransfer.setData(
       'application/reactflow',
       JSON.stringify({ level, title: label })
@@ -36,13 +39,15 @@ const NodeTemplate = ({ level, label, desc, bg, border, text }) => {
 
   return (
     <div
-      draggable
+      draggable={isEditMode}
       onDragStart={onDragStart}
       className="node-template"
       style={{
         background: bg,
         border: `2px solid ${border}`,
         color: text,
+        opacity: isEditMode ? 1 : 0.55,
+        cursor: isEditMode ? 'grab' : 'not-allowed',
       }}
     >
       <span className="node-template-label">{label}</span>
@@ -51,21 +56,27 @@ const NodeTemplate = ({ level, label, desc, bg, border, text }) => {
   )
 }
 
-const NodePalette = () => (
-  <div className="node-palette">
-    <div className="palette-title">Add Nodes</div>
-    <p className="palette-hint">Drag a node onto the canvas to add it</p>
+const NodePalette = () => {
+  const isEditMode = useMindMapStore((s) => s.isEditMode)
 
-    {NODE_TEMPLATES.map((t) => (
-      <NodeTemplate key={t.level} {...t} />
-    ))}
+  return (
+    <div className="node-palette">
+      <div className="palette-title">Add Nodes</div>
+      <p className="palette-hint">
+        {isEditMode ? 'Drag a node onto the canvas to add it' : 'Enable Edit Mode to add nodes'}
+      </p>
 
-    <div className="palette-tip">
-      <strong>Connect nodes:</strong>
-      <br />
-      Drag from a handle (circle) on one node to a handle on another.
+      {NODE_TEMPLATES.map((t) => (
+        <NodeTemplate key={t.level} {...t} isEditMode={isEditMode} />
+      ))}
+
+      <div className="palette-tip">
+        <strong>Connect nodes:</strong>
+        <br />
+        Drag from a handle (circle) on one node to a handle on another.
+      </div>
     </div>
-  </div>
-)
+  )
+}
 
 export default NodePalette

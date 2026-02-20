@@ -10,7 +10,7 @@ import { useMindMapStore } from './store/useMindMapStore'
 import './App.css'
 
 function AppInner() {
-  const { undo, redo, loadMap } = useMindMapStore()
+  const { undo, redo, loadMap, isEditMode } = useMindMapStore()
   const { user, loading } = useAuth()
 
   // Restore the last viewed map once the user is authenticated
@@ -25,6 +25,7 @@ function AppInner() {
     const onKey = (e) => {
       const mod = e.metaKey || e.ctrlKey
       if (!mod) return
+      if (!isEditMode) return
 
       if (e.key === 'z' && !e.shiftKey) {
         e.preventDefault()
@@ -36,7 +37,7 @@ function AppInner() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [undo, redo])
+  }, [isEditMode, undo, redo])
 
   if (loading) return <div className="auth-loading" />
   if (!user) return <LoginPage />
