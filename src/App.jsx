@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { ReactFlowProvider } from '@xyflow/react'
 import Toolbar from './components/Toolbar'
 import MindMapCanvas from './components/MindMapCanvas'
-import Sidebar from './components/Sidebar'
+import NodePopup from './components/NodePopup'
 import MapListModal from './components/MapListModal'
 import LoginPage from './components/LoginPage'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
@@ -48,8 +48,8 @@ function AppInner() {
         <div className="canvas-wrapper">
           <MindMapCanvas />
         </div>
-        <Sidebar />
       </div>
+      <NodePopup />
       <MapListModal />
     </div>
   )

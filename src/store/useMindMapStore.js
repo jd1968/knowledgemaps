@@ -17,6 +17,7 @@ const initialNodes = [
       key: ROOT_ID,
       level: 0,
       content: '',
+      overview: '',
     },
   },
 ]
@@ -99,6 +100,7 @@ export const useMindMapStore = create((set, get) => ({
         key: id,
         level,
         content: '',
+        overview: '',
       },
     }
     set((state) => ({
@@ -288,6 +290,7 @@ export const useMindMapStore = create((set, get) => ({
           user_id: user?.id,
           title: n.data.title || '',
           content: n.data.content || '',
+          overview: n.data.overview || '',
         }))
         const { error } = await supabase
           .from('nodes')
@@ -312,17 +315,21 @@ export const useMindMapStore = create((set, get) => ({
       // Load diagram layout and node content in parallel
       const [mapResult, nodesResult] = await Promise.all([
         supabase.from('maps').select('*').eq('id', mapId).single(),
-        supabase.from('nodes').select('id, content').eq('map_id', mapId),
+        supabase.from('nodes').select('id, content, overview').eq('map_id', mapId),
       ])
       if (mapResult.error) throw mapResult.error
 
       // Build a lookup so we can merge content back into each node
       const contentById = {}
-      nodesResult.data?.forEach((n) => { contentById[n.id] = n.content })
+      nodesResult.data?.forEach((n) => { contentById[n.id] = { content: n.content, overview: n.overview } })
 
       const nodes = (mapResult.data.data.nodes || []).map((n) => ({
         ...n,
-        data: { ...n.data, content: contentById[n.id] ?? '' },
+        data: {
+          ...n.data,
+          content: contentById[n.id]?.content ?? '',
+          overview: contentById[n.id]?.overview ?? '',
+        },
       }))
 
       set((state) => ({
@@ -425,6 +432,7 @@ export const useMindMapStore = create((set, get) => ({
         user_id: user?.id,
         title: n.data.title || '',
         content: n.data.content || '',
+        overview: n.data.overview || '',
       }))
       const { error: contentErr } = await supabase
         .from('nodes')
@@ -489,7 +497,7 @@ export const useMindMapStore = create((set, get) => ({
           id: rootId,
           type: 'mindmap',
           position: { x: 350, y: 250 },
-          data: { title: 'Central Topic', key: rootId, level: 0, content: '' },
+          data: { title: 'Central Topic', key: rootId, level: 0, content: '', overview: '' },
         },
       ],
       edges: [],
@@ -543,7 +551,7 @@ export const useMindMapStore = create((set, get) => ({
       id,
       type: 'mindmap',
       position: { x, y },
-      data: { title: 'New Node', key: id, level: childLevel, content: '' },
+      data: { title: 'New Node', key: id, level: childLevel, content: '', overview: '' },
     }
 
     const newEdge = {

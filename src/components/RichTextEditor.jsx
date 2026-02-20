@@ -115,19 +115,24 @@ const EditorToolbar = ({ editor }) => {
   )
 }
 
-const RichTextEditor = ({ content, onChange }) => {
+const RichTextEditor = ({ content, onChange, editable = true }) => {
   const editor = useEditor({
     extensions: [StarterKit, Underline],
     content: content || '',
+    editable,
     onUpdate: ({ editor }) => {
-      onChange(editor.getHTML())
+      if (editable) onChange?.(editor.getHTML())
     },
     editorProps: {
-      attributes: {
-        class: 'prose-editor',
-      },
+      attributes: { class: 'prose-editor' },
     },
   })
+
+  // Sync editable flag when it changes
+  useEffect(() => {
+    if (!editor) return
+    editor.setEditable(editable)
+  }, [editor, editable])
 
   // Sync content when switching between nodes
   useEffect(() => {
@@ -139,8 +144,8 @@ const RichTextEditor = ({ content, onChange }) => {
   }, [content]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div className="rich-text-editor">
-      <EditorToolbar editor={editor} />
+    <div className={`rich-text-editor${editable ? '' : ' rich-text-editor--readonly'}`}>
+      {editable && <EditorToolbar editor={editor} />}
       <EditorContent editor={editor} className="editor-content" />
     </div>
   )

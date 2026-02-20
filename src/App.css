@@ -963,6 +963,195 @@
   justify-content: center;
 }
 
+/* ── Node Popup (Stage 1 — floating card near node) ──────────────── */
+
+.node-popup {
+  position: fixed;
+  z-index: 1000;
+  width: 284px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.14), 0 2px 8px rgba(0, 0, 0, 0.07);
+  border: 1px solid #e2e8f0;
+  overflow: hidden;
+  animation: popup-in 0.13s ease;
+  pointer-events: all;
+}
+
+@keyframes popup-in {
+  from { opacity: 0; transform: scale(0.95) translateY(4px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0);   }
+}
+
+.node-popup-header {
+  padding: 12px 14px 10px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.node-popup-badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.node-popup-title {
+  margin-top: 7px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #0f172a;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.node-popup-overview {
+  padding: 10px 14px 6px;
+  min-height: 44px;
+  max-height: 130px;
+  overflow-y: auto;
+}
+
+.node-popup-overview p {
+  margin: 0;
+  font-size: 13px;
+  color: #475569;
+  line-height: 1.55;
+}
+
+.node-popup-empty {
+  color: #94a3b8 !important;
+  font-style: italic;
+}
+
+.node-popup-footer {
+  padding: 8px 14px 12px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* ── Node Modal (Stage 2 — full centred modal) ────────────────────── */
+
+.node-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(2px);
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  padding-bottom: max(20px, env(safe-area-inset-bottom));
+}
+
+.node-modal {
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+  width: 100%;
+  max-width: 560px;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.node-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid #e2e8f0;
+  flex-shrink: 0;
+}
+
+.node-modal-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.node-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.node-modal-footer {
+  padding: 12px 16px;
+  padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  border-top: 1px solid #f1f5f9;
+  flex-shrink: 0;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.field-textarea {
+  resize: vertical;
+  min-height: 72px;
+  font-family: inherit;
+  line-height: 1.5;
+}
+
+.node-modal-header-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #0f172a;
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.node-modal-view-title {
+  font-size: 19px;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.3;
+  word-break: break-word;
+}
+
+.node-modal-view-section {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.node-modal-view-text {
+  margin: 0;
+  font-size: 14px;
+  color: #475569;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.node-modal-empty {
+  margin: 0;
+  font-size: 13px;
+  color: #94a3b8;
+  font-style: italic;
+}
+
+/* Edit button pushed to the right in view-mode footer */
+.node-modal-edit-btn {
+  margin-left: auto;
+}
+
+/* Read-only TipTap: no border, transparent background */
+.rich-text-editor--readonly {
+  border: 1px solid #f1f5f9;
+  background: #fafafa;
+}
+
+.rich-text-editor--readonly .editor-content {
+  background: transparent;
+}
+
 /* ── React Flow overrides ─────────────────────────────────────────── */
 
 .react-flow__attribution {
