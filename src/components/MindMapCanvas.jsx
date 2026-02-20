@@ -331,6 +331,7 @@ const MindMapCanvas = () => {
         ...node,
         ...(groupLayout ? { position: { x: groupLayout.x, y: groupLayout.y } } : {}),
         zIndex: node.data?.nodeType === 'group' ? 0 : 10,
+        className: node.data?.nodeType === 'group' ? 'km-group-node' : 'km-content-node',
         hidden: hiddenNodeIds.has(node.id),
         data: {
           ...node.data,

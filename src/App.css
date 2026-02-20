@@ -1244,3 +1244,17 @@
   overflow: hidden;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
+
+/* Keep group containers behind their child/content nodes even when selected/dragged */
+.react-flow__node.km-group-node {
+  z-index: 0 !important;
+}
+
+.react-flow__node.km-group-node.selected,
+.react-flow__node.km-group-node.dragging {
+  z-index: 0 !important;
+}
+
+.react-flow__node.km-content-node {
+  z-index: 10 !important;
+}
