@@ -101,13 +101,17 @@ const CustomNode = memo(({ id, data, selected }) => {
         ...(cfg.height ? { height: cfg.height } : {}),
         display: 'flex',
         flexDirection: 'column',
-        background: isSubmap
-          ? blendWithWhite(borderColor, 0.12)
+        background: isSubmap || nodeType === 'group'
+          ? blendWithWhite(borderColor, 0.08)
           : nodeType === 'note'
             ? 'repeating-linear-gradient(to bottom, #fffef5 0px, #fffef5 23px, #e8e0d0 23px, #e8e0d0 24px)'
             : '#ffffff',
-        ...(nodeType !== 'note' && { border: `2px ${isSubmap ? 'dashed' : 'solid'} ${borderColor}` }),
-        borderRadius: nodeType === 'note' ? '0' : '10px',
+        ...(nodeType !== 'note' && {
+          border: nodeType === 'group'
+            ? `1.5px solid ${borderColor}60`
+            : `2px ${isSubmap ? 'dashed' : 'solid'} ${borderColor}`,
+        }),
+        borderRadius: nodeType === 'note' ? '0' : nodeType === 'group' ? '12px' : '10px',
         fontSize: cfg.fontSize,
         fontWeight: cfg.fontWeight,
         color: '#0f172a',

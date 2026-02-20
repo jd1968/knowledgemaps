@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ReactFlow,
   Background,
@@ -74,7 +74,6 @@ const FitViewOnLoad = () => {
 
 // Handles pinch-to-zoom for touch devices — attached to the outer container in
 // capture phase so it intercepts before ReactFlow's node/pane handlers see the events.
-// This makes pinch work uniformly whether fingers land on the background or on nodes.
 const PinchZoomHandler = ({ containerRef }) => {
   const { getViewport, setViewport } = useReactFlow()
 
@@ -90,14 +89,14 @@ const PinchZoomHandler = ({ containerRef }) => {
     const onTouchStart = (e) => {
       if (e.touches.length === 2) {
         prevDist = getDist(e.touches)
-        e.stopPropagation() // prevent ReactFlow starting a pan/drag with these touches
+        e.stopPropagation()
       }
     }
 
     const onTouchMove = (e) => {
       if (e.touches.length !== 2 || prevDist === null) return
-      e.preventDefault()   // prevent page scroll
-      e.stopPropagation()  // prevent ReactFlow double-handling
+      e.preventDefault()
+      e.stopPropagation()
 
       const currDist = getDist(e.touches)
       const scale = currDist / prevDist
@@ -106,7 +105,6 @@ const PinchZoomHandler = ({ containerRef }) => {
       const { x, y, zoom } = getViewport()
       const newZoom = Math.min(Math.max(zoom * scale, 0.2), 2)
 
-      // Keep the pinch midpoint stationary in screen space
       const mid  = getMid(e.touches)
       const rect = el.getBoundingClientRect()
       const px   = mid.x - rect.left
@@ -144,6 +142,7 @@ const MindMapCanvas = () => {
     onConnect,
     pushHistory,
     deselectNode,
+    reparentNode,
   } = useMindMapStore()
 
   // targetId -> sourceId lookup
@@ -214,11 +213,10 @@ const MindMapCanvas = () => {
   // Nodes that have at least one descendant which itself has children (i.e. can offer collapse-all)
   const hasCollapsibleDescendantsSet = useMemo(() => {
     const result = new Set()
-    // Walk up from every node-with-children, marking all its ancestors
     const markAncestors = (nodeId) => {
       let cur = parentMap[nodeId]
       while (cur) {
-        if (result.has(cur)) break // already marked, ancestors already done
+        if (result.has(cur)) break
         result.add(cur)
         cur = parentMap[cur]
       }
@@ -274,39 +272,54 @@ const MindMapCanvas = () => {
     [nodes, l1ColorMap, getL1Id, childrenMap, hiddenNodeIds, hasCollapsibleDescendantsSet, allDescendantsCollapsedSet]
   )
 
-  // Hide edges whose target is hidden
-  const edgesWithHidden = useMemo(() =>
-    edges.map(edge => ({ ...edge, hidden: hiddenNodeIds.has(edge.target) })),
+  const displayEdges = useMemo(() =>
+    edges.map(e => ({ ...e, hidden: hiddenNodeIds.has(e.target) })),
     [edges, hiddenNodeIds]
   )
 
-  // Detect touch-primary devices (phones/tablets). Checked once on mount.
   const [isTouch] = useState(
     () => typeof window !== 'undefined' && window.matchMedia('(hover: none) and (pointer: coarse)').matches
   )
 
-  // Ref for the outer wrapper — passed to PinchZoomHandler so it can attach
-  // capture-phase touch listeners that intercept before ReactFlow's handlers.
   const containerRef = useRef(null)
 
   const onNodeDragStart = useCallback(() => {
     pushHistory()
   }, [pushHistory])
 
+  // When a node is dropped, check if its centre landed inside a group node.
+  // If so, reparent it to that group.
+  const onNodeDragStop = useCallback((_, draggedNode) => {
+    if (draggedNode.data?.level === 0) return // root is not reparentable
+    const dW = draggedNode.measured?.width ?? 0
+    const dH = draggedNode.measured?.height ?? 0
+    const cx = draggedNode.position.x + dW / 2
+    const cy = draggedNode.position.y + dH / 2
+
+    const target = nodes.find(n => {
+      if (n.id === draggedNode.id || n.data?.nodeType !== 'group') return false
+      const nW = n.measured?.width ?? 0
+      const nH = n.measured?.height ?? 0
+      return cx > n.position.x && cx < n.position.x + nW &&
+             cy > n.position.y && cy < n.position.y + nH
+    })
+
+    if (target) reparentNode(draggedNode.id, target.id)
+  }, [nodes, reparentNode])
+
   return (
     <div ref={containerRef} style={{ width: '100%', height: '100%' }}>
       <ReactFlow
         nodes={nodesWithColor}
-        edges={edgesWithHidden}
+        edges={displayEdges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onNodeDragStart={onNodeDragStart}
+        onNodeDragStop={onNodeDragStop}
         onPaneClick={deselectNode}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
-        // Desktop: Miro-style — trackpad pans, left-drag lassos
-        // Touch: single-finger pans, two-finger pinch-zooms
         panOnScroll={!isTouch}
         panOnDrag={isTouch ? true : [1, 2]}
         selectionOnDrag={!isTouch}

@@ -586,6 +586,65 @@ export const useMindMapStore = create((set, get) => ({
     get().scheduleAutosave()
   },
 
+  // ── Reparent node (drag-drop into group) ──────────────────────
+
+  reparentNode: (nodeId, newParentId) => {
+    const { nodes, edges } = get()
+
+    // Guard: can't reparent to self
+    if (nodeId === newParentId) return
+
+    // Guard: already a direct child of this parent
+    const currentParentEdge = edges.find(e => e.target === nodeId)
+    if (currentParentEdge?.source === newParentId) return
+
+    // Guard: newParentId must not be a descendant of nodeId (would create cycle)
+    const isDescendant = (fromId, targetId) => {
+      for (const e of edges) {
+        if (e.source !== fromId) continue
+        if (e.target === targetId || isDescendant(e.target, targetId)) return true
+      }
+      return false
+    }
+    if (isDescendant(nodeId, newParentId)) return
+
+    const newParentNode = nodes.find(n => n.id === newParentId)
+    const newParentLevel = newParentNode?.data?.level ?? 0
+
+    // Build new edge list: remove old parent edge, add new one
+    const newEdges = [
+      ...edges.filter(e => e.target !== nodeId),
+      {
+        id: `e-${newParentId}-${nodeId}`,
+        source: newParentId,
+        target: nodeId,
+        type: 'straight-center',
+        style: { stroke: '#94a3b8', strokeWidth: 2 },
+        animated: false,
+      },
+    ]
+
+    // Recursively assign new levels for the moved subtree
+    const levelMap = {}
+    const assignLevels = (id, level) => {
+      levelMap[id] = Math.min(level, 3)
+      newEdges.filter(e => e.source === id).forEach(e => assignLevels(e.target, level + 1))
+    }
+    assignLevels(nodeId, newParentLevel + 1)
+
+    set(state => ({
+      nodes: state.nodes.map(n =>
+        levelMap[n.id] !== undefined
+          ? { ...n, data: { ...n.data, level: levelMap[n.id] } }
+          : n
+      ),
+      edges: newEdges,
+      isDirty: true,
+    }))
+
+    get().scheduleAutosave()
+  },
+
   // ── Modal ─────────────────────────────────────────────────────
 
   openMapList: () => set({ isMapListOpen: true }),

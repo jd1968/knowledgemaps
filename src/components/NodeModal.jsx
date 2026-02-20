@@ -12,7 +12,7 @@ function parseH1s(html) {
   return Array.from(doc.querySelectorAll('h1')).map((el) => el.textContent.trim()).filter(Boolean)
 }
 
-const TYPE_LABELS = { folder: 'Folder', note: 'Note', submap: 'Submap' }
+const TYPE_LABELS = { folder: 'Folder', group: 'Group', note: 'Note', submap: 'Submap' }
 
 export default function NodeModal({ node, onClose }) {
   const updateNodeData   = useMindMapStore((s) => s.updateNodeData)
@@ -34,9 +34,9 @@ export default function NodeModal({ node, onClose }) {
   const hasNotes = content && content !== '<p></p>' && content !== ''
   const h1s = useMemo(() => parseH1s(content), [content])
 
-  // Nav badges: overview for folders, H1s for notes
+  // Nav badges: overview for folders/groups, H1s for notes
   const showNav = !isEditing && (
-    (nodeType === 'folder' && overview) ||
+    ((nodeType === 'folder' || nodeType === 'group') && overview) ||
     (nodeType === 'note' && h1s.length > 0)
   )
 
@@ -101,6 +101,8 @@ export default function NodeModal({ node, onClose }) {
       updateNodeData(id, { nodeType: 'note', overview: '' })
     } else if (newType === 'folder') {
       updateNodeData(id, { nodeType: 'folder', content: '' })
+    } else if (newType === 'group') {
+      updateNodeData(id, { nodeType: 'group', content: '' })
     }
     setShowConvertMenu(false)
     onClose()
@@ -122,7 +124,7 @@ export default function NodeModal({ node, onClose }) {
         {/* Navigation badges — view mode only */}
         {showNav && (
           <div className="node-modal-nav">
-            {nodeType === 'folder' && overview && (
+            {(nodeType === 'folder' || nodeType === 'group') && overview && (
               <button className="node-modal-nav-badge" onClick={scrollToOverview}>
                 Overview
               </button>
@@ -153,7 +155,7 @@ export default function NodeModal({ node, onClose }) {
                 />
               </div>
 
-              {nodeType === 'folder' && (
+              {(nodeType === 'folder' || nodeType === 'group') && (
                 <div className="field">
                   <label className="field-label">Overview</label>
                   <textarea
@@ -180,7 +182,7 @@ export default function NodeModal({ node, onClose }) {
             </>
           ) : (
             <>
-              {nodeType === 'folder' && overview && (
+              {(nodeType === 'folder' || nodeType === 'group') && overview && (
                 <div className="node-modal-view-section">
                   <div className="field-label">Overview</div>
                   <p className="node-modal-view-text">{overview}</p>
@@ -227,7 +229,7 @@ export default function NodeModal({ node, onClose }) {
           ) : showConvertMenu ? (
             <>
               <span className="node-modal-convert-label">Convert to:</span>
-              {['folder', 'note', 'submap'].map((t) => (
+              {['folder', 'group', 'note', 'submap'].map((t) => (
                 <button
                   key={t}
                   className={`btn btn--sm${nodeType === t ? ' btn--disabled' : ' btn--secondary'}`}
