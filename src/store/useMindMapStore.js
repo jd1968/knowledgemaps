@@ -564,9 +564,8 @@ export const useMindMapStore = create((set, get) => ({
     }
 
     set((state) => ({
-      nodes: [...state.nodes.map((n) => ({ ...n, selected: false })), { ...newNode, selected: true }],
+      nodes: [...state.nodes.map((n) => ({ ...n, selected: false })), newNode],
       edges: [...state.edges, newEdge],
-      selectedNodeId: id,
       isDirty: true,
     }))
 

@@ -77,7 +77,15 @@ const CustomNode = memo(({ id, data, selected }) => {
     <div
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      onPointerDown={() => selectNode(id)}
+      onPointerDown={(e) => {
+        const startX = e.clientX
+        const startY = e.clientY
+        document.addEventListener('pointerup', (e2) => {
+          const dx = e2.clientX - startX
+          const dy = e2.clientY - startY
+          if (dx * dx + dy * dy < 25) selectNode(id) // < 5px = tap, not drag
+        }, { once: true })
+      }}
       onClick={(e) => e.stopPropagation()}
       onDoubleClick={(e) => { e.stopPropagation(); startEditing() }}
       style={{
@@ -145,7 +153,7 @@ const CustomNode = memo(({ id, data, selected }) => {
           className="submap-open-btn nodrag nopan"
           title="Open submap"
           style={{ background: borderColor }}
-          onMouseDown={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => { e.stopPropagation(); navigateToSubmap(submapId) }}
         >
           ↗
@@ -157,7 +165,7 @@ const CustomNode = memo(({ id, data, selected }) => {
           className="collapse-btn nodrag nopan"
           title={collapsed ? 'Expand' : 'Collapse'}
           style={{ background: borderColor }}
-          onMouseDown={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => {
             e.stopPropagation()
             updateNodeData(id, { collapsed: !collapsed })
@@ -171,7 +179,7 @@ const CustomNode = memo(({ id, data, selected }) => {
         <button
           className="add-child-btn"
           title="Add child node"
-          onMouseDown={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => {
             e.stopPropagation()
             addChildNode(id)
@@ -186,7 +194,7 @@ const CustomNode = memo(({ id, data, selected }) => {
           className="collapse-all-btn nodrag nopan"
           title={allDescendantsCollapsed ? 'Expand all' : 'Collapse all'}
           style={{ background: borderColor }}
-          onMouseDown={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => {
             e.stopPropagation()
             setDescendantsCollapsed(id, !allDescendantsCollapsed)

@@ -1069,6 +1069,38 @@
   flex-shrink: 0;
 }
 
+.node-modal-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 16px 10px;
+  border-bottom: 1px solid #e2e8f0;
+  flex-shrink: 0;
+}
+
+.node-modal-nav-badge {
+  padding: 3px 11px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  white-space: nowrap;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: inherit;
+}
+
+.node-modal-nav-badge:hover {
+  background: #dbeafe;
+  color: #1d4ed8;
+  border-color: #bfdbfe;
+}
+
 .node-modal-header-left {
   display: flex;
   align-items: center;
@@ -1151,13 +1183,17 @@
   margin-left: auto;
 }
 
-/* Read-only TipTap: no border, transparent background */
+/* Read-only TipTap: expands to full content height so the modal body scrolls as one */
 .rich-text-editor--readonly {
+  flex: none;
+  min-height: 0;
   border: 1px solid #f1f5f9;
   background: #fafafa;
 }
 
 .rich-text-editor--readonly .editor-content {
+  overflow-y: visible;
+  height: auto;
   background: transparent;
 }
 
