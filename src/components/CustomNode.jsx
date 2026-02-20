@@ -175,10 +175,11 @@ const CustomNode = memo(({ id, data, selected }) => {
         </button>
       )}
 
-      {hovered && !editing && !collapsed && !isSubmap && (
+      {!editing && !collapsed && !isSubmap && (
         <button
           className="add-child-btn"
           title="Add child node"
+          style={{ background: borderColor }}
           onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => {
             e.stopPropagation()
