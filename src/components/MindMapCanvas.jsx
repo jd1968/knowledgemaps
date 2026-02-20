@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ReactFlow,
   Background,
@@ -68,6 +68,69 @@ const FitViewOnLoad = () => {
     const id = requestAnimationFrame(() => fitView({ padding: 0.3, duration: 400 }))
     return () => cancelAnimationFrame(id)
   }, [fitViewTrigger, fitView])
+
+  return null
+}
+
+// Handles pinch-to-zoom for touch devices — attached to the outer container in
+// capture phase so it intercepts before ReactFlow's node/pane handlers see the events.
+// This makes pinch work uniformly whether fingers land on the background or on nodes.
+const PinchZoomHandler = ({ containerRef }) => {
+  const { getViewport, setViewport } = useReactFlow()
+
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+
+    let prevDist = null
+
+    const getDist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY)
+    const getMid  = (t) => ({ x: (t[0].clientX + t[1].clientX) / 2, y: (t[0].clientY + t[1].clientY) / 2 })
+
+    const onTouchStart = (e) => {
+      if (e.touches.length === 2) {
+        prevDist = getDist(e.touches)
+        e.stopPropagation() // prevent ReactFlow starting a pan/drag with these touches
+      }
+    }
+
+    const onTouchMove = (e) => {
+      if (e.touches.length !== 2 || prevDist === null) return
+      e.preventDefault()   // prevent page scroll
+      e.stopPropagation()  // prevent ReactFlow double-handling
+
+      const currDist = getDist(e.touches)
+      const scale = currDist / prevDist
+      prevDist = currDist
+
+      const { x, y, zoom } = getViewport()
+      const newZoom = Math.min(Math.max(zoom * scale, 0.2), 2)
+
+      // Keep the pinch midpoint stationary in screen space
+      const mid  = getMid(e.touches)
+      const rect = el.getBoundingClientRect()
+      const px   = mid.x - rect.left
+      const py   = mid.y - rect.top
+
+      setViewport({
+        x: px - (px - x) * (newZoom / zoom),
+        y: py - (py - y) * (newZoom / zoom),
+        zoom: newZoom,
+      })
+    }
+
+    const onTouchEnd = (e) => { if (e.touches.length < 2) prevDist = null }
+
+    el.addEventListener('touchstart', onTouchStart, { passive: true,  capture: true })
+    el.addEventListener('touchmove',  onTouchMove,  { passive: false, capture: true })
+    el.addEventListener('touchend',   onTouchEnd,   { passive: true,  capture: true })
+
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart, { capture: true })
+      el.removeEventListener('touchmove',  onTouchMove,  { capture: true })
+      el.removeEventListener('touchend',   onTouchEnd,   { capture: true })
+    }
+  }, [containerRef, getViewport, setViewport])
 
   return null
 }
@@ -221,6 +284,10 @@ const MindMapCanvas = () => {
     () => typeof window !== 'undefined' && window.matchMedia('(hover: none) and (pointer: coarse)').matches
   )
 
+  // Ref for the outer wrapper — passed to PinchZoomHandler so it can attach
+  // capture-phase touch listeners that intercept before ReactFlow's handlers.
+  const containerRef = useRef(null)
+
   const onNodeDragStart = useCallback(() => {
     pushHistory()
   }, [pushHistory])
@@ -237,7 +304,7 @@ const MindMapCanvas = () => {
   )
 
   return (
-    <div style={{ width: '100%', height: '100%' }}>
+    <div ref={containerRef} style={{ width: '100%', height: '100%' }}>
       <ReactFlow
         nodes={nodesWithColor}
         edges={edgesWithHidden}
@@ -255,7 +322,7 @@ const MindMapCanvas = () => {
         selectionOnDrag={!isTouch}
         selectionMode={SelectionMode.Partial}
         zoomOnScroll={false}
-        zoomOnPinch={true}
+        zoomOnPinch={false}
         fitView
         fitViewOptions={{ padding: 0.3 }}
         minZoom={0.2}
@@ -289,6 +356,7 @@ const MindMapCanvas = () => {
         </Panel>
         <BreadcrumbNav />
         <FitViewOnLoad />
+        <PinchZoomHandler containerRef={containerRef} />
       </ReactFlow>
     </div>
   )
