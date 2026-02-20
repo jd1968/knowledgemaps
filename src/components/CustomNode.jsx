@@ -30,6 +30,7 @@ const CustomNode = memo(({ id, data, selected }) => {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
   const inputRef = useRef(null)
+  const selectTimerRef = useRef(null)
   const { title, level, l1Color, hasChildren, collapsed, hasCollapsibleDescendants, allDescendantsCollapsed, isSubmap, submapId } = data
   const cfg = getConfig(level)
   const borderColor = l1Color ?? '#94a3b8'
@@ -83,11 +84,18 @@ const CustomNode = memo(({ id, data, selected }) => {
         document.addEventListener('pointerup', (e2) => {
           const dx = e2.clientX - startX
           const dy = e2.clientY - startY
-          if (dx * dx + dy * dy < 25) selectNode(id) // < 5px = tap, not drag
+          if (dx * dx + dy * dy < 25) {
+            clearTimeout(selectTimerRef.current)
+            selectTimerRef.current = setTimeout(() => selectNode(id), 300)
+          }
         }, { once: true })
       }}
       onClick={(e) => e.stopPropagation()}
-      onDoubleClick={(e) => { e.stopPropagation(); startEditing() }}
+      onDoubleClick={(e) => {
+        e.stopPropagation()
+        clearTimeout(selectTimerRef.current) // cancel pending modal open
+        startEditing()
+      }}
       style={{
         width: cfg.width,
         ...(cfg.height ? { height: cfg.height } : {}),
