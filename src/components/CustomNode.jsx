@@ -106,8 +106,8 @@ const CustomNode = memo(({ id, data, selected }) => {
           : nodeType === 'note'
             ? 'repeating-linear-gradient(to bottom, #fffef5 0px, #fffef5 23px, #e8e0d0 23px, #e8e0d0 24px)'
             : '#ffffff',
-        border: `${nodeType === 'note' ? '1px' : '2px'} ${isSubmap ? 'dashed' : 'solid'} ${borderColor}`,
-        borderRadius: '10px',
+        ...(nodeType !== 'note' && { border: `2px ${isSubmap ? 'dashed' : 'solid'} ${borderColor}` }),
+        borderRadius: nodeType === 'note' ? '0' : '10px',
         fontSize: cfg.fontSize,
         fontWeight: cfg.fontWeight,
         color: '#0f172a',
