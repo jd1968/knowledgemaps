@@ -143,7 +143,6 @@ const MindMapCanvas = () => {
     onEdgesChange,
     onConnect,
     pushHistory,
-    selectNode,
     deselectNode,
   } = useMindMapStore()
 
@@ -292,17 +291,6 @@ const MindMapCanvas = () => {
     pushHistory()
   }, [pushHistory])
 
-  const onSelectionChange = useCallback(
-    ({ nodes: selected }) => {
-      if (selected.length === 1) {
-        selectNode(selected[0].id)
-      } else {
-        deselectNode()
-      }
-    },
-    [selectNode, deselectNode]
-  )
-
   return (
     <div ref={containerRef} style={{ width: '100%', height: '100%' }}>
       <ReactFlow
@@ -312,7 +300,7 @@ const MindMapCanvas = () => {
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onNodeDragStart={onNodeDragStart}
-        onSelectionChange={onSelectionChange}
+        onPaneClick={deselectNode}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         // Desktop: Miro-style — trackpad pans, left-drag lassos
