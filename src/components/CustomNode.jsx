@@ -105,7 +105,7 @@ const CustomNode = memo(({ id, data, selected }) => {
         display: 'flex',
         flexDirection: 'column',
         background: nodeType === 'group'
-          ? 'rgba(15, 23, 42, 0.02)'
+          ? '#dfe7f3'
           : isSubmap
             ? blendWithWhite(borderColor, 0.08)
           : nodeType === 'note'
