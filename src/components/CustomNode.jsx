@@ -107,25 +107,27 @@ const CustomNode = memo(({ id, data, selected }) => {
         display: 'flex',
         flexDirection: 'column',
         background: nodeType === 'group'
-          ? '#dfe7f3'
+          ? blendWithWhite(borderColor, 0.04)
           : isSubmap
             ? blendWithWhite(borderColor, 0.08)
           : nodeType === 'note'
-            ? 'repeating-linear-gradient(to bottom, #fffef5 0px, #fffef5 23px, #e8e0d0 23px, #e8e0d0 24px)'
+            ? 'repeating-linear-gradient(to bottom, #ffffff 0px, #ffffff 17px, #e8edf2 17px, #e8edf2 18px)'
             : '#ffffff',
-        ...(nodeType !== 'note' && {
-          border: nodeType === 'group'
+        border: nodeType === 'note'
+          ? '1px solid #c8cdd5'
+          : nodeType === 'group'
             ? `2px solid ${borderColor}90`
             : `2px ${isSubmap ? 'dashed' : 'solid'} ${borderColor}`,
-        }),
-        borderRadius: nodeType === 'note' ? '0' : nodeType === 'group' ? '12px' : '10px',
+        borderRadius: nodeType === 'note' ? '2px' : nodeType === 'group' ? '12px' : '10px',
         fontSize: cfg.fontSize,
         fontWeight: cfg.fontWeight,
         color: '#0f172a',
         cursor: editing ? 'text' : 'pointer',
         boxShadow: selected
-          ? `0 0 0 3px ${borderColor}40, 0 4px 12px rgba(0,0,0,0.10)`
-          : '0 2px 8px rgba(0,0,0,0.08)',
+          ? `0 0 0 3px ${borderColor}40, 2px 4px 14px rgba(0,0,0,0.18)`
+          : nodeType === 'note'
+            ? '1px 2px 6px rgba(0,0,0,0.09)'
+            : '0 2px 8px rgba(0,0,0,0.08)',
         transition: 'box-shadow 0.15s ease',
         userSelect: 'none',
         position: 'relative',
@@ -189,7 +191,7 @@ const CustomNode = memo(({ id, data, selected }) => {
         </div>
       )}
 
-      {/* Footer — content indicators (folders and submaps only) */}
+{/* Footer — content indicators (folders and submaps only) */}
       {!editing && nodeType !== 'note' && nodeType !== 'group' && (
         <div style={{
           display: 'flex',

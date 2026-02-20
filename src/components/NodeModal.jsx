@@ -22,15 +22,15 @@ export default function NodeModal({ node, onClose }) {
   const navigateToSubmap = useMindMapStore((s) => s.navigateToSubmap)
   const isEditMode       = useMindMapStore((s) => s.isEditMode)
 
-  const [isEditing, setIsEditing] = useState(false)
-  const [draft, setDraft]         = useState(null)
+  const { id } = node
+  const { title, level, content, overview, isSubmap, submapId, nodeType = 'folder' } = node.data
+
+  const [isEditing, setIsEditing] = useState(isEditMode)
+  const [draft, setDraft]         = useState(isEditMode ? { title: title || '', overview: overview || '', content: content || '' } : null)
   const [converting, setConverting] = useState(false)
   const [showConvertMenu, setShowConvertMenu] = useState(false)
 
   const modalBodyRef = useRef(null)
-
-  const { id } = node
-  const { title, level, content, overview, isSubmap, submapId, nodeType = 'folder' } = node.data
 
   const hasNotes = content && content !== '<p></p>' && content !== ''
   const h1s = useMemo(() => parseH1s(content), [content])
@@ -74,8 +74,7 @@ export default function NodeModal({ node, onClose }) {
   const saveEdit = () => {
     if (!isEditMode) return
     if (draft) updateNodeData(id, { title: draft.title, overview: draft.overview, content: draft.content })
-    setIsEditing(false)
-    setDraft(null)
+    onClose()
   }
 
   const cancelEdit = () => {
@@ -230,7 +229,7 @@ export default function NodeModal({ node, onClose }) {
 
         {/* Footer */}
         <div className="node-modal-footer">
-          {!isEditMode ? null : isEditing ? (
+          {isEditing ? (
             <>
               <button className="btn btn--secondary btn--sm" onClick={cancelEdit}>
                 Cancel
@@ -259,7 +258,7 @@ export default function NodeModal({ node, onClose }) {
             </>
           ) : (
             <>
-              {level > 0 && !isSubmap && (
+              {isEditMode && level > 0 && !isSubmap && (
                 <button
                   className="btn btn--secondary btn--sm"
                   onClick={() => setShowConvertMenu(true)}
@@ -267,7 +266,7 @@ export default function NodeModal({ node, onClose }) {
                   Convert to…
                 </button>
               )}
-              {level > 0 && (
+              {isEditMode && level > 0 && (
                 <button className="btn btn--danger btn--sm" onClick={handleDelete}>
                   Delete
                 </button>

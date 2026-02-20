@@ -132,13 +132,13 @@ const Toolbar = () => {
         >
           ↪ Redo
         </button>
-        <button
-          className={`btn btn--sm ${isEditMode ? 'btn--primary' : 'btn--ghost'}`}
-          onClick={toggleEditMode}
-          title={isEditMode ? 'Disable editing' : 'Enable editing'}
-        >
-          {isEditMode ? 'Edit Mode: On' : 'Edit Mode: Off'}
-        </button>
+        <label className="edit-mode-toggle" title={isEditMode ? 'Disable editing' : 'Enable editing'}>
+          <input type="checkbox" checked={isEditMode} onChange={toggleEditMode} />
+          <span className="edit-mode-toggle__track">
+            <span className="edit-mode-toggle__thumb" />
+          </span>
+          <span className="edit-mode-toggle__label">Edit Mode</span>
+        </label>
 
         <div className="toolbar-sep" />
 
