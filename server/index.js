@@ -2,18 +2,32 @@ import express from 'express'
 import cors from 'cors'
 import dotenv from 'dotenv'
 import { createClient } from '@supabase/supabase-js'
+import { fileURLToPath } from 'url'
+import { dirname, join } from 'path'
+import { existsSync } from 'fs'
 
 dotenv.config()
 
+const __dirname = dirname(fileURLToPath(import.meta.url))
 const app = express()
 const PORT = process.env.PORT || 3001
+const isProd = process.env.NODE_ENV === 'production'
 
-app.use(cors({ origin: 'http://localhost:5173' }))
+// In dev, restrict CORS to the Vite dev server.
+// In production the frontend is served from the same origin, so CORS is irrelevant
+// for browser requests — but we allow it explicitly via CLIENT_ORIGIN if set.
+const corsOrigin = isProd
+  ? (process.env.CLIENT_ORIGIN || true)
+  : 'http://localhost:5173'
+
+app.use(cors({ origin: corsOrigin }))
 app.use(express.json({ limit: '10mb' }))
 
 // ── Supabase client (server-side, uses service role key) ──────────────
+// VITE_SUPABASE_URL is the same value as SUPABASE_URL — reuse it to avoid duplication.
+// The service role key is separate: it bypasses RLS and must never reach the browser.
 const supabase = createClient(
-  process.env.SUPABASE_URL || '',
+  process.env.VITE_SUPABASE_URL || '',
   process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 )
 
@@ -86,6 +100,17 @@ app.delete('/api/maps/:id', async (req, res) => {
   res.json({ success: true })
 })
 
+// ── Serve frontend in production ──────────────────────────────────────
+// API routes are registered above; this catch-all comes last so it never
+// swallows /api/* requests.
+const distPath = join(__dirname, '..', 'dist')
+if (isProd && existsSync(distPath)) {
+  app.use(express.static(distPath))
+  app.get('*', (_req, res) => {
+    res.sendFile(join(distPath, 'index.html'))
+  })
+}
+
 app.listen(PORT, () => {
-  console.log(`Knowledge Maps API server running on http://localhost:${PORT}`)
+  console.log(`Knowledge Maps server running on port ${PORT} (${isProd ? 'production' : 'development'})`)
 })
