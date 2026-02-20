@@ -16,6 +16,7 @@ const initialNodes = [
       title: 'Central Topic',
       key: ROOT_ID,
       level: 0,
+      nodeType: 'folder',
       content: '',
       overview: '',
     },
@@ -99,6 +100,7 @@ export const useMindMapStore = create((set, get) => ({
         title,
         key: id,
         level,
+        nodeType: 'folder',
         content: '',
         overview: '',
       },
@@ -318,7 +320,12 @@ export const useMindMapStore = create((set, get) => ({
 
       const nodes = (mapResult.data.data.nodes || []).map((n) => ({
         ...n,
-        data: { ...n.data, content: '', overview: '' },
+        data: {
+          ...n.data,
+          nodeType: n.data.nodeType ?? (n.data.isSubmap ? 'submap' : 'folder'),
+          content: '',
+          overview: '',
+        },
       }))
 
       set((state) => ({
@@ -453,7 +460,7 @@ export const useMindMapStore = create((set, get) => ({
           .filter((n) => !descendantIds.has(n.id))
           .map((n) =>
             n.id === nodeId
-              ? { ...n, data: { ...n.data, isSubmap: true, submapId: newMap.id, collapsed: false } }
+              ? { ...n, data: { ...n.data, isSubmap: true, submapId: newMap.id, nodeType: 'submap', collapsed: false } }
               : n
           ),
         edges: state.edges.filter(
@@ -558,7 +565,7 @@ export const useMindMapStore = create((set, get) => ({
       id,
       type: 'mindmap',
       position: { x, y },
-      data: { title: 'New Node', key: id, level: childLevel, content: '', overview: '' },
+      data: { title: 'New Node', key: id, level: childLevel, nodeType: 'folder', content: '', overview: '' },
     }
 
     const newEdge = {

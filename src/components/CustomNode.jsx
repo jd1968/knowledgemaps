@@ -31,7 +31,7 @@ const CustomNode = memo(({ id, data, selected }) => {
   const [draft, setDraft] = useState('')
   const inputRef = useRef(null)
   const selectTimerRef = useRef(null)
-  const { title, level, l1Color, hasChildren, collapsed, hasCollapsibleDescendants, allDescendantsCollapsed, isSubmap, submapId, hasNotes, hasOverview } = data
+  const { title, level, l1Color, hasChildren, collapsed, hasCollapsibleDescendants, allDescendantsCollapsed, isSubmap, submapId, hasNotes, hasOverview, nodeType } = data
   const cfg = getConfig(level)
   const borderColor = l1Color ?? '#94a3b8'
 
@@ -101,8 +101,12 @@ const CustomNode = memo(({ id, data, selected }) => {
         ...(cfg.height ? { height: cfg.height } : {}),
         display: 'flex',
         flexDirection: 'column',
-        background: isSubmap ? blendWithWhite(borderColor, 0.12) : '#ffffff',
-        border: `2px ${isSubmap ? 'dashed' : 'solid'} ${borderColor}`,
+        background: isSubmap
+          ? blendWithWhite(borderColor, 0.12)
+          : nodeType === 'note'
+            ? 'repeating-linear-gradient(to bottom, #fffef5 0px, #fffef5 23px, #e8e0d0 23px, #e8e0d0 24px)'
+            : '#ffffff',
+        border: `${nodeType === 'note' ? '1px' : '2px'} ${isSubmap ? 'dashed' : 'solid'} ${borderColor}`,
         borderRadius: '10px',
         fontSize: cfg.fontSize,
         fontWeight: cfg.fontWeight,
@@ -157,12 +161,14 @@ const CustomNode = memo(({ id, data, selected }) => {
             }}
           />
         ) : (
-          <span>{title || 'Untitled'}</span>
+          <span style={nodeType === 'note' && !hasNotes ? { color: '#94a3b8' } : undefined}>
+            {title || 'Untitled'}
+          </span>
         )}
       </div>
 
-      {/* Footer — content indicators */}
-      {!editing && (
+      {/* Footer — content indicators (folders and submaps only) */}
+      {!editing && nodeType !== 'note' && (
         <div style={{
           display: 'flex',
           alignItems: 'center',
@@ -211,7 +217,7 @@ const CustomNode = memo(({ id, data, selected }) => {
         </button>
       )}
 
-      {!editing && !collapsed && !isSubmap && (
+      {!editing && !collapsed && !isSubmap && nodeType !== 'note' && (
         <button
           className="add-child-btn"
           title="Add child node"

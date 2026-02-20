@@ -12,6 +12,8 @@ function parseH1s(html) {
   return Array.from(doc.querySelectorAll('h1')).map((el) => el.textContent.trim()).filter(Boolean)
 }
 
+const TYPE_LABELS = { folder: 'Folder', note: 'Note', submap: 'Submap' }
+
 export default function NodeModal({ node, onClose }) {
   const updateNodeData   = useMindMapStore((s) => s.updateNodeData)
   const deleteNode       = useMindMapStore((s) => s.deleteNode)
@@ -22,18 +24,21 @@ export default function NodeModal({ node, onClose }) {
   const [isEditing, setIsEditing] = useState(false)
   const [draft, setDraft]         = useState(null)
   const [converting, setConverting] = useState(false)
+  const [showConvertMenu, setShowConvertMenu] = useState(false)
 
   const modalBodyRef = useRef(null)
 
   const { id } = node
-  const { title, level, key, content, overview, isSubmap, submapId } = node.data
-  const levelLabel = LEVEL_LABELS[Math.min(level ?? 0, 3)] || 'Node'
+  const { title, level, content, overview, isSubmap, submapId, nodeType = 'folder' } = node.data
 
   const hasNotes = content && content !== '<p></p>' && content !== ''
   const h1s = useMemo(() => parseH1s(content), [content])
 
-  // Navigation badges: overview (if present) + one per H1
-  const showNav = !isEditing && (overview || h1s.length > 0)
+  // Nav badges: overview for folders, H1s for notes
+  const showNav = !isEditing && (
+    (nodeType === 'folder' && overview) ||
+    (nodeType === 'note' && h1s.length > 0)
+  )
 
   const scrollToOverview = () => {
     modalBodyRef.current?.querySelector('.node-modal-view-section')
@@ -86,6 +91,21 @@ export default function NodeModal({ node, onClose }) {
     else onClose()
   }, [title, id, convertToSubmap, onClose])
 
+  const handleConvertType = useCallback((newType) => {
+    if (newType === nodeType) return
+    if (newType === 'submap') { handleConvertToSubmap(); return }
+
+    if (newType === 'note') {
+      const hasChildren = node.data.hasChildren
+      if (hasChildren && !confirm(`"${title}" has children. Converting to Note will prevent adding more children, but existing ones will remain.\n\nContinue?`)) return
+      updateNodeData(id, { nodeType: 'note', overview: '' })
+    } else if (newType === 'folder') {
+      updateNodeData(id, { nodeType: 'folder', content: '' })
+    }
+    setShowConvertMenu(false)
+    onClose()
+  }, [nodeType, title, id, node.data.hasChildren, updateNodeData, handleConvertToSubmap, onClose])
+
   return createPortal(
     <div
       className="node-modal-overlay"
@@ -102,12 +122,12 @@ export default function NodeModal({ node, onClose }) {
         {/* Navigation badges — view mode only */}
         {showNav && (
           <div className="node-modal-nav">
-            {overview && (
+            {nodeType === 'folder' && overview && (
               <button className="node-modal-nav-badge" onClick={scrollToOverview}>
                 Overview
               </button>
             )}
-            {h1s.map((text, i) => (
+            {nodeType === 'note' && h1s.map((text, i) => (
               <button key={i} className="node-modal-nav-badge" onClick={() => scrollToH1(i)}>
                 {text}
               </button>
@@ -133,18 +153,20 @@ export default function NodeModal({ node, onClose }) {
                 />
               </div>
 
-              <div className="field">
-                <label className="field-label">Overview</label>
-                <textarea
-                  className="field-input field-textarea"
-                  value={draft.overview}
-                  onChange={(e) => setDraft((d) => ({ ...d, overview: e.target.value }))}
-                  placeholder="Brief overview…"
-                  rows={3}
-                />
-              </div>
+              {nodeType === 'folder' && (
+                <div className="field">
+                  <label className="field-label">Overview</label>
+                  <textarea
+                    className="field-input field-textarea"
+                    value={draft.overview}
+                    onChange={(e) => setDraft((d) => ({ ...d, overview: e.target.value }))}
+                    placeholder="Brief overview…"
+                    rows={3}
+                  />
+                </div>
+              )}
 
-              {!isSubmap && (
+              {nodeType === 'note' && (
                 <div className="field field--grow">
                   <label className="field-label">Notes</label>
                   <RichTextEditor
@@ -158,14 +180,14 @@ export default function NodeModal({ node, onClose }) {
             </>
           ) : (
             <>
-              {overview ? (
+              {nodeType === 'folder' && overview && (
                 <div className="node-modal-view-section">
                   <div className="field-label">Overview</div>
                   <p className="node-modal-view-text">{overview}</p>
                 </div>
-              ) : null}
+              )}
 
-              {!isSubmap && hasNotes && (
+              {nodeType === 'note' && hasNotes && (
                 <div className="field">
                   <div className="field-label">Notes</div>
                   <RichTextEditor
@@ -202,15 +224,32 @@ export default function NodeModal({ node, onClose }) {
                 Save
               </button>
             </>
+          ) : showConvertMenu ? (
+            <>
+              <span className="node-modal-convert-label">Convert to:</span>
+              {['folder', 'note', 'submap'].map((t) => (
+                <button
+                  key={t}
+                  className={`btn btn--sm${nodeType === t ? ' btn--disabled' : ' btn--secondary'}`}
+                  disabled={nodeType === t || converting}
+                  onClick={() => handleConvertType(t)}
+                >
+                  {t === 'submap' ? '↗ Submap' : TYPE_LABELS[t]}
+                  {converting && t === 'submap' ? '…' : ''}
+                </button>
+              ))}
+              <button className="btn btn--secondary btn--sm" onClick={() => setShowConvertMenu(false)}>
+                Cancel
+              </button>
+            </>
           ) : (
             <>
               {level > 0 && !isSubmap && (
                 <button
                   className="btn btn--secondary btn--sm"
-                  onClick={handleConvertToSubmap}
-                  disabled={converting}
+                  onClick={() => setShowConvertMenu(true)}
                 >
-                  {converting ? 'Converting…' : '↗ Convert to submap'}
+                  Convert to…
                 </button>
               )}
               {level > 0 && (
