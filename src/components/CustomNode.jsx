@@ -176,11 +176,9 @@ const CustomNode = memo(({ id, data, selected }) => {
           borderRadius: '0 0 8px 8px',
           fontSize: '24px',
           lineHeight: 1,
-          opacity: 0.5,
           pointerEvents: 'none',
         }}>
-          {hasOverview && <span title="Has overview">◎</span>}
-          {hasNotes && <span title="Has notes">≡</span>}
+          {(hasNotes || hasOverview) && <span style={{ color: '#94a3b8' }}>≡</span>}
         </div>
       )}
 
