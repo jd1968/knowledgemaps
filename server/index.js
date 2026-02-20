@@ -8,6 +8,8 @@ import { existsSync } from 'fs'
 
 dotenv.config()
 
+//test
+
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const app = express()
 const PORT = process.env.PORT || 3001
