@@ -140,6 +140,7 @@ const MindMapCanvas = () => {
     moveSubtreeBy,
     scheduleAutosave,
     isEditMode,
+    openMenuNodeId,
   } = useMindMapStore()
 
   // targetId -> sourceId lookup
@@ -306,7 +307,7 @@ const MindMapCanvas = () => {
       return {
         ...node,
         ...(groupLayout ? { position: { x: groupLayout.x, y: groupLayout.y } } : {}),
-        zIndex: node.data?.nodeType === 'group' ? 0 : 10,
+        zIndex: node.id === openMenuNodeId ? 9999 : node.data?.nodeType === 'group' ? 0 : 10,
         className: node.data?.nodeType === 'group' ? 'km-group-node' : 'km-content-node',
         hidden: hiddenNodeIds.has(node.id),
         data: {
@@ -321,13 +322,12 @@ const MindMapCanvas = () => {
       }
     })
 
-    // Keep container groups behind regular nodes for consistent child interaction.
+    // Keep container groups behind regular nodes; elevated (menu-open) node last so it renders on top.
     return decoratedNodes.sort((a, b) => {
-      const aGroup = a.data?.nodeType === 'group' ? 0 : 1
-      const bGroup = b.data?.nodeType === 'group' ? 0 : 1
-      return aGroup - bGroup
+      const rank = (n) => n.id === openMenuNodeId ? 2 : n.data?.nodeType === 'group' ? 0 : 1
+      return rank(a) - rank(b)
     })
-  }, [nodes, edges, l1ColorMap, getL1Id, childrenMap, hiddenNodeIds, hasCollapsibleDescendantsSet, allDescendantsCollapsedSet, nodeById])
+  }, [nodes, edges, l1ColorMap, getL1Id, childrenMap, hiddenNodeIds, hasCollapsibleDescendantsSet, allDescendantsCollapsedSet, nodeById, openMenuNodeId])
 
   const groupDropTargets = useMemo(
     () =>

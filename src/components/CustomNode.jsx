@@ -22,6 +22,7 @@ const blendWithWhite = (hex, alpha) => {
 const CONVERT_LABELS = { folder: 'Folder', group: 'Group', note: 'Note', pointer: 'Pointer', submap: '↗ Submap' }
 
 const CustomNode = memo(({ id, data, selected }) => {
+  const setOpenMenuNodeId     = useMindMapStore((state) => state.setOpenMenuNodeId)
   const addChildNode          = useMindMapStore((state) => state.addChildNode)
   const updateNodeData        = useMindMapStore((state) => state.updateNodeData)
   const deleteNode            = useMindMapStore((state) => state.deleteNode)
@@ -107,8 +108,8 @@ const CustomNode = memo(({ id, data, selected }) => {
       if (nodeType === 'pointer') setEdgeType(id, 'straight-center')
       updateNodeData(id, { nodeType: newType })
     }
-    setShowConvertMenu(false)
-  }, [nodeType, title, id, hasChildren, convertToSubmap, updateNodeData, setEdgeType])
+    setShowConvertMenu(false); setOpenMenuNodeId(null)
+  }, [nodeType, title, id, hasChildren, convertToSubmap, updateNodeData, setEdgeType, setOpenMenuNodeId])
 
   // Invisible handles centred on the node — edges connect to the node centre
   const centerHandle = {
@@ -126,7 +127,7 @@ const CustomNode = memo(({ id, data, selected }) => {
   return (
     <div
       onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => { setHovered(false); setShowConvertMenu(false); setShowAddMenu(false) }}
+      onMouseLeave={() => { setHovered(false); setShowConvertMenu(false); setShowAddMenu(false); setOpenMenuNodeId(null) }}
       onPointerDown={(e) => {
         const startX = e.clientX
         const startY = e.clientY
@@ -338,7 +339,7 @@ const CustomNode = memo(({ id, data, selected }) => {
             title="Add child node"
             style={{ background: showAddMenu ? borderColor : borderColor }}
             onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => { e.stopPropagation(); setShowAddMenu((v) => !v) }}
+            onClick={(e) => { e.stopPropagation(); const next = !showAddMenu; setShowAddMenu(next); setOpenMenuNodeId(next ? id : null) }}
           >
             +
           </button>
@@ -356,7 +357,7 @@ const CustomNode = memo(({ id, data, selected }) => {
                   onClick={(e) => {
                     e.stopPropagation()
                     const newId = addChildNode(id, t)
-                    setShowAddMenu(false)
+                    setShowAddMenu(false); setOpenMenuNodeId(null)
                     if (newId) selectNode(newId)
                   }}
                 >
@@ -390,7 +391,7 @@ const CustomNode = memo(({ id, data, selected }) => {
           title="Convert type"
           style={{ background: borderColor }}
           onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => { e.stopPropagation(); setShowConvertMenu((v) => !v) }}
+          onClick={(e) => { e.stopPropagation(); const next = !showConvertMenu; setShowConvertMenu(next); setOpenMenuNodeId(next ? id : null) }}
         >
           ⇄
         </button>

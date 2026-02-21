@@ -44,6 +44,8 @@ export const useMindMapStore = create((set, get) => ({
   autosaveTimer: null,
   fitViewTrigger: 0,
   isEditMode: false,
+  openMenuNodeId: null,
+  setOpenMenuNodeId: (id) => set({ openMenuNodeId: id }),
 
   setEditMode: (isEditMode) => set({ isEditMode }),
   toggleEditMode: () => set((state) => ({ isEditMode: !state.isEditMode })),
