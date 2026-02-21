@@ -39,7 +39,6 @@ const CustomNode = memo(({ id, data, selected }) => {
   const [editing, setEditing]             = useState(false)
   const [draft, setDraft]                 = useState('')
   const [showConvertMenu, setShowConvertMenu] = useState(false)
-  const [showAddMenu, setShowAddMenu]     = useState(false)
   const [converting, setConverting]       = useState(false)
   const inputRef       = useRef(null)
   const selectTimerRef = useRef(null)
@@ -81,7 +80,7 @@ const CustomNode = memo(({ id, data, selected }) => {
 
   // Close menus when the user clicks outside the node (capture phase bypasses stopPropagation)
   useEffect(() => {
-    if (!showConvertMenu && !showAddMenu) return
+    if (!showConvertMenu) return
     const handler = (e) => {
       if (nodeRef.current?.contains(e.target)) return
       setShowConvertMenu(false)
@@ -90,7 +89,7 @@ const CustomNode = memo(({ id, data, selected }) => {
     }
     document.addEventListener('mousedown', handler, true)
     return () => document.removeEventListener('mousedown', handler, true)
-  }, [showConvertMenu, showAddMenu, setOpenMenuNodeId])
+  }, [showConvertMenu, setOpenMenuNodeId])
 
   const handleDelete = useCallback(() => {
     if (!confirm(`Delete "${title || 'Untitled'}"?`)) return
@@ -348,40 +347,19 @@ const CustomNode = memo(({ id, data, selected }) => {
       )}
 
       {!editing && !collapsed && !isSubmap && nodeType !== 'note' && nodeType !== 'pointer' && isEditMode && (
-        <>
-          <button
-            className="add-child-btn"
-            title="Add child node"
-            style={{ background: showAddMenu ? borderColor : borderColor }}
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => { e.stopPropagation(); const next = !showAddMenu; setShowAddMenu(next); setOpenMenuNodeId(next ? id : null) }}
-          >
-            +
-          </button>
-
-          {showAddMenu && (
-            <div
-              className="node-add-menu nodrag nopan"
-              onPointerDown={(e) => e.stopPropagation()}
-            >
-              <span className="node-convert-menu-label">Add as</span>
-              {['folder', 'group', 'note', 'pointer'].map((t) => (
-                <button
-                  key={t}
-                  className="node-convert-menu-item"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    const newId = addChildNode(id, t)
-                    setShowAddMenu(false); setOpenMenuNodeId(null)
-                    if (newId) selectNode(newId)
-                  }}
-                >
-                  {CONVERT_LABELS[t]}
-                </button>
-              ))}
-            </div>
-          )}
-        </>
+        <button
+          className="add-child-btn"
+          title="Add child node"
+          style={{ background: borderColor }}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation()
+            const newId = addChildNode(id, 'folder')
+            if (newId) selectNode(newId)
+          }}
+        >
+          +
+        </button>
       )}
 
       {!isSubmap && hovered && hasCollapsibleDescendants && !editing && isEditMode && (

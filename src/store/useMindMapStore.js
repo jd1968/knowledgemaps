@@ -582,7 +582,7 @@ export const useMindMapStore = create((set, get) => ({
 
     const parentLevel = parent.data.level ?? 0
     const isGroupParent = parent.data.nodeType === 'group'
-    const childLevel = Math.min(parentLevel + 1, 3)
+    const childLevel = parentLevel + 1
     const NODE_WIDTHS = [190, 160, 135, 115]
     const parentWidth = NODE_WIDTHS[Math.min(parentLevel, 3)]
 
@@ -686,7 +686,7 @@ export const useMindMapStore = create((set, get) => ({
     // Recursively assign new levels for the moved subtree
     const levelMap = {}
     const assignLevels = (id, level) => {
-      levelMap[id] = Math.min(level, 3)
+      levelMap[id] = level
       newEdges.filter(e => e.source === id).forEach(e => assignLevels(e.target, level + 1))
     }
     assignLevels(nodeId, newParentLevel + 1)
