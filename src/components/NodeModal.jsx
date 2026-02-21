@@ -5,7 +5,7 @@ import RichTextEditor from './RichTextEditor'
 
 const LEVEL_LABELS = { 0: 'Root', 1: 'Main Topic', 2: 'Subtopic', 3: 'Detail' }
 
-const TYPE_LABELS = { folder: 'Folder', group: 'Group', note: 'Note', submap: 'Submap' }
+const TYPE_LABELS = { folder: 'Folder', group: 'Group', note: 'Note', pointer: 'Pointer', submap: 'Submap' }
 
 export default function NodeModal({ node, onClose }) {
   const updateNodeData   = useMindMapStore((s) => s.updateNodeData)
@@ -13,6 +13,7 @@ export default function NodeModal({ node, onClose }) {
   const deselectNode     = useMindMapStore((s) => s.deselectNode)
   const convertToSubmap  = useMindMapStore((s) => s.convertToSubmap)
   const navigateToSubmap = useMindMapStore((s) => s.navigateToSubmap)
+  const setEdgeType      = useMindMapStore((s) => s.setEdgeType)
   const isEditMode       = useMindMapStore((s) => s.isEditMode)
 
   const { id } = node
@@ -80,18 +81,21 @@ export default function NodeModal({ node, onClose }) {
     if (newType === nodeType) return
     if (newType === 'submap') { handleConvertToSubmap(); return }
 
-    if (newType === 'note') {
+    if (newType === 'note' || newType === 'pointer') {
       const hasChildren = node.data.hasChildren
-      if (hasChildren && !confirm(`"${title}" has children. Converting to Note will prevent adding more children, but existing ones will remain.\n\nContinue?`)) return
-      updateNodeData(id, { nodeType: 'note' })
-    } else if (newType === 'folder') {
-      updateNodeData(id, { nodeType: 'folder' })
-    } else if (newType === 'group') {
-      updateNodeData(id, { nodeType: 'group' })
+      if (hasChildren && !confirm(`"${title}" has children. Converting to ${TYPE_LABELS[newType]} will prevent adding more children, but existing ones will remain.\n\nContinue?`)) return
+    }
+
+    if (newType === 'pointer') {
+      updateNodeData(id, { nodeType: 'pointer' })
+      setEdgeType(id, 'pointer-edge')
+    } else {
+      if (nodeType === 'pointer') setEdgeType(id, 'straight-center')
+      updateNodeData(id, { nodeType: newType })
     }
     setShowConvertMenu(false)
     onClose()
-  }, [isEditMode, nodeType, title, id, node.data.hasChildren, updateNodeData, handleConvertToSubmap, onClose])
+  }, [isEditMode, nodeType, title, id, node.data.hasChildren, updateNodeData, setEdgeType, handleConvertToSubmap, onClose])
 
   return createPortal(
     <div
@@ -174,7 +178,7 @@ export default function NodeModal({ node, onClose }) {
           ) : showConvertMenu ? (
             <>
               <span className="node-modal-convert-label">Convert to:</span>
-              {['folder', 'group', 'note', 'submap'].map((t) => (
+              {['folder', 'group', 'note', 'pointer', 'submap'].map((t) => (
                 <button
                   key={t}
                   className={`btn btn--sm${nodeType === t ? ' btn--disabled' : ' btn--secondary'}`}

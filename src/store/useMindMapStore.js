@@ -182,6 +182,16 @@ export const useMindMapStore = create((set, get) => ({
     get().scheduleAutosave()
   },
 
+  setEdgeType: (targetNodeId, edgeType) => {
+    set((state) => ({
+      edges: state.edges.map((e) =>
+        e.target === targetNodeId ? { ...e, type: edgeType } : e
+      ),
+      isDirty: true,
+    }))
+    get().scheduleAutosave()
+  },
+
   deleteNode: (nodeId) => {
     if (!get().isEditMode) return
     get().pushHistory()

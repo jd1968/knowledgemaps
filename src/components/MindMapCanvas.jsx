@@ -13,9 +13,10 @@ import '@xyflow/react/dist/style.css'
 import { useMindMapStore } from '../store/useMindMapStore'
 import CustomNode from './CustomNode'
 import StraightCenterEdge from './StraightCenterEdge'
+import PointerEdge from './PointerEdge'
 
 const nodeTypes = { mindmap: CustomNode }
-const edgeTypes = { 'straight-center': StraightCenterEdge }
+const edgeTypes = { 'straight-center': StraightCenterEdge, 'pointer-edge': PointerEdge }
 
 // Contemporary, compatible palette — one color per L1 branch
 const L1_PALETTE = [

@@ -3,7 +3,7 @@ import { Handle, Position } from '@xyflow/react'
 import { useMindMapStore } from '../store/useMindMapStore'
 
 const LEVEL_CONFIG = {
-  0: { width: 200, height: 200, fontSize: '15px', fontWeight: '700' },
+  0: { width: 180, height: null, fontSize: '16px', fontWeight: '700' },
   1: { width: 170, height: null,  fontSize: '14px', fontWeight: '600' },
   2: { width: 150, height: null,  fontSize: '13px', fontWeight: '500' },
   3: { width: 130, height: null,  fontSize: '12px', fontWeight: '400' },
@@ -32,12 +32,13 @@ const CustomNode = memo(({ id, data, selected }) => {
   const [draft, setDraft] = useState('')
   const inputRef = useRef(null)
   const selectTimerRef = useRef(null)
-  const { title, level, l1Color, hasChildren, collapsed, hasCollapsibleDescendants, allDescendantsCollapsed, isSubmap, submapId, hasNotes, nodeType, groupSize } = data
+  const { title, level, l1Color, hasChildren, collapsed, hasCollapsibleDescendants, allDescendantsCollapsed, isSubmap, submapId, hasNotes, nodeType, groupSize, content } = data
   const cfg = getConfig(level)
   const borderColor = l1Color ?? '#94a3b8'
   const width = groupSize?.width ?? cfg.width
-  const height = groupSize?.height ?? (nodeType === 'note' ? null : cfg.height)
+  const height = groupSize?.height ?? (nodeType === 'note' || nodeType === 'pointer' ? null : cfg.height)
   const showGroupHeader = nodeType === 'group' && !!title?.trim()
+  const hasPointerContent = nodeType === 'pointer' && content && content !== '<p></p>' && content !== ''
 
   const startEditing = useCallback(() => {
     setDraft(title || '')
@@ -106,22 +107,31 @@ const CustomNode = memo(({ id, data, selected }) => {
         ...(height ? { height } : {}),
         display: 'flex',
         flexDirection: 'column',
-        background: nodeType === 'group'
-          ? blendWithWhite(borderColor, 0.04)
-          : isSubmap
-            ? blendWithWhite(borderColor, 0.08)
-          : nodeType === 'note'
-            ? 'repeating-linear-gradient(to bottom, #ffffff 0px, #ffffff 17px, #e8edf2 17px, #e8edf2 18px)'
-            : '#ffffff',
-        border: nodeType === 'note'
-          ? `1px solid ${borderColor}90`
+        background: level === 0
+          ? '#3a3a3a'
           : nodeType === 'group'
-            ? `2px solid ${borderColor}90`
-            : `2px ${isSubmap ? 'dashed' : 'solid'} ${borderColor}`,
-        borderRadius: nodeType === 'note' ? '2px' : nodeType === 'group' ? '12px' : '10px',
+            ? blendWithWhite(borderColor, 0.04)
+            : isSubmap
+              ? blendWithWhite(borderColor, 0.08)
+            : nodeType === 'note'
+              ? 'repeating-linear-gradient(to bottom, #ffffff 0px, #ffffff 17px, #e8edf2 17px, #e8edf2 18px)'
+            : nodeType === 'pointer'
+              ? blendWithWhite(borderColor, 0.05)
+            : '#ffffff',
+        border: level === 0
+          ? 'none'
+          : nodeType === 'note'
+            ? `1px solid ${borderColor}90`
+            : nodeType === 'group'
+              ? `2px solid ${borderColor}90`
+            : nodeType === 'pointer'
+              ? `1px solid ${borderColor}40`
+              : `2px ${isSubmap ? 'dashed' : 'solid'} ${borderColor}`,
+        ...(nodeType === 'pointer' ? { borderLeft: `3px solid ${borderColor}` } : {}),
+        borderRadius: level === 0 ? '50px' : nodeType === 'note' ? '2px' : nodeType === 'group' ? '12px' : nodeType === 'pointer' ? '8px' : '10px',
         fontSize: cfg.fontSize,
         fontWeight: cfg.fontWeight,
-        color: '#0f172a',
+        color: level === 0 ? '#ffffff' : '#0f172a',
         cursor: editing ? 'text' : 'pointer',
         boxShadow: selected
           ? `0 0 0 3px ${borderColor}40, 2px 4px 14px rgba(0,0,0,0.18)`
@@ -138,8 +148,51 @@ const CustomNode = memo(({ id, data, selected }) => {
     >
       <Handle type="target" position={Position.Left} style={centerHandle} />
 
-      {/* Header — title */}
-      {(nodeType !== 'group' || showGroupHeader) && (
+      {/* Header — title (or pointer callout layout) */}
+      {nodeType === 'pointer' ? (
+        <div style={{ flex: 1 }}>
+          {editing ? (
+            <input
+              ref={inputRef}
+              className="nodrag nopan"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onBlur={commitEdit}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') { e.preventDefault(); commitEdit() }
+                if (e.key === 'Escape') { e.preventDefault(); cancelEdit() }
+                e.stopPropagation()
+              }}
+              style={{
+                display: 'block',
+                width: '100%',
+                border: 'none',
+                outline: 'none',
+                background: 'transparent',
+                fontSize: '11px',
+                fontWeight: 600,
+                color: '#0f172a',
+                fontFamily: 'inherit',
+                padding: '8px 10px 4px',
+                boxSizing: 'border-box',
+              }}
+            />
+          ) : (
+            <>
+              {title?.trim() && (
+                <div style={{ fontSize: '11px', fontWeight: 600, color: '#0f172a', padding: '8px 10px 4px', lineHeight: '1.3', wordBreak: 'break-word' }}>
+                  {title}
+                </div>
+              )}
+              <div
+                className="pointer-content"
+                style={{ fontSize: '11px', fontWeight: 400, color: '#334155', padding: '0 10px 8px', maxHeight: '120px', overflow: 'hidden', lineHeight: '1.4' }}
+                dangerouslySetInnerHTML={{ __html: hasPointerContent ? content : '<p style="margin:0;color:#94a3b8">No content yet</p>' }}
+              />
+            </>
+          )}
+        </div>
+      ) : (nodeType !== 'group' || showGroupHeader) && (
         <div style={{
           flex: nodeType === 'group' ? '0 0 auto' : 1,
           display: 'flex',
@@ -219,7 +272,7 @@ const CustomNode = memo(({ id, data, selected }) => {
         </button>
       )}
 
-      {!isSubmap && level !== 0 && hasChildren && (hovered || collapsed) && !editing && isEditMode && (
+      {!isSubmap && level !== 0 && hasChildren && (hovered || collapsed) && !editing && isEditMode && nodeType !== 'pointer' && (
         <button
           className="collapse-btn nodrag nopan"
           title={collapsed ? 'Expand' : 'Collapse'}
@@ -234,7 +287,7 @@ const CustomNode = memo(({ id, data, selected }) => {
         </button>
       )}
 
-      {!editing && !collapsed && !isSubmap && nodeType !== 'note' && isEditMode && (
+      {!editing && !collapsed && !isSubmap && nodeType !== 'note' && nodeType !== 'pointer' && isEditMode && (
         <button
           className="add-child-btn"
           title="Add child node"
