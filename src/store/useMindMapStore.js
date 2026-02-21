@@ -667,6 +667,9 @@ export const useMindMapStore = create((set, get) => ({
     const newParentLevel = newParentNode?.data?.level ?? 0
     const isGroupParent = newParentNode?.data?.nodeType === 'group'
 
+    // Preserve the existing edge type (e.g. pointer-edge) when reparenting
+    const existingEdgeType = currentParentEdge?.type ?? 'straight-center'
+
     // Build new edge list: remove old parent edge, add new one
     const newEdges = [
       ...edges.filter(e => e.target !== nodeId),
@@ -674,7 +677,7 @@ export const useMindMapStore = create((set, get) => ({
         id: `e-${newParentId}-${nodeId}`,
         source: newParentId,
         target: nodeId,
-        type: 'straight-center',
+        type: existingEdgeType,
         style: { stroke: '#94a3b8', strokeWidth: 2 },
         animated: false,
       },

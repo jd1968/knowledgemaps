@@ -329,19 +329,21 @@ const MindMapCanvas = () => {
     })
   }, [nodes, edges, l1ColorMap, getL1Id, childrenMap, hiddenNodeIds, hasCollapsibleDescendantsSet, allDescendantsCollapsedSet, nodeById, openMenuNodeId])
 
-  const groupDropTargets = useMemo(
+  const allDropTargets = useMemo(
     () =>
       nodesWithColor
-        .filter((n) => n.data?.nodeType === 'group' && !n.hidden)
+        .filter((n) => !n.hidden)
         .map((n) => {
-          const size = n.data?.groupSize ?? getStableNodeSize(n)
-          return {
-            id: n.id,
-            x: n.position.x,
-            y: n.position.y,
-            width: size.width,
-            height: size.height,
+          let width, height
+          if (n.data?.nodeType === 'group') {
+            const size = n.data?.groupSize ?? getStableNodeSize(n)
+            width = size.width
+            height = size.height
+          } else {
+            width = n.measured?.width ?? getStableNodeSize(n).width
+            height = n.measured?.height ?? getStableNodeSize(n).height
           }
+          return { id: n.id, x: n.position.x, y: n.position.y, width, height }
         }),
     [nodesWithColor]
   )
@@ -394,18 +396,20 @@ const MindMapCanvas = () => {
     const cx = draggedNode.position.x + dW / 2
     const cy = draggedNode.position.y + dH / 2
 
-    const target = groupDropTargets.find((g) => {
-      if (g.id === draggedNode.id) return false
-      return cx > g.x && cx < g.x + g.width &&
-             cy > g.y && cy < g.y + g.height
-    })
+    // Pick the smallest overlapping target (most specific hit when nodes overlap)
+    const target = allDropTargets
+      .filter((t) => {
+        if (t.id === draggedNode.id) return false
+        return cx > t.x && cx < t.x + t.width && cy > t.y && cy < t.y + t.height
+      })
+      .sort((a, b) => (a.width * a.height) - (b.width * b.height))[0]
 
     if (target) reparentNode(draggedNode.id, target.id)
 
     if (draggedNode.data?.nodeType === 'group') scheduleAutosave()
 
     delete dragStartRef.current[draggedNode.id]
-  }, [groupDropTargets, isEditMode, reparentNode, scheduleAutosave])
+  }, [allDropTargets, isEditMode, reparentNode, scheduleAutosave])
 
   return (
     <div ref={containerRef} style={{ width: '100%', height: '100%' }}>

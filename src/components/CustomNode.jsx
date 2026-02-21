@@ -43,6 +43,7 @@ const CustomNode = memo(({ id, data, selected }) => {
   const [converting, setConverting]       = useState(false)
   const inputRef       = useRef(null)
   const selectTimerRef = useRef(null)
+  const nodeRef        = useRef(null)
 
   const { title, level, l1Color, hasChildren, collapsed, hasCollapsibleDescendants, allDescendantsCollapsed, isSubmap, submapId, hasNotes, nodeType, groupSize, content } = data
   const cfg         = getConfig(level)
@@ -77,6 +78,19 @@ const CustomNode = memo(({ id, data, selected }) => {
       inputRef.current.select()
     }
   }, [editing])
+
+  // Close menus when the user clicks outside the node (capture phase bypasses stopPropagation)
+  useEffect(() => {
+    if (!showConvertMenu && !showAddMenu) return
+    const handler = (e) => {
+      if (nodeRef.current?.contains(e.target)) return
+      setShowConvertMenu(false)
+      setShowAddMenu(false)
+      setOpenMenuNodeId(null)
+    }
+    document.addEventListener('mousedown', handler, true)
+    return () => document.removeEventListener('mousedown', handler, true)
+  }, [showConvertMenu, showAddMenu, setOpenMenuNodeId])
 
   const handleDelete = useCallback(() => {
     if (!confirm(`Delete "${title || 'Untitled'}"?`)) return
@@ -126,8 +140,9 @@ const CustomNode = memo(({ id, data, selected }) => {
 
   return (
     <div
+      ref={nodeRef}
       onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => { setHovered(false); setShowConvertMenu(false); setShowAddMenu(false); setOpenMenuNodeId(null) }}
+      onMouseLeave={() => setHovered(false)}
       onPointerDown={(e) => {
         const startX = e.clientX
         const startY = e.clientY
