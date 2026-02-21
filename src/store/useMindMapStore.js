@@ -27,6 +27,7 @@ export const useMindMapStore = create((set, get) => ({
   nodes: initialNodes,
   edges: [],
   selectedNodeId: null,
+  pendingNewNodeId: null,
 
   // ── Map metadata ─────────────────────────────────────────────
   currentMapId: null,
@@ -221,7 +222,7 @@ export const useMindMapStore = create((set, get) => ({
   },
 
   deselectNode: () => {
-    set({ selectedNodeId: null })
+    set({ selectedNodeId: null, pendingNewNodeId: null })
   },
 
   // ── History ───────────────────────────────────────────────────
@@ -569,7 +570,7 @@ export const useMindMapStore = create((set, get) => ({
 
   // ── Add child node ────────────────────────────────────────────
 
-  addChildNode: (parentId) => {
+  addChildNode: (parentId, nodeType = 'folder') => {
     if (!get().isEditMode) return
     const { nodes, edges } = get()
     const parent = nodes.find((n) => n.id === parentId)
@@ -614,7 +615,7 @@ export const useMindMapStore = create((set, get) => ({
       id,
       type: 'mindmap',
       position: { x, y },
-      data: { title: 'New Node', key: id, level: childLevel, nodeType: 'folder', content: '' },
+      data: { title: 'New Node', key: id, level: childLevel, nodeType, content: '' },
     }
 
     const newEdge = {
@@ -629,10 +630,12 @@ export const useMindMapStore = create((set, get) => ({
     set((state) => ({
       nodes: [...state.nodes.map((n) => ({ ...n, selected: false })), newNode],
       edges: [...state.edges, newEdge],
+      pendingNewNodeId: id,
       isDirty: true,
     }))
 
     get().scheduleAutosave()
+    return id
   },
 
   // ── Reparent node (drag-drop into group) ──────────────────────

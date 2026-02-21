@@ -923,6 +923,131 @@
   transform: translateY(-50%) scale(1.15);
 }
 
+/* ── Add-child type menu (floats right of the + button) ─────────── */
+
+.node-add-menu {
+  position: absolute;
+  left: calc(100% + 22px);
+  top: 50%;
+  transform: translateY(-50%);
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.13);
+  padding: 5px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 1000;
+  min-width: 120px;
+}
+
+/* ── Convert-type glyph (top-left corner) ────────────────────────── */
+
+.node-convert-btn {
+  position: absolute;
+  top: -11px;
+  left: -11px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  color: #fff;
+  font-size: 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  z-index: 10;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  transition: transform 0.12s;
+}
+
+.node-convert-btn:hover {
+  transform: scale(1.15);
+}
+
+/* ── Delete glyph (top-right corner) ─────────────────────────────── */
+
+.node-delete-btn {
+  position: absolute;
+  top: -11px;
+  right: -11px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  background: #ef4444;
+  color: #fff;
+  font-size: 9px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  z-index: 10;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  transition: background 0.12s, transform 0.12s;
+}
+
+.node-delete-btn:hover {
+  background: #dc2626;
+  transform: scale(1.15);
+}
+
+/* ── Inline convert-type menu ────────────────────────────────────── */
+
+.node-convert-menu {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.13);
+  padding: 5px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 1000;
+  min-width: 120px;
+}
+
+.node-convert-menu-label {
+  padding: 3px 10px 5px;
+  font-size: 10px;
+  color: #94a3b8;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.node-convert-menu-item {
+  padding: 5px 10px;
+  border-radius: 5px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+  font-family: inherit;
+  text-align: left;
+  color: #374151;
+  transition: background 0.1s;
+  white-space: nowrap;
+}
+
+.node-convert-menu-item:hover:not(:disabled) {
+  background: #f1f5f9;
+}
+
+.node-convert-menu-item:disabled {
+  color: #64748b;
+  cursor: default;
+  font-weight: 600;
+}
+
 /* ── Toolbar breadcrumb ───────────────────────────────────────────── */
 
 .toolbar-breadcrumb {

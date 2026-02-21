@@ -19,25 +19,36 @@ const blendWithWhite = (hex, alpha) => {
   return `rgb(${Math.round(255 * (1 - alpha) + r * alpha)}, ${Math.round(255 * (1 - alpha) + g * alpha)}, ${Math.round(255 * (1 - alpha) + b * alpha)})`
 }
 
+const CONVERT_LABELS = { folder: 'Folder', group: 'Group', note: 'Note', pointer: 'Pointer', submap: '↗ Submap' }
+
 const CustomNode = memo(({ id, data, selected }) => {
-  const addChildNode = useMindMapStore((state) => state.addChildNode)
-  const updateNodeData = useMindMapStore((state) => state.updateNodeData)
+  const addChildNode          = useMindMapStore((state) => state.addChildNode)
+  const updateNodeData        = useMindMapStore((state) => state.updateNodeData)
+  const deleteNode            = useMindMapStore((state) => state.deleteNode)
+  const deselectNode          = useMindMapStore((state) => state.deselectNode)
+  const setEdgeType           = useMindMapStore((state) => state.setEdgeType)
+  const convertToSubmap       = useMindMapStore((state) => state.convertToSubmap)
   const setDescendantsCollapsed = useMindMapStore((state) => state.setDescendantsCollapsed)
-  const navigateToSubmap = useMindMapStore((state) => state.navigateToSubmap)
-  const pushHistory = useMindMapStore((state) => state.pushHistory)
-  const selectNode = useMindMapStore((state) => state.selectNode)
-  const isEditMode = useMindMapStore((state) => state.isEditMode)
-  const [hovered, setHovered] = useState(false)
-  const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState('')
-  const inputRef = useRef(null)
+  const navigateToSubmap      = useMindMapStore((state) => state.navigateToSubmap)
+  const pushHistory           = useMindMapStore((state) => state.pushHistory)
+  const selectNode            = useMindMapStore((state) => state.selectNode)
+  const isEditMode            = useMindMapStore((state) => state.isEditMode)
+
+  const [hovered, setHovered]             = useState(false)
+  const [editing, setEditing]             = useState(false)
+  const [draft, setDraft]                 = useState('')
+  const [showConvertMenu, setShowConvertMenu] = useState(false)
+  const [showAddMenu, setShowAddMenu]     = useState(false)
+  const [converting, setConverting]       = useState(false)
+  const inputRef       = useRef(null)
   const selectTimerRef = useRef(null)
+
   const { title, level, l1Color, hasChildren, collapsed, hasCollapsibleDescendants, allDescendantsCollapsed, isSubmap, submapId, hasNotes, nodeType, groupSize, content } = data
-  const cfg = getConfig(level)
+  const cfg         = getConfig(level)
   const borderColor = l1Color ?? '#94a3b8'
-  const width = groupSize?.width ?? cfg.width
-  const height = groupSize?.height ?? (nodeType === 'note' || nodeType === 'pointer' ? null : cfg.height)
-  const showGroupHeader = nodeType === 'group' && !!title?.trim()
+  const width       = groupSize?.width ?? cfg.width
+  const height      = groupSize?.height ?? (nodeType === 'note' || nodeType === 'pointer' ? null : cfg.height)
+  const showGroupHeader   = nodeType === 'group' && !!title?.trim()
   const hasPointerContent = nodeType === 'pointer' && content && content !== '<p></p>' && content !== ''
 
   const startEditing = useCallback(() => {
@@ -66,6 +77,39 @@ const CustomNode = memo(({ id, data, selected }) => {
     }
   }, [editing])
 
+  const handleDelete = useCallback(() => {
+    if (!confirm(`Delete "${title || 'Untitled'}"?`)) return
+    deleteNode(id)
+    deselectNode()
+  }, [title, id, deleteNode, deselectNode])
+
+  const handleConvert = useCallback(async (newType) => {
+    if (newType === nodeType) { setShowConvertMenu(false); return }
+
+    if (newType === 'submap') {
+      if (!confirm(`Convert "${title}" to a submap?\n\nIts children will be moved into the new map.`)) return
+      setConverting(true)
+      const result = await convertToSubmap(id)
+      setConverting(false)
+      if (!result.success) alert('Failed to convert to submap. Please try again.')
+      setShowConvertMenu(false)
+      return
+    }
+
+    if ((newType === 'note' || newType === 'pointer') && hasChildren) {
+      if (!confirm(`"${title}" has children. Converting to ${CONVERT_LABELS[newType]} will prevent adding more children, but existing ones will remain.\n\nContinue?`)) return
+    }
+
+    if (newType === 'pointer') {
+      updateNodeData(id, { nodeType: 'pointer' })
+      setEdgeType(id, 'pointer-edge')
+    } else {
+      if (nodeType === 'pointer') setEdgeType(id, 'straight-center')
+      updateNodeData(id, { nodeType: newType })
+    }
+    setShowConvertMenu(false)
+  }, [nodeType, title, id, hasChildren, convertToSubmap, updateNodeData, setEdgeType])
+
   // Invisible handles centred on the node — edges connect to the node centre
   const centerHandle = {
     width: 1,
@@ -82,7 +126,7 @@ const CustomNode = memo(({ id, data, selected }) => {
   return (
     <div
       onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      onMouseLeave={() => { setHovered(false); setShowConvertMenu(false); setShowAddMenu(false) }}
       onPointerDown={(e) => {
         const startX = e.clientX
         const startY = e.clientY
@@ -288,18 +332,40 @@ const CustomNode = memo(({ id, data, selected }) => {
       )}
 
       {!editing && !collapsed && !isSubmap && nodeType !== 'note' && nodeType !== 'pointer' && isEditMode && (
-        <button
-          className="add-child-btn"
-          title="Add child node"
-          style={{ background: borderColor }}
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => {
-            e.stopPropagation()
-            addChildNode(id)
-          }}
-        >
-          +
-        </button>
+        <>
+          <button
+            className="add-child-btn"
+            title="Add child node"
+            style={{ background: showAddMenu ? borderColor : borderColor }}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); setShowAddMenu((v) => !v) }}
+          >
+            +
+          </button>
+
+          {showAddMenu && (
+            <div
+              className="node-add-menu nodrag nopan"
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              <span className="node-convert-menu-label">Add as</span>
+              {['folder', 'group', 'note', 'pointer'].map((t) => (
+                <button
+                  key={t}
+                  className="node-convert-menu-item"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    const newId = addChildNode(id, t)
+                    setShowAddMenu(false)
+                    if (newId) selectNode(newId)
+                  }}
+                >
+                  {CONVERT_LABELS[t]}
+                </button>
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       {!isSubmap && hovered && hasCollapsibleDescendants && !editing && isEditMode && (
@@ -315,6 +381,50 @@ const CustomNode = memo(({ id, data, selected }) => {
         >
           {allDescendantsCollapsed ? '▸▸' : '▾▾'}
         </button>
+      )}
+
+      {/* Convert-type glyph — top-left, shown on hover for non-root, non-submap nodes */}
+      {(hovered || showConvertMenu) && isEditMode && level > 0 && !isSubmap && !editing && (
+        <button
+          className="node-convert-btn nodrag nopan"
+          title="Convert type"
+          style={{ background: borderColor }}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); setShowConvertMenu((v) => !v) }}
+        >
+          ⇄
+        </button>
+      )}
+
+      {/* Delete glyph — top-right, shown on hover for non-root nodes */}
+      {hovered && isEditMode && level > 0 && !editing && (
+        <button
+          className="node-delete-btn nodrag nopan"
+          title="Delete node"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); handleDelete() }}
+        >
+          ✕
+        </button>
+      )}
+
+      {/* Convert menu panel */}
+      {showConvertMenu && (
+        <div className="node-convert-menu nodrag nopan" onPointerDown={(e) => e.stopPropagation()}>
+          <span className="node-convert-menu-label">Convert to</span>
+          {['folder', 'group', 'note', 'pointer', 'submap'].map((t) => (
+            <button
+              key={t}
+              className="node-convert-menu-item"
+              disabled={nodeType === t || converting}
+              onClick={(e) => { e.stopPropagation(); handleConvert(t) }}
+            >
+              {CONVERT_LABELS[t]}
+              {nodeType === t ? ' ✓' : ''}
+              {converting && t === 'submap' ? '…' : ''}
+            </button>
+          ))}
+        </div>
       )}
     </div>
   )
