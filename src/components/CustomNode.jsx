@@ -302,12 +302,13 @@ const CustomNode = memo(({ id, data, selected }) => {
               {title || 'Untitled'}
             </span>
           )}
-          {!editing && hasNotes && nodeType !== 'group' && (
+          {!editing && hasNotes && (
             <span style={{
               position: 'absolute',
               top: '4px',
               right: '5px',
-              fontSize: '9px',
+              fontSize: '12px',
+              fontWeight: 700,
               color: `${borderColor}90`,
               lineHeight: 1,
               pointerEvents: 'none',
