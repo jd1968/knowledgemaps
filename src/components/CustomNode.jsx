@@ -44,7 +44,7 @@ const CustomNode = memo(({ id, data, selected }) => {
   const selectTimerRef = useRef(null)
   const nodeRef        = useRef(null)
 
-  const { title, level, l1Color, hasChildren, collapsed, hasCollapsibleDescendants, allDescendantsCollapsed, isSubmap, submapId, hasNotes, nodeType, groupSize, content } = data
+  const { title, level, l1Color, hasChildren, collapsed, hasCollapsibleDescendants, allDescendantsCollapsed, isSubmap, submapId, hasNotes, nodeType, groupSize, content, groupNestingLevel = 0 } = data
   const cfg         = getConfig(level)
   const borderColor = l1Color ?? '#94a3b8'
   const width       = groupSize?.width ?? cfg.width
@@ -84,7 +84,6 @@ const CustomNode = memo(({ id, data, selected }) => {
     const handler = (e) => {
       if (nodeRef.current?.contains(e.target)) return
       setShowConvertMenu(false)
-      setShowAddMenu(false)
       setOpenMenuNodeId(null)
     }
     document.addEventListener('mousedown', handler, true)
@@ -169,7 +168,7 @@ const CustomNode = memo(({ id, data, selected }) => {
         background: level === 0
           ? '#3a3a3a'
           : nodeType === 'group'
-            ? blendWithWhite(borderColor, 0.04)
+            ? blendWithWhite(borderColor, Math.min(0.08 + groupNestingLevel * 0.1, 0.42))
             : isSubmap
               ? blendWithWhite(borderColor, 0.08)
             : nodeType === 'note'

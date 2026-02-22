@@ -68,14 +68,7 @@ export const useMindMapStore = create((set, get) => ({
     // Don't push position changes to history during drag (too noisy)
     // History is pushed in onNodeDragStart instead
     set((state) => ({
-      nodes: applyNodeChanges(
-        effectiveChanges.filter((c) => {
-          if (c.type !== 'position') return true
-          const node = state.nodes.find((n) => n.id === c.id)
-          return node?.data?.nodeType !== 'group'
-        }),
-        state.nodes
-      ),
+      nodes: applyNodeChanges(effectiveChanges, state.nodes),
       isDirty: hasNonSelectChange ? true : state.isDirty,
     }))
     // Debounce autosave (skip for selection-only changes)
@@ -597,12 +590,32 @@ export const useMindMapStore = create((set, get) => ({
     const groupPaddingX = 24
     const groupPaddingTop = parent.data.title?.trim() ? 58 : 16
 
+    // Check if parent lives inside a group (walk up the edge tree)
+    const parentEdgeMap = {}
+    edges.forEach((e) => { parentEdgeMap[e.target] = e.source })
+    let ancestor = parentEdgeMap[parentId]
+    let isInsideGroup = false
+    while (ancestor) {
+      const an = nodes.find((n) => n.id === ancestor)
+      if (an?.data?.nodeType === 'group') { isInsideGroup = true; break }
+      ancestor = parentEdgeMap[ancestor]
+    }
+
     let x = parent.position.x + parentWidth + hGap
     let y = parent.position.y
 
     if (isGroupParent) {
       x = parent.position.x + groupPaddingX
       y = parent.position.y + groupPaddingTop
+      if (childNodes.length > 0) {
+        const sorted = [...childNodes].sort((a, b) => a.position.y - b.position.y)
+        y = sorted[sorted.length - 1].position.y + vSpacing
+      }
+    } else if (isInsideGroup) {
+      // Indent right of parent to show hierarchy, stacked below existing children
+      const childIndent = 24
+      x = parent.position.x + childIndent
+      y = parent.position.y + vSpacing
       if (childNodes.length > 0) {
         const sorted = [...childNodes].sort((a, b) => a.position.y - b.position.y)
         y = sorted[sorted.length - 1].position.y + vSpacing

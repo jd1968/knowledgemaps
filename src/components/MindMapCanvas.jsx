@@ -259,46 +259,97 @@ const MindMapCanvas = () => {
       if (groupChildrenMap[e.source]) groupChildrenMap[e.source].push(e.target)
     })
 
-    const groupLayouts = {}
-    Object.entries(groupChildrenMap).forEach(([groupId, childIds]) => {
-      const groupNode = nodeById[groupId]
-      const hasGroupHeader = !!groupNode?.data?.title?.trim()
-      const topPadding = hasGroupHeader ? GROUP_PADDING_TOP_WITH_HEADER : GROUP_PADDING_TOP_NO_HEADER
-      const visibleChildren = childIds
-        .map((id) => nodeById[id])
-        .filter((n) => n && !hiddenNodeIds.has(n.id))
-
-      if (visibleChildren.length === 0) return
-
-      let minX = Infinity
-      let minY = Infinity
-      let maxX = -Infinity
-      let maxY = -Infinity
-
-      visibleChildren.forEach((child) => {
-        const stableSize = getStableNodeSize(child)
-        const childWidth = stableSize.width
-        const childHeight = child.measured?.height ?? child.height ?? stableSize.height
-
-        minX = Math.min(minX, child.position.x)
-        minY = Math.min(minY, child.position.y)
-        maxX = Math.max(maxX, child.position.x + childWidth)
-        maxY = Math.max(maxY, child.position.y + childHeight)
+    // Process groups innermost-first so outer groups can use sub-group computed layouts
+    const groupIdSet = new Set(Object.keys(groupChildrenMap))
+    const groupDepth = {}
+    const computeGroupDepth = (id) => {
+      if (id in groupDepth) return groupDepth[id]
+      let max = 0
+      ;(groupChildrenMap[id] || []).forEach(childId => {
+        if (groupIdSet.has(childId)) max = Math.max(max, computeGroupDepth(childId) + 1)
       })
+      groupDepth[id] = max
+      return max
+    }
+    groupIdSet.forEach(id => computeGroupDepth(id))
 
-      groupLayouts[groupId] = {
-        x: minX - GROUP_PADDING_X,
-        y: minY - topPadding,
-        width: Math.max(180, (maxX - minX) + GROUP_PADDING_X * 2),
-        height: Math.max(80, (maxY - minY) + topPadding + GROUP_PADDING_BOTTOM),
-      }
-    })
+    const groupLayouts = {}
+    Object.entries(groupChildrenMap)
+      .sort(([a], [b]) => groupDepth[a] - groupDepth[b])
+      .forEach(([groupId, childIds]) => {
+        const groupNode = nodeById[groupId]
+        const hasGroupHeader = !!groupNode?.data?.title?.trim()
+        const topPadding = hasGroupHeader ? GROUP_PADDING_TOP_WITH_HEADER : GROUP_PADDING_TOP_NO_HEADER
+
+        // Collect descendants; stop at sub-groups that already have computed layouts —
+        // their full bounds (including padding) are captured via groupLayouts[id] below.
+        const allDescendantIds = []
+        const collectDescendants = (ids) => {
+          ids.forEach((cid) => {
+            allDescendantIds.push(cid)
+            if (groupIdSet.has(cid) && groupLayouts[cid]) return
+            const grandchildren = childrenMap[cid]
+            if (grandchildren?.length) collectDescendants(grandchildren)
+          })
+        }
+        collectDescendants(childIds)
+
+        const visibleChildren = allDescendantIds
+          .map((id) => nodeById[id])
+          .filter((n) => n && !hiddenNodeIds.has(n.id))
+
+        if (visibleChildren.length === 0) return
+
+        let minX = Infinity
+        let minY = Infinity
+        let maxX = -Infinity
+        let maxY = -Infinity
+
+        visibleChildren.forEach((child) => {
+          if (groupIdSet.has(child.id) && groupLayouts[child.id]) {
+            // Use the sub-group's already-computed layout bounds (includes its own padding)
+            const layout = groupLayouts[child.id]
+            minX = Math.min(minX, layout.x)
+            minY = Math.min(minY, layout.y)
+            maxX = Math.max(maxX, layout.x + layout.width)
+            maxY = Math.max(maxY, layout.y + layout.height)
+          } else {
+            const stableSize = getStableNodeSize(child)
+            const childWidth = stableSize.width
+            const childHeight = child.measured?.height ?? child.height ?? stableSize.height
+            minX = Math.min(minX, child.position.x)
+            minY = Math.min(minY, child.position.y)
+            maxX = Math.max(maxX, child.position.x + childWidth)
+            maxY = Math.max(maxY, child.position.y + childHeight)
+          }
+        })
+
+        const anchorX = groupNode?.position?.x ?? (minX - GROUP_PADDING_X)
+        const anchorY = groupNode?.position?.y ?? (minY - topPadding)
+        const x = Math.min(anchorX, minX - GROUP_PADDING_X)
+        const y = Math.min(anchorY, minY - topPadding)
+
+        // Keep the group anchored unless children move beyond its top/left bounds.
+        // This allows children (including a single child) to be repositioned within the group.
+        groupLayouts[groupId] = {
+          x,
+          y,
+          width: Math.max(180, (maxX - x) + GROUP_PADDING_X),
+          height: Math.max(80, (maxY - y) + GROUP_PADDING_BOTTOM),
+        }
+      })
 
     const decoratedNodes = nodes.map(node => {
       const level = node.data?.level ?? 0
       const l1Color = level === 0
         ? ROOT_BORDER
         : (l1ColorMap[getL1Id(node.id)] ?? L1_PALETTE[0])
+      let groupNestingLevel = 0
+      let ancestorId = parentMap[node.id]
+      while (ancestorId) {
+        if (nodeById[ancestorId]?.data?.nodeType === 'group') groupNestingLevel++
+        ancestorId = parentMap[ancestorId]
+      }
       const hasChildren = !!(childrenMap[node.id]?.length)
       const hasCollapsibleDescendants = hasCollapsibleDescendantsSet.has(node.id)
       const allDescendantsCollapsed = allDescendantsCollapsedSet.has(node.id)
@@ -317,6 +368,7 @@ const MindMapCanvas = () => {
           hasCollapsibleDescendants,
           allDescendantsCollapsed,
           hasNotes,
+          groupNestingLevel,
           groupSize: groupLayout ? { width: groupLayout.width, height: groupLayout.height } : undefined,
         },
       }
@@ -348,13 +400,33 @@ const MindMapCanvas = () => {
     [nodesWithColor]
   )
 
+  // All node IDs that are descendants (direct or indirect) of a group node
+  const groupDescendantsSet = useMemo(() => {
+    const groupIds = new Set(nodes.filter(n => n.data?.nodeType === 'group').map(n => n.id))
+    const result = new Set()
+    const visit = (id) => {
+      ;(childrenMap[id] || []).forEach(childId => {
+        result.add(childId)
+        visit(childId)
+      })
+    }
+    groupIds.forEach(visit)
+    return result
+  }, [nodes, childrenMap])
+
   const displayEdges = useMemo(() =>
     edges.map(e => {
       const sourceNode = nodeById[e.source]
       const isGroupConnector = sourceNode?.data?.nodeType === 'group'
-      return { ...e, hidden: hiddenNodeIds.has(e.target) || isGroupConnector }
+      // Edges between nodes inside a group need elevated zIndex to render above the group background
+      const isIntraGroup = groupDescendantsSet.has(e.source)
+      return {
+        ...e,
+        hidden: hiddenNodeIds.has(e.target) || isGroupConnector,
+        zIndex: isIntraGroup ? 5 : undefined,
+      }
     }),
-    [edges, hiddenNodeIds, nodeById]
+    [edges, hiddenNodeIds, nodeById, groupDescendantsSet]
   )
 
   const [isTouch] = useState(
@@ -396,10 +468,20 @@ const MindMapCanvas = () => {
     const cx = draggedNode.position.x + dW / 2
     const cy = draggedNode.position.y + dH / 2
 
+    // Build ancestor set so dragging within a group never accidentally reparents
+    // the node to one of its own ancestors (e.g. the containing group node)
+    const ancestorIds = new Set()
+    let cur = parentMap[draggedNode.id]
+    while (cur) {
+      ancestorIds.add(cur)
+      cur = parentMap[cur]
+    }
+
     // Pick the smallest overlapping target (most specific hit when nodes overlap)
     const target = allDropTargets
       .filter((t) => {
         if (t.id === draggedNode.id) return false
+        if (ancestorIds.has(t.id)) return false
         return cx > t.x && cx < t.x + t.width && cy > t.y && cy < t.y + t.height
       })
       .sort((a, b) => (a.width * a.height) - (b.width * b.height))[0]
@@ -409,7 +491,7 @@ const MindMapCanvas = () => {
     if (draggedNode.data?.nodeType === 'group') scheduleAutosave()
 
     delete dragStartRef.current[draggedNode.id]
-  }, [allDropTargets, isEditMode, reparentNode, scheduleAutosave])
+  }, [allDropTargets, isEditMode, reparentNode, scheduleAutosave, parentMap])
 
   return (
     <div ref={containerRef} style={{ width: '100%', height: '100%' }}>
