@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useMindMapStore } from '../store/useMindMapStore'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -105,6 +106,8 @@ const Toolbar = () => {
   const [tempName, setTempName] = useState('')
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef(null)
+  const [newMapDialogOpen, setNewMapDialogOpen] = useState(false)
+  const [newMapName, setNewMapName] = useState('')
 
   useEffect(() => {
     if (!menuOpen) return
@@ -135,7 +138,15 @@ const Toolbar = () => {
   const handleNew = () => {
     if (isDirty && !confirm('You have unsaved changes. Create a new map anyway?'))
       return
-    newMap()
+    setNewMapName('')
+    setNewMapDialogOpen(true)
+  }
+
+  const confirmNewMap = () => {
+    const name = newMapName.trim() || 'Untitled Map'
+    setNewMapDialogOpen(false)
+    newMap(name)
+    saveMap(name)
   }
 
   const handleSave = async () => {
@@ -151,6 +162,7 @@ const Toolbar = () => {
   const isInSubmap = breadcrumbs.length > 0
 
   return (
+    <>
     <div className="toolbar">
       {/* Left: map name always here — with back+parent when in a submap */}
       <div className="toolbar-breadcrumb">
@@ -334,6 +346,44 @@ const Toolbar = () => {
         </div>
       </div>
     </div>
+
+    {newMapDialogOpen && createPortal(
+      <div
+        className="submap-choice-overlay"
+        onPointerDown={(e) => { if (e.target === e.currentTarget) setNewMapDialogOpen(false) }}
+      >
+        <div className="submap-choice-modal" onPointerDown={(e) => e.stopPropagation()}>
+          <div className="submap-choice-header">
+            <h3>New Map</h3>
+            <button className="icon-btn" onClick={() => setNewMapDialogOpen(false)} aria-label="Close">✕</button>
+          </div>
+          <div className="submap-choice-body">
+            <p>Enter a name for the new map.</p>
+            <input
+              className="new-map-name-input"
+              value={newMapName}
+              onChange={(e) => setNewMapName(e.target.value)}
+              placeholder="Map name"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') confirmNewMap()
+                if (e.key === 'Escape') setNewMapDialogOpen(false)
+              }}
+            />
+            <div className="submap-choice-actions">
+              <button className="btn btn--primary btn--sm" onClick={confirmNewMap}>
+                Create
+              </button>
+              <button className="btn btn--secondary btn--sm" onClick={() => setNewMapDialogOpen(false)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>,
+      document.body
+    )}
+    </>
   )
 }
 

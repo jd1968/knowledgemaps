@@ -545,7 +545,7 @@ export const useMindMapStore = create((set, get) => ({
     return get().loadMap(crumb.mapId, newCrumbs)
   },
 
-  newMap: () => {
+  newMap: (name = 'Untitled Map') => {
     const rootId = 'root-' + uuidv4().slice(0, 8)
     set({
       nodes: [
@@ -553,12 +553,12 @@ export const useMindMapStore = create((set, get) => ({
           id: rootId,
           type: 'mindmap',
           position: { x: 350, y: 250 },
-          data: { title: 'Central Topic', key: rootId, level: 0, content: '' },
+          data: { title: name, key: rootId, level: 0, content: '' },
         },
       ],
       edges: [],
       currentMapId: null,
-      currentMapName: 'Untitled Map',
+      currentMapName: name,
       isDirty: false,
       past: [],
       future: [],
