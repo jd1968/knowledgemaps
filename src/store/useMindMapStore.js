@@ -48,10 +48,9 @@ export const useMindMapStore = create((set, get) => ({
   openMenuNodeId: null,
   reparentSourceNodeId: null,
 
-  // ── Reading mode ──────────────────────────────────────────────
-  isReadingMode: localStorage.getItem('km_viewMode') === 'reading',
-  readingModeNodeId: null,
-  readingModeHistory: [],
+  // ── Node focus (map navigation) ───────────────────────────────
+  focusNodeId: null,
+
   setIsFullscreen: (val) => set({ isFullscreen: val }),
   setOpenMenuNodeId: (id) => set({ openMenuNodeId: id }),
   setReparentSourceNodeId: (id) => set({ reparentSourceNodeId: id }),
@@ -63,28 +62,8 @@ export const useMindMapStore = create((set, get) => ({
     reparentSourceNodeId: state.isEditMode ? null : state.reparentSourceNodeId,
   })),
 
-  setReadingMode: (bool) => {
-    localStorage.setItem('km_viewMode', bool ? 'reading' : 'map')
-    set({ isReadingMode: bool })
-  },
-
-  navigateReadingToChild: (childId) => set(state => ({
-    readingModeHistory: [...state.readingModeHistory, { nodeId: state.readingModeNodeId, via: 'drill' }],
-    readingModeNodeId: childId,
-  })),
-
-  navigateReadingToSibling: (siblingId) => set(state => ({
-    readingModeHistory: [...state.readingModeHistory, { nodeId: state.readingModeNodeId, via: 'sibling' }],
-    readingModeNodeId: siblingId,
-  })),
-
-  navigateReadingBack: () => set(state => {
-    const history = [...state.readingModeHistory]
-    const prev = history.pop()
-    return { readingModeHistory: history, readingModeNodeId: prev?.nodeId ?? null }
-  }),
-
-  resetReadingPosition: () => set({ readingModeNodeId: null, readingModeHistory: [] }),
+  focusNode: (nodeId) => set({ focusNodeId: nodeId }),
+  clearFocusNode: () => set({ focusNodeId: null }),
 
   // ── Submap navigation ─────────────────────────────────────────
   // Each entry: { mapId, mapName }  — the trail of maps above the current one
@@ -410,8 +389,6 @@ export const useMindMapStore = create((set, get) => ({
         saveStatus: 'idle',
         fitViewTrigger: state.fitViewTrigger + 1,
         breadcrumbs,
-        readingModeNodeId: null,
-        readingModeHistory: [],
       }))
 
       // Only persist the last-opened map when at the root level

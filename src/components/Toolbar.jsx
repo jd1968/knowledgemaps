@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useMindMapStore } from '../store/useMindMapStore'
 import { useAuth } from '../contexts/AuthContext'
+import NodeTreePanel from './NodeTreePanel'
 
 /* ── Icons ─────────────────────────────────────────────────────────── */
 
@@ -59,6 +60,12 @@ const MenuIcon = () => (
   </svg>
 )
 
+const TreeIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
+  </svg>
+)
+
 
 /* ── SaveStatusDot ──────────────────────────────────────────────────── */
 
@@ -99,8 +106,6 @@ const Toolbar = () => {
     toggleEditMode,
     breadcrumbs,
     navigateBack,
-    isReadingMode,
-    setReadingMode,
   } = useMindMapStore()
   const { user, signOut } = useAuth()
 
@@ -110,6 +115,8 @@ const Toolbar = () => {
   const menuRef = useRef(null)
   const [newMapDialogOpen, setNewMapDialogOpen] = useState(false)
   const [newMapName, setNewMapName] = useState('')
+  const [treeOpen, setTreeOpen] = useState(false)
+  const treeBtnRef = useRef(null)
 
   useEffect(() => {
     if (!menuOpen) return
@@ -165,6 +172,7 @@ const Toolbar = () => {
 
   return (
     <>
+    {treeOpen && <NodeTreePanel onClose={() => setTreeOpen(false)} buttonRef={treeBtnRef} />}
     <div className="toolbar">
       {/* Left: map name always here — with back+parent when in a submap */}
       <div className="toolbar-breadcrumb">
@@ -214,50 +222,46 @@ const Toolbar = () => {
 
       {/* Right: actions */}
       <div className="toolbar-actions">
-        {/* Undo / Redo — hidden in reading mode */}
-        {!isReadingMode && (
-          <>
-            <button
-              className="btn btn--ghost btn--sm"
-              onClick={undo}
-              disabled={!isEditMode || past.length === 0}
-              title="Undo (Ctrl+Z)"
-              aria-label="Undo"
-            >
-              <UndoIcon />
-              <span className="btn-label">Undo</span>
-            </button>
-            <button
-              className="btn btn--ghost btn--sm"
-              onClick={redo}
-              disabled={!isEditMode || future.length === 0}
-              title="Redo (Ctrl+Y / Ctrl+Shift+Z)"
-              aria-label="Redo"
-            >
-              <RedoIcon />
-              <span className="btn-label">Redo</span>
-            </button>
-
-            {/* Edit mode toggle — hidden in reading mode */}
-            <label className="edit-mode-toggle" title={isEditMode ? 'Disable editing' : 'Enable editing'}>
-              <input type="checkbox" checked={isEditMode} onChange={toggleEditMode} />
-              <span className="edit-mode-toggle__track">
-                <span className="edit-mode-toggle__thumb" />
-              </span>
-              <span className="edit-mode-toggle__label">Edit</span>
-            </label>
-          </>
-        )}
-
-        {/* Mode toggle */}
         <button
-          className={`btn btn--ghost btn--sm mode-toggle-btn${isReadingMode ? ' mode-toggle-btn--active' : ''}`}
-          onClick={() => setReadingMode(!isReadingMode)}
-          title={isReadingMode ? 'Switch to Map Mode' : 'Switch to Reading Mode'}
-          aria-label={isReadingMode ? 'Switch to Map Mode' : 'Switch to Reading Mode'}
+          className="btn btn--ghost btn--sm"
+          onClick={undo}
+          disabled={!isEditMode || past.length === 0}
+          title="Undo (Ctrl+Z)"
+          aria-label="Undo"
         >
-          {isReadingMode ? '🗺' : '📖'}
-          <span className="btn-label">{isReadingMode ? 'Map' : 'Read'}</span>
+          <UndoIcon />
+          <span className="btn-label">Undo</span>
+        </button>
+        <button
+          className="btn btn--ghost btn--sm"
+          onClick={redo}
+          disabled={!isEditMode || future.length === 0}
+          title="Redo (Ctrl+Y / Ctrl+Shift+Z)"
+          aria-label="Redo"
+        >
+          <RedoIcon />
+          <span className="btn-label">Redo</span>
+        </button>
+
+        <label className="edit-mode-toggle" title={isEditMode ? 'Disable editing' : 'Enable editing'}>
+          <input type="checkbox" checked={isEditMode} onChange={toggleEditMode} />
+          <span className="edit-mode-toggle__track">
+            <span className="edit-mode-toggle__thumb" />
+          </span>
+          <span className="edit-mode-toggle__label">Edit</span>
+        </label>
+
+        {/* Tree / contents panel */}
+        <button
+          ref={treeBtnRef}
+          className={`btn btn--ghost btn--sm${treeOpen ? ' btn--ghost-active' : ''}`}
+          onClick={() => setTreeOpen(o => !o)}
+          title="Map contents"
+          aria-label="Map contents"
+          aria-expanded={treeOpen}
+        >
+          <TreeIcon />
+          <span className="btn-label">Contents</span>
         </button>
 
         <div className="toolbar-sep toolbar-sep--desktop-only" />

@@ -53,6 +53,29 @@ const getStableNodeSize = (node) => {
   return DEFAULT_NODE_SIZE[level]
 }
 
+// Watches focusNodeId and flies the viewport to that node at a fixed zoom
+const FocusNodeHandler = () => {
+  const focusNodeId = useMindMapStore(s => s.focusNodeId)
+  const clearFocusNode = useMindMapStore(s => s.clearFocusNode)
+  const { getNode, setCenter } = useReactFlow()
+
+  useEffect(() => {
+    if (!focusNodeId) return
+    const id = requestAnimationFrame(() => {
+      const node = getNode(focusNodeId)
+      if (node) {
+        const cx = node.position.x + (node.measured?.width ?? 160) / 2
+        const cy = node.position.y + (node.measured?.height ?? 60) / 2
+        setCenter(cx, cy, { zoom: 1.5, duration: 600 })
+      }
+      clearFocusNode()
+    })
+    return () => cancelAnimationFrame(id)
+  }, [focusNodeId, getNode, setCenter, clearFocusNode])
+
+  return null
+}
+
 // Must live inside the ReactFlow tree to access the ReactFlow context
 const FitViewOnLoad = () => {
   const fitViewTrigger = useMindMapStore((s) => s.fitViewTrigger)
@@ -610,6 +633,7 @@ const MindMapCanvas = () => {
           </div>
         </Panel>
         <FitViewOnLoad />
+        <FocusNodeHandler />
         <PinchZoomHandler containerRef={containerRef} />
       </ReactFlow>
     </div>
