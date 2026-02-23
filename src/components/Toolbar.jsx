@@ -99,6 +99,8 @@ const Toolbar = () => {
     toggleEditMode,
     breadcrumbs,
     navigateBack,
+    isReadingMode,
+    setReadingMode,
   } = useMindMapStore()
   const { user, signOut } = useAuth()
 
@@ -212,36 +214,51 @@ const Toolbar = () => {
 
       {/* Right: actions */}
       <div className="toolbar-actions">
-        {/* Undo / Redo — always visible */}
-        <button
-          className="btn btn--ghost btn--sm"
-          onClick={undo}
-          disabled={!isEditMode || past.length === 0}
-          title="Undo (Ctrl+Z)"
-          aria-label="Undo"
-        >
-          <UndoIcon />
-          <span className="btn-label">Undo</span>
-        </button>
-        <button
-          className="btn btn--ghost btn--sm"
-          onClick={redo}
-          disabled={!isEditMode || future.length === 0}
-          title="Redo (Ctrl+Y / Ctrl+Shift+Z)"
-          aria-label="Redo"
-        >
-          <RedoIcon />
-          <span className="btn-label">Redo</span>
-        </button>
+        {/* Undo / Redo — hidden in reading mode */}
+        {!isReadingMode && (
+          <>
+            <button
+              className="btn btn--ghost btn--sm"
+              onClick={undo}
+              disabled={!isEditMode || past.length === 0}
+              title="Undo (Ctrl+Z)"
+              aria-label="Undo"
+            >
+              <UndoIcon />
+              <span className="btn-label">Undo</span>
+            </button>
+            <button
+              className="btn btn--ghost btn--sm"
+              onClick={redo}
+              disabled={!isEditMode || future.length === 0}
+              title="Redo (Ctrl+Y / Ctrl+Shift+Z)"
+              aria-label="Redo"
+            >
+              <RedoIcon />
+              <span className="btn-label">Redo</span>
+            </button>
 
-        {/* Edit mode toggle — always visible */}
-        <label className="edit-mode-toggle" title={isEditMode ? 'Disable editing' : 'Enable editing'}>
-          <input type="checkbox" checked={isEditMode} onChange={toggleEditMode} />
-          <span className="edit-mode-toggle__track">
-            <span className="edit-mode-toggle__thumb" />
-          </span>
-          <span className="edit-mode-toggle__label">Edit</span>
-        </label>
+            {/* Edit mode toggle — hidden in reading mode */}
+            <label className="edit-mode-toggle" title={isEditMode ? 'Disable editing' : 'Enable editing'}>
+              <input type="checkbox" checked={isEditMode} onChange={toggleEditMode} />
+              <span className="edit-mode-toggle__track">
+                <span className="edit-mode-toggle__thumb" />
+              </span>
+              <span className="edit-mode-toggle__label">Edit</span>
+            </label>
+          </>
+        )}
+
+        {/* Mode toggle */}
+        <button
+          className={`btn btn--ghost btn--sm mode-toggle-btn${isReadingMode ? ' mode-toggle-btn--active' : ''}`}
+          onClick={() => setReadingMode(!isReadingMode)}
+          title={isReadingMode ? 'Switch to Map Mode' : 'Switch to Reading Mode'}
+          aria-label={isReadingMode ? 'Switch to Map Mode' : 'Switch to Reading Mode'}
+        >
+          {isReadingMode ? '🗺' : '📖'}
+          <span className="btn-label">{isReadingMode ? 'Map' : 'Read'}</span>
+        </button>
 
         <div className="toolbar-sep toolbar-sep--desktop-only" />
 
