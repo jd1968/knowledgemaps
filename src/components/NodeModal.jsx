@@ -2,8 +2,10 @@ import { useCallback, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useMindMapStore } from '../store/useMindMapStore'
 import RichTextEditor from './RichTextEditor'
+import SubmapChoiceModal from './SubmapChoiceModal'
 
 const TYPE_LABELS = { folder: 'Folder', group: 'Group', note: 'Note', pointer: 'Pointer', submap: 'Submap' }
+const CREATE_TYPE_OPTIONS = ['folder', 'group', 'note', 'pointer', 'submap']
 
 const isTouch = typeof window !== 'undefined' && window.matchMedia('(hover: none) and (pointer: coarse)').matches
 
@@ -14,14 +16,16 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
   const setEdgeType      = useMindMapStore((s) => s.setEdgeType)
   const convertToSubmap  = useMindMapStore((s) => s.convertToSubmap)
   const isEditMode       = useMindMapStore((s) => s.isEditMode)
+  const currentMapId     = useMindMapStore((s) => s.currentMapId)
 
   const { id } = node
   const { title, level, content, isSubmap, submapId, nodeType = 'folder', hasChildren, isTodo = false } = node.data
 
   const [isEditing, setIsEditing]         = useState(isEditMode)
-  const [draft, setDraft]                 = useState(isEditMode ? { title: title || '', content: content || '', isTodo: !!isTodo } : null)
+  const [draft, setDraft]                 = useState(isEditMode ? { title: title || '', content: content || '', isTodo: !!isTodo, nodeType } : null)
   const [showConvertMenu, setShowConvertMenu] = useState(false)
   const [converting, setConverting]       = useState(false)
+  const [showSubmapChoice, setShowSubmapChoice] = useState(false)
   const headerIsTodo = isEditing ? !!draft?.isTodo : isTodo
   const canSave = !!draft?.title?.trim()
 
@@ -47,7 +51,7 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
   }, [isEditMode])
 
   const startEdit = () => {
-    setDraft({ title: title || '', content: content || '', isTodo: !!isTodo })
+    setDraft({ title: title || '', content: content || '', isTodo: !!isTodo, nodeType })
     setIsEditing(true)
   }
 
@@ -56,7 +60,14 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
       alert('Title is required.')
       return
     }
-    if (draft) updateNodeData(id, { title: draft.title.trim(), content: draft.content, isTodo: !!draft.isTodo })
+    const nextType = draft?.nodeType || nodeType
+    if (nextType === 'submap' && (!isSubmap || isNew)) {
+      setShowSubmapChoice(true)
+      return
+    }
+    if (draft) updateNodeData(id, { title: draft.title.trim(), content: draft.content, isTodo: !!draft.isTodo, nodeType: nextType })
+    if (nextType === 'pointer') setEdgeType(id, 'pointer-edge')
+    else if (nodeType === 'pointer') setEdgeType(id, 'straight-center')
     onClose()
   }
 
@@ -71,7 +82,6 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
   }, [title, id, deleteNode, onClose])
 
   const handleConvertToSubmap = useCallback(async () => {
-    if (!confirm(`Convert "${title}" to a submap?\n\nIts children will be moved into the new map.`)) return
     setConverting(true)
     const result = await convertToSubmap(id)
     setConverting(false)
@@ -81,7 +91,10 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
 
   const handleConvertType = useCallback((newType) => {
     if (newType === nodeType) return
-    if (newType === 'submap') { handleConvertToSubmap(); return }
+    if (newType === 'submap') {
+      setShowSubmapChoice(true)
+      return
+    }
 
     if ((newType === 'note' || newType === 'pointer') && hasChildren) {
       if (!confirm(`"${title}" has children. Converting to ${TYPE_LABELS[newType]} will prevent adding more children, but existing ones will remain.\n\nContinue?`)) return
@@ -96,7 +109,40 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
     }
     setShowConvertMenu(false)
     onClose()
-  }, [nodeType, title, id, hasChildren, updateNodeData, setEdgeType, handleConvertToSubmap, onClose])
+  }, [nodeType, title, id, hasChildren, updateNodeData, setEdgeType, onClose])
+
+  const handleCreateNewSubmap = useCallback(async () => {
+    if (!canSave) {
+      alert('Title is required.')
+      return
+    }
+    if (draft) updateNodeData(id, { title: draft.title.trim(), content: draft.content, isTodo: !!draft.isTodo })
+    await handleConvertToSubmap()
+    setShowSubmapChoice(false)
+  }, [canSave, draft, handleConvertToSubmap, id, updateNodeData])
+
+  const handleSelectExistingSubmap = useCallback((map) => {
+    if (hasChildren) {
+      alert('This node already has children. You can only create a new submap for it.')
+      return
+    }
+    const nextTitle = draft?.title?.trim() || title?.trim() || map.name
+    const nextContent = draft?.content ?? content
+    const nextTodo = draft?.isTodo ?? isTodo
+    if (nodeType === 'pointer') setEdgeType(id, 'straight-center')
+    updateNodeData(id, {
+      title: nextTitle,
+      content: nextContent,
+      isTodo: !!nextTodo,
+      isSubmap: true,
+      submapId: map.id,
+      nodeType: 'submap',
+      collapsed: false,
+    })
+    setShowSubmapChoice(false)
+    setShowConvertMenu(false)
+    onClose()
+  }, [content, draft, hasChildren, id, isTodo, nodeType, onClose, setEdgeType, title, updateNodeData])
 
   return createPortal(
     <div
@@ -128,6 +174,24 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
                   autoFocus
                 />
               </div>
+
+              {isNew && (
+                <div className="field">
+                  <label className="field-label">Type</label>
+                  <div className="node-create-type-row">
+                    {CREATE_TYPE_OPTIONS.map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        className={`btn btn--sm${draft?.nodeType === t ? ' btn--primary' : ' btn--secondary'}`}
+                        onClick={() => setDraft((d) => ({ ...(d || { title: '', content: '', isTodo: false, nodeType }), nodeType: t }))}
+                      >
+                        {TYPE_LABELS[t]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="field field--grow">
                 <label className="field-label">Notes</label>
@@ -200,7 +264,7 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
                 )}
                 <button
                   className="btn btn--secondary btn--sm"
-                  onClick={() => setDraft((d) => ({ ...(d || { title: '', content: '' }), isTodo: !d?.isTodo }))}
+                  onClick={() => setDraft((d) => ({ ...(d || { title: '', content: '', nodeType }), isTodo: !d?.isTodo }))}
                 >
                   {draft?.isTodo ? 'Unmark To Do' : 'Mark To Do'}
                 </button>
@@ -217,6 +281,15 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
         </div>
 
       </div>
+
+      <SubmapChoiceModal
+        open={showSubmapChoice}
+        onClose={() => { setShowSubmapChoice(false) }}
+        onCreateNew={handleCreateNewSubmap}
+        onSelectExisting={handleSelectExistingSubmap}
+        currentMapId={currentMapId}
+        existingDisabledReason={hasChildren ? 'This node has children, so an existing map cannot be selected.' : ''}
+      />
     </div>,
     document.body
   )

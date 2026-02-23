@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { Handle, Position } from '@xyflow/react'
 import { useMindMapStore } from '../store/useMindMapStore'
+import SubmapChoiceModal from './SubmapChoiceModal'
 
 const LEVEL_CONFIG = {
   0: { width: 180, height: null, fontSize: '16px', fontWeight: '700' },
@@ -38,12 +39,14 @@ const CustomNode = memo(({ id, data, selected }) => {
   const reparentSourceNodeId  = useMindMapStore((state) => state.reparentSourceNodeId)
   const setReparentSourceNodeId = useMindMapStore((state) => state.setReparentSourceNodeId)
   const clearReparentMode     = useMindMapStore((state) => state.clearReparentMode)
+  const currentMapId          = useMindMapStore((state) => state.currentMapId)
 
   const [hovered, setHovered]             = useState(false)
   const [editing, setEditing]             = useState(false)
   const [draft, setDraft]                 = useState('')
   const [showConvertMenu, setShowConvertMenu] = useState(false)
   const [converting, setConverting]       = useState(false)
+  const [showSubmapChoice, setShowSubmapChoice] = useState(false)
   const inputRef       = useRef(null)
   const selectTimerRef = useRef(null)
   const nodeRef        = useRef(null)
@@ -105,12 +108,9 @@ const CustomNode = memo(({ id, data, selected }) => {
     if (newType === nodeType) { setShowConvertMenu(false); return }
 
     if (newType === 'submap') {
-      if (!confirm(`Convert "${title}" to a submap?\n\nIts children will be moved into the new map.`)) return
-      setConverting(true)
-      const result = await convertToSubmap(id)
-      setConverting(false)
-      if (!result.success) alert('Failed to convert to submap. Please try again.')
       setShowConvertMenu(false)
+      setOpenMenuNodeId(null)
+      setShowSubmapChoice(true)
       return
     }
 
@@ -127,6 +127,33 @@ const CustomNode = memo(({ id, data, selected }) => {
     }
     setShowConvertMenu(false); setOpenMenuNodeId(null)
   }, [nodeType, title, id, hasChildren, convertToSubmap, updateNodeData, setEdgeType, setOpenMenuNodeId])
+
+  const handleCreateNewSubmap = useCallback(async () => {
+    setConverting(true)
+    const result = await convertToSubmap(id)
+    setConverting(false)
+    if (!result.success) {
+      alert('Failed to convert to submap. Please try again.')
+      return
+    }
+    setShowSubmapChoice(false)
+  }, [convertToSubmap, id])
+
+  const handleLinkExistingSubmap = useCallback((map) => {
+    if (hasChildren) {
+      alert('This node already has children. You can only create a new submap for it.')
+      return
+    }
+    if (nodeType === 'pointer') setEdgeType(id, 'straight-center')
+    updateNodeData(id, {
+      isSubmap: true,
+      submapId: map.id,
+      nodeType: 'submap',
+      collapsed: false,
+      title: title?.trim() ? title : map.name,
+    })
+    setShowSubmapChoice(false)
+  }, [hasChildren, id, nodeType, setEdgeType, title, updateNodeData])
 
   const handleToggleTodo = useCallback(() => {
     pushHistory()
@@ -490,6 +517,15 @@ const CustomNode = memo(({ id, data, selected }) => {
           </button>
         </div>
       )}
+
+      <SubmapChoiceModal
+        open={showSubmapChoice}
+        onClose={() => setShowSubmapChoice(false)}
+        onCreateNew={handleCreateNewSubmap}
+        onSelectExisting={handleLinkExistingSubmap}
+        currentMapId={currentMapId}
+        existingDisabledReason={hasChildren ? 'This node has children, so an existing map cannot be selected.' : ''}
+      />
     </div>
   )
 })
