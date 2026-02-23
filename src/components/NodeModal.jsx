@@ -16,12 +16,13 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
   const isEditMode       = useMindMapStore((s) => s.isEditMode)
 
   const { id } = node
-  const { title, level, content, isSubmap, submapId, nodeType = 'folder', hasChildren } = node.data
+  const { title, level, content, isSubmap, submapId, nodeType = 'folder', hasChildren, isTodo = false } = node.data
 
   const [isEditing, setIsEditing]         = useState(isEditMode)
-  const [draft, setDraft]                 = useState(isEditMode ? { title: title || '', content: content || '' } : null)
+  const [draft, setDraft]                 = useState(isEditMode ? { title: title || '', content: content || '', isTodo: !!isTodo } : null)
   const [showConvertMenu, setShowConvertMenu] = useState(false)
   const [converting, setConverting]       = useState(false)
+  const headerIsTodo = isEditing ? !!draft?.isTodo : isTodo
 
   const hasNotes = content && content !== '<p></p>' && content !== ''
 
@@ -41,12 +42,12 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
   }, [isEditMode])
 
   const startEdit = () => {
-    setDraft({ title: title || '', content: content || '' })
+    setDraft({ title: title || '', content: content || '', isTodo: !!isTodo })
     setIsEditing(true)
   }
 
   const saveEdit = () => {
-    if (draft) updateNodeData(id, { title: draft.title, content: draft.content })
+    if (draft) updateNodeData(id, { title: draft.title, content: draft.content, isTodo: !!draft.isTodo })
     onClose()
   }
 
@@ -98,7 +99,10 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
 
         {/* Header */}
         <div className="node-modal-header">
-          <span className="node-modal-header-title">{title || 'Untitled'}</span>
+          <div className="node-modal-header-left">
+            <span className="node-modal-header-title">{title || 'Untitled'}</span>
+            {headerIsTodo && <span className="node-modal-todo-chip">To Do</span>}
+          </div>
           <button className="icon-btn" onClick={onClose} aria-label="Close">✕</button>
         </div>
 
@@ -186,6 +190,12 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
                     Delete
                   </button>
                 )}
+                <button
+                  className="btn btn--secondary btn--sm"
+                  onClick={() => setDraft((d) => ({ ...(d || { title: '', content: '' }), isTodo: !d?.isTodo }))}
+                >
+                  {draft?.isTodo ? 'Unmark To Do' : 'Mark To Do'}
+                </button>
                 <button className="btn btn--primary btn--sm" onClick={saveEdit}>
                   Save
                 </button>

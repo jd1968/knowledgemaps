@@ -44,7 +44,7 @@ const CustomNode = memo(({ id, data, selected }) => {
   const selectTimerRef = useRef(null)
   const nodeRef        = useRef(null)
 
-  const { title, level, l1Color, hasChildren, collapsed, hasCollapsibleDescendants, allDescendantsCollapsed, isSubmap, submapId, hasNotes, nodeType, groupSize, content, groupNestingLevel = 0 } = data
+  const { title, level, l1Color, hasChildren, collapsed, hasCollapsibleDescendants, allDescendantsCollapsed, isSubmap, submapId, hasNotes, nodeType, groupSize, content, isTodo = false, groupNestingLevel = 0 } = data
   const cfg         = getConfig(level)
   const borderColor = l1Color ?? '#94a3b8'
   const width       = groupSize?.width ?? cfg.width
@@ -122,6 +122,13 @@ const CustomNode = memo(({ id, data, selected }) => {
     }
     setShowConvertMenu(false); setOpenMenuNodeId(null)
   }, [nodeType, title, id, hasChildren, convertToSubmap, updateNodeData, setEdgeType, setOpenMenuNodeId])
+
+  const handleToggleTodo = useCallback(() => {
+    pushHistory()
+    updateNodeData(id, { isTodo: !isTodo })
+    setShowConvertMenu(false)
+    setOpenMenuNodeId(null)
+  }, [id, isTodo, pushHistory, setOpenMenuNodeId, updateNodeData])
 
   // Invisible handles centred on the node — edges connect to the node centre
   const centerHandle = {
@@ -205,6 +212,12 @@ const CustomNode = memo(({ id, data, selected }) => {
       }}
     >
       <Handle type="target" position={Position.Left} style={centerHandle} />
+
+      {!editing && isTodo && (
+        <span className="node-todo-indicator" title="Marked as To Do">
+          To Do
+        </span>
+      )}
 
       {/* Header — title (or pointer callout layout) */}
       {nodeType === 'pointer' ? (
@@ -390,6 +403,18 @@ const CustomNode = memo(({ id, data, selected }) => {
         </button>
       )}
 
+      {/* To-do glyph — quick toggle */}
+      {hovered && isEditMode && level > 0 && !editing && (
+        <button
+          className={`node-todo-btn nodrag nopan${isTodo ? ' node-todo-btn--active' : ''}`}
+          title={isTodo ? 'Unmark To Do' : 'Mark as To Do'}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); handleToggleTodo() }}
+        >
+          ✓
+        </button>
+      )}
+
       {/* Delete glyph — top-right, shown on hover for non-root nodes */}
       {hovered && isEditMode && level > 0 && !editing && (
         <button
@@ -418,6 +443,12 @@ const CustomNode = memo(({ id, data, selected }) => {
               {converting && t === 'submap' ? '…' : ''}
             </button>
           ))}
+          <button
+            className="node-convert-menu-item node-convert-menu-item--todo"
+            onClick={(e) => { e.stopPropagation(); handleToggleTodo() }}
+          >
+            {isTodo ? 'Unmark To Do' : 'Mark as To Do'}
+          </button>
         </div>
       )}
     </div>
