@@ -10,7 +10,7 @@ import { useMindMapStore } from './store/useMindMapStore'
 import './App.css'
 
 function AppInner() {
-  const { undo, redo, loadMap, isEditMode } = useMindMapStore()
+  const { undo, redo, loadMap, isEditMode, isFullscreen } = useMindMapStore()
   const { user, loading } = useAuth()
 
   // Restore the last viewed map once the user is authenticated
@@ -43,8 +43,8 @@ function AppInner() {
   if (!user) return <LoginPage />
 
   return (
-    <div className="app">
-      <Toolbar />
+    <div className={`app${isFullscreen ? ' app--fullscreen' : ''}`}>
+      {!isFullscreen && <Toolbar />}
       <div className="app-body">
         <div className="canvas-wrapper">
           <MindMapCanvas />
