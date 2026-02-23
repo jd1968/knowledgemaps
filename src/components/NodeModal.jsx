@@ -23,15 +23,20 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
   const [showConvertMenu, setShowConvertMenu] = useState(false)
   const [converting, setConverting]       = useState(false)
   const headerIsTodo = isEditing ? !!draft?.isTodo : isTodo
+  const canSave = !!draft?.title?.trim()
 
   const hasNotes = content && content !== '<p></p>' && content !== ''
+  const requestClose = useCallback(() => {
+    if (isNew && onDelete) onDelete()
+    onClose()
+  }, [isNew, onDelete, onClose])
 
   // Close on Escape
   useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape') onClose() }
+    const onKey = (e) => { if (e.key === 'Escape') requestClose() }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+  }, [requestClose])
 
   // If edit mode is turned off while the modal is open, force read-only view.
   useEffect(() => {
@@ -47,13 +52,16 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
   }
 
   const saveEdit = () => {
-    if (draft) updateNodeData(id, { title: draft.title, content: draft.content, isTodo: !!draft.isTodo })
+    if (!canSave) {
+      alert('Title is required.')
+      return
+    }
+    if (draft) updateNodeData(id, { title: draft.title.trim(), content: draft.content, isTodo: !!draft.isTodo })
     onClose()
   }
 
   const cancelEdit = () => {
-    if (isNew && onDelete) onDelete()
-    onClose()
+    requestClose()
   }
 
   const handleDelete = useCallback(() => {
@@ -93,7 +101,7 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
   return createPortal(
     <div
       className="node-modal-overlay"
-      onPointerDown={(e) => { if (e.target === e.currentTarget) onClose() }}
+      onPointerDown={(e) => { if (e.target === e.currentTarget) requestClose() }}
     >
       <div className="node-modal">
 
@@ -103,7 +111,7 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
             <span className="node-modal-header-title">{title || 'Untitled'}</span>
             {headerIsTodo && <span className="node-modal-todo-chip">To Do</span>}
           </div>
-          <button className="icon-btn" onClick={onClose} aria-label="Close">✕</button>
+          <button className="icon-btn" onClick={requestClose} aria-label="Close">✕</button>
         </div>
 
         {/* Body */}
@@ -196,7 +204,7 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
                 >
                   {draft?.isTodo ? 'Unmark To Do' : 'Mark To Do'}
                 </button>
-                <button className="btn btn--primary btn--sm" onClick={saveEdit}>
+                <button className="btn btn--primary btn--sm" onClick={saveEdit} disabled={!canSave}>
                   Save
                 </button>
               </>

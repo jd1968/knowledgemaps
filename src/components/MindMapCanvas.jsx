@@ -141,6 +141,8 @@ const MindMapCanvas = () => {
     scheduleAutosave,
     isEditMode,
     openMenuNodeId,
+    reparentSourceNodeId,
+    clearReparentMode,
   } = useMindMapStore()
 
   // targetId -> sourceId lookup
@@ -436,6 +438,14 @@ const MindMapCanvas = () => {
   const containerRef = useRef(null)
   const dragStartRef = useRef({})
 
+  useEffect(() => {
+    if (!reparentSourceNodeId) return
+    document.body.style.cursor = 'copy'
+    return () => {
+      document.body.style.cursor = ''
+    }
+  }, [reparentSourceNodeId])
+
   const onNodeDragStart = useCallback((_, node) => {
     if (!isEditMode) return
     dragStartRef.current[node.id] = { x: node.position.x, y: node.position.y }
@@ -504,7 +514,13 @@ const MindMapCanvas = () => {
         onNodeDragStart={onNodeDragStart}
         onNodeDrag={onNodeDrag}
         onNodeDragStop={onNodeDragStop}
-        onPaneClick={deselectNode}
+        onPaneClick={() => {
+          if (reparentSourceNodeId) {
+            clearReparentMode()
+            return
+          }
+          deselectNode()
+        }}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         nodesDraggable={isEditMode}
@@ -545,7 +561,9 @@ const MindMapCanvas = () => {
             {isTouch
               ? 'Tap a node to select · Drag to pan · Pinch to zoom'
               : isEditMode
-                ? 'Hover a node and click + to add a child · Drag to lasso-select · Trackpad to pan & zoom'
+                ? reparentSourceNodeId
+                  ? 'Click a new parent node to reparent · Click source node or canvas to cancel'
+                  : 'Hover a node and click + to add a child · Drag to lasso-select · Trackpad to pan & zoom'
                 : 'Edit Mode is off · Drag to lasso-select · Trackpad to pan & zoom'}
           </div>
         </Panel>

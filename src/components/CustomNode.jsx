@@ -34,6 +34,10 @@ const CustomNode = memo(({ id, data, selected }) => {
   const pushHistory           = useMindMapStore((state) => state.pushHistory)
   const selectNode            = useMindMapStore((state) => state.selectNode)
   const isEditMode            = useMindMapStore((state) => state.isEditMode)
+  const reparentNode          = useMindMapStore((state) => state.reparentNode)
+  const reparentSourceNodeId  = useMindMapStore((state) => state.reparentSourceNodeId)
+  const setReparentSourceNodeId = useMindMapStore((state) => state.setReparentSourceNodeId)
+  const clearReparentMode     = useMindMapStore((state) => state.clearReparentMode)
 
   const [hovered, setHovered]             = useState(false)
   const [editing, setEditing]             = useState(false)
@@ -51,6 +55,7 @@ const CustomNode = memo(({ id, data, selected }) => {
   const height      = groupSize?.height ?? (nodeType === 'note' || nodeType === 'pointer' ? null : cfg.height)
   const showGroupHeader   = nodeType === 'group' && !!title?.trim()
   const hasPointerContent = nodeType === 'pointer' && content && content !== '<p></p>' && content !== ''
+  const isReparentSource = reparentSourceNodeId === id
 
   const startEditing = useCallback(() => {
     setDraft(title || '')
@@ -130,6 +135,16 @@ const CustomNode = memo(({ id, data, selected }) => {
     setOpenMenuNodeId(null)
   }, [id, isTodo, pushHistory, setOpenMenuNodeId, updateNodeData])
 
+  const handleToggleReparentMode = useCallback(() => {
+    if (isReparentSource) {
+      clearReparentMode()
+      return
+    }
+    setShowConvertMenu(false)
+    setOpenMenuNodeId(null)
+    setReparentSourceNodeId(id)
+  }, [clearReparentMode, id, isReparentSource, setOpenMenuNodeId, setReparentSourceNodeId])
+
   // Invisible handles centred on the node — edges connect to the node centre
   const centerHandle = {
     width: 1,
@@ -149,6 +164,7 @@ const CustomNode = memo(({ id, data, selected }) => {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       onPointerDown={(e) => {
+        if (reparentSourceNodeId) return
         const startX = e.clientX
         const startY = e.clientY
         document.addEventListener('pointerup', (e2) => {
@@ -160,7 +176,17 @@ const CustomNode = memo(({ id, data, selected }) => {
           }
         }, { once: true })
       }}
-      onClick={(e) => e.stopPropagation()}
+      onClick={(e) => {
+        e.stopPropagation()
+        if (!reparentSourceNodeId) return
+        if (id === reparentSourceNodeId) {
+          clearReparentMode()
+          return
+        }
+        pushHistory()
+        reparentNode(reparentSourceNodeId, id)
+        clearReparentMode()
+      }}
       onDoubleClick={(e) => {
         if (!isEditMode) return
         e.stopPropagation()
@@ -197,7 +223,7 @@ const CustomNode = memo(({ id, data, selected }) => {
         fontSize: cfg.fontSize,
         fontWeight: cfg.fontWeight,
         color: level === 0 ? '#ffffff' : '#0f172a',
-        cursor: editing ? 'text' : 'pointer',
+        cursor: reparentSourceNodeId ? 'copy' : (editing ? 'text' : 'pointer'),
         boxShadow: selected
           ? `0 0 0 3px ${borderColor}40, 2px 4px 14px rgba(0,0,0,0.18)`
           : hovered
@@ -209,6 +235,7 @@ const CustomNode = memo(({ id, data, selected }) => {
         userSelect: 'none',
         position: 'relative',
         boxSizing: 'border-box',
+        ...(isReparentSource ? { boxShadow: `0 0 0 3px #f59e0b99, 2px 4px 14px rgba(0,0,0,0.18)` } : {}),
       }}
     >
       <Handle type="target" position={Position.Left} style={centerHandle} />
@@ -412,6 +439,18 @@ const CustomNode = memo(({ id, data, selected }) => {
           onClick={(e) => { e.stopPropagation(); handleToggleTodo() }}
         >
           ✓
+        </button>
+      )}
+
+      {/* Reparent glyph — quick select-source mode */}
+      {(hovered || isReparentSource) && isEditMode && level > 0 && !editing && (
+        <button
+          className={`node-reparent-btn nodrag nopan${isReparentSource ? ' node-reparent-btn--active' : ''}`}
+          title={isReparentSource ? 'Cancel reparent' : 'Reparent node'}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); handleToggleReparentMode() }}
+        >
+          ⇢
         </button>
       )}
 

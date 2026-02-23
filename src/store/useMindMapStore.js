@@ -45,10 +45,16 @@ export const useMindMapStore = create((set, get) => ({
   fitViewTrigger: 0,
   isEditMode: false,
   openMenuNodeId: null,
+  reparentSourceNodeId: null,
   setOpenMenuNodeId: (id) => set({ openMenuNodeId: id }),
+  setReparentSourceNodeId: (id) => set({ reparentSourceNodeId: id }),
+  clearReparentMode: () => set({ reparentSourceNodeId: null }),
 
-  setEditMode: (isEditMode) => set({ isEditMode }),
-  toggleEditMode: () => set((state) => ({ isEditMode: !state.isEditMode })),
+  setEditMode: (isEditMode) => set({ isEditMode, reparentSourceNodeId: isEditMode ? get().reparentSourceNodeId : null }),
+  toggleEditMode: () => set((state) => ({
+    isEditMode: !state.isEditMode,
+    reparentSourceNodeId: state.isEditMode ? null : state.reparentSourceNodeId,
+  })),
 
   // ── Submap navigation ─────────────────────────────────────────
   // Each entry: { mapId, mapName }  — the trail of maps above the current one
@@ -111,7 +117,7 @@ export const useMindMapStore = create((set, get) => ({
 
   // ── Node CRUD ─────────────────────────────────────────────────
 
-  addNode: ({ position, level = 1, title = 'New Node' }) => {
+  addNode: ({ position, level = 1, title = '' }) => {
     if (!get().isEditMode) return null
     get().pushHistory()
     const id = uuidv4()
@@ -630,7 +636,7 @@ export const useMindMapStore = create((set, get) => ({
       id,
       type: 'mindmap',
       position: { x, y },
-      data: { title: 'New Node', key: id, level: childLevel, nodeType, content: '' },
+      data: { title: '', key: id, level: childLevel, nodeType, content: '' },
     }
 
     const newEdge = {
