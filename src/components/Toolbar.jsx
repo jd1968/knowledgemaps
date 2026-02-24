@@ -66,6 +66,13 @@ const TreeIcon = () => (
   </svg>
 )
 
+const FeedIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <rect x="3" y="4" width="18" height="7" rx="2" />
+    <rect x="3" y="14" width="18" height="7" rx="2" />
+  </svg>
+)
+
 
 /* ── SaveStatusDot ──────────────────────────────────────────────────── */
 
@@ -104,6 +111,8 @@ const Toolbar = () => {
     currentMapId,
     isEditMode,
     toggleEditMode,
+    isFeedMode,
+    toggleFeedMode,
     breadcrumbs,
     navigateBack,
   } = useMindMapStore()
@@ -223,7 +232,7 @@ const Toolbar = () => {
       {/* Right: actions */}
       <div className="toolbar-actions">
         <button
-          className="btn btn--ghost btn--sm"
+          className="btn btn--ghost btn--sm toolbar-desktop-only"
           onClick={undo}
           disabled={!isEditMode || past.length === 0}
           title="Undo (Ctrl+Z)"
@@ -233,7 +242,7 @@ const Toolbar = () => {
           <span className="btn-label">Undo</span>
         </button>
         <button
-          className="btn btn--ghost btn--sm"
+          className="btn btn--ghost btn--sm toolbar-desktop-only"
           onClick={redo}
           disabled={!isEditMode || future.length === 0}
           title="Redo (Ctrl+Y / Ctrl+Shift+Z)"
@@ -262,6 +271,18 @@ const Toolbar = () => {
         >
           <TreeIcon />
           <span className="btn-label">Contents</span>
+        </button>
+
+        {/* Feed mode toggle */}
+        <button
+          className={`btn btn--ghost btn--sm${isFeedMode ? ' btn--ghost-active' : ''}`}
+          onClick={toggleFeedMode}
+          title={isFeedMode ? 'Back to map view' : 'Feed view'}
+          aria-label={isFeedMode ? 'Back to map view' : 'Feed view'}
+          aria-pressed={isFeedMode}
+        >
+          <FeedIcon />
+          <span className="btn-label">Feed</span>
         </button>
 
         <div className="toolbar-sep toolbar-sep--desktop-only" />
