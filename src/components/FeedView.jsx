@@ -39,7 +39,7 @@ function getAncestorCrumbs(nodeId, nodeMap, parentMap) {
 
 /* ── FeedCard ──────────────────────────────────────────────────────── */
 
-function FeedCard({ node, index, nodeMap, parentMap, onSave }) {
+function FeedCard({ node, index, nodeMap, parentMap, onSave, onEditStart, onEditEnd }) {
   const [editingTitle, setEditingTitle] = useState(false)
   const [editingContent, setEditingContent] = useState(false)
   const [localTitle, setLocalTitle] = useState(node.data.title)
@@ -48,64 +48,125 @@ function FeedCard({ node, index, nodeMap, parentMap, onSave }) {
   const [isClamped, setIsClamped] = useState(false)
   const contentRef = useRef(null)
   const titleInputRef = useRef(null)
-  const contentCancelledRef = useRef(false)
-  const contentConfirmedRef = useRef(false)
+
+  // Always-current value refs — avoid stale closures in registered callbacks
+  const localTitleRef = useRef(localTitle)
+  useEffect(() => { localTitleRef.current = localTitle }, [localTitle])
+  const localContentRef = useRef(localContent)
+  useEffect(() => { localContentRef.current = localContent }, [localContent])
+
+  // Flags to suppress double-save when blur fires after a manual confirm/cancel
+  const titleHandledRef = useRef(false)
+  const contentHandledRef = useRef(false)
 
   useEffect(() => {
     if (editingTitle) titleInputRef.current?.select()
   }, [editingTitle])
 
   useEffect(() => {
-    if (!editingContent) return
-    const handler = (e) => { if (e.key === 'Escape') cancelContent() }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
-  }, [editingContent]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
     if (!contentRef.current || expanded || editingContent) return
     setIsClamped(contentRef.current.scrollHeight > contentRef.current.clientHeight + 2)
   }, [localContent, expanded, editingContent])
 
-  const commitTitle = () => {
+  // Escape cancels content editing regardless of focus
+  useEffect(() => {
+    if (!editingContent) return
+    const handler = (e) => {
+      if (e.key === 'Escape') cancelContent()
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [editingContent]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* ── Title ── */
+
+  const startTitleEdit = () => {
+    setEditingTitle(true)
+    onEditStart(
+      () => {  // confirm from fixed bar
+        if (titleHandledRef.current) return
+        titleHandledRef.current = true
+        setEditingTitle(false)
+        onEditEnd()
+        const trimmed = localTitleRef.current.trim() || node.data.title
+        setLocalTitle(trimmed)
+        if (trimmed !== node.data.title) onSave(node, { title: trimmed })
+      },
+      () => {  // cancel from fixed bar
+        if (titleHandledRef.current) return
+        titleHandledRef.current = true
+        setLocalTitle(node.data.title)
+        setEditingTitle(false)
+        onEditEnd()
+      }
+    )
+  }
+
+  // Natural blur (clicking outside, not via fixed bar)
+  const commitTitleOnBlur = () => {
+    if (titleHandledRef.current) { titleHandledRef.current = false; return }
     setEditingTitle(false)
-    const trimmed = localTitle.trim() || node.data.title
+    onEditEnd()
+    const trimmed = localTitleRef.current.trim() || node.data.title
     setLocalTitle(trimmed)
     if (trimmed !== node.data.title) onSave(node, { title: trimmed })
   }
 
-  const cancelTitle = () => {
+  const cancelTitleOnEscape = () => {
+    if (titleHandledRef.current) return
+    titleHandledRef.current = true
     setLocalTitle(node.data.title)
     setEditingTitle(false)
+    onEditEnd()
   }
 
-  const commitContent = (html) => {
-    if (contentCancelledRef.current) { contentCancelledRef.current = false; return }
-    if (contentConfirmedRef.current) { contentConfirmedRef.current = false; return }
-    setEditingContent(false)
-    setLocalContent(html)
-    if (html !== node.data.content) onSave(node, { content: html })
-  }
+  /* ── Content ── */
 
-  const confirmContent = () => {
-    contentConfirmedRef.current = true
-    setEditingContent(false)
-    if (localContent !== node.data.content) onSave(node, { content: localContent })
+  const startContentEdit = () => {
+    setEditingContent(true)
+    onEditStart(
+      () => {  // confirm from fixed bar
+        if (contentHandledRef.current) return
+        contentHandledRef.current = true
+        setEditingContent(false)
+        onEditEnd()
+        if (localContentRef.current !== node.data.content) onSave(node, { content: localContentRef.current })
+      },
+      () => {  // cancel from fixed bar
+        if (contentHandledRef.current) return
+        contentHandledRef.current = true
+        setLocalContent(node.data.content)
+        setEditingContent(false)
+        onEditEnd()
+      }
+    )
   }
 
   const cancelContent = () => {
-    contentCancelledRef.current = true
+    if (contentHandledRef.current) return
+    contentHandledRef.current = true
     setLocalContent(node.data.content)
     setEditingContent(false)
+    onEditEnd()
+  }
+
+  // Natural blur (clicking outside, not via fixed bar)
+  const commitContentOnBlur = (html) => {
+    if (contentHandledRef.current) { contentHandledRef.current = false; return }
+    setEditingContent(false)
+    onEditEnd()
+    setLocalContent(html)
+    if (html !== node.data.content) onSave(node, { content: html })
   }
 
   const crumbs = getAncestorCrumbs(node.id, nodeMap, parentMap)
   const typeLabel = node.data.nodeType !== 'folder' ? node.data.nodeType : null
 
   return (
-    <div className={`feed-card${editingContent ? ' feed-card--editing' : ''}`}
-      style={{ animationDelay: `${(index % BATCH_SIZE) * 40}ms` }}>
-
+    <div
+      className={`feed-card${(editingTitle || editingContent) ? ' feed-card--editing' : ''}`}
+      style={{ animationDelay: `${(index % BATCH_SIZE) * 40}ms` }}
+    >
       {crumbs && (
         <div className="feed-card__breadcrumb" aria-label="Location">
           {crumbs.map((crumb, i) => (
@@ -121,25 +182,21 @@ function FeedCard({ node, index, nodeMap, parentMap, onSave }) {
 
       <div className="feed-card__header">
         {editingTitle ? (
-          <div className="feed-card__title-edit-row">
-            <input
-              ref={titleInputRef}
-              className="feed-card__title-input"
-              value={localTitle}
-              onChange={(e) => setLocalTitle(e.target.value)}
-              onBlur={commitTitle}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') e.target.blur()
-                if (e.key === 'Escape') cancelTitle()
-              }}
-            />
-            <button className="feed-card__inline-btn feed-card__inline-btn--confirm" onMouseDown={(e) => e.preventDefault()} onClick={commitTitle} title="Confirm">✓</button>
-            <button className="feed-card__inline-btn feed-card__inline-btn--cancel" onMouseDown={(e) => e.preventDefault()} onClick={cancelTitle} title="Cancel">✕</button>
-          </div>
+          <input
+            ref={titleInputRef}
+            className="feed-card__title-input"
+            value={localTitle}
+            onChange={(e) => setLocalTitle(e.target.value)}
+            onBlur={commitTitleOnBlur}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') e.target.blur()
+              if (e.key === 'Escape') cancelTitleOnEscape()
+            }}
+          />
         ) : (
           <h3
             className="feed-card__title feed-card__title--editable"
-            onClick={() => setEditingTitle(true)}
+            onClick={startTitleEdit}
             title="Click to edit"
           >
             {localTitle}
@@ -155,19 +212,15 @@ function FeedCard({ node, index, nodeMap, parentMap, onSave }) {
           <RichTextEditor
             content={localContent}
             onChange={setLocalContent}
-            onBlur={commitContent}
+            onBlur={commitContentOnBlur}
             onEscape={cancelContent}
             editable
           />
-          <div className="feed-card__edit-actions">
-            <button className="feed-card__action-btn feed-card__action-btn--confirm" onMouseDown={(e) => e.preventDefault()} onClick={confirmContent} title="Save">✓</button>
-            <button className="feed-card__action-btn feed-card__action-btn--cancel" onMouseDown={(e) => e.preventDefault()} onClick={cancelContent} title="Cancel">✕</button>
-          </div>
         </div>
       ) : (
         <div
           className="feed-card__content-wrap feed-card__content-wrap--clickable"
-          onClick={() => setEditingContent(true)}
+          onClick={startContentEdit}
           title="Click to edit"
         >
           <div
@@ -208,6 +261,7 @@ export default function FeedView() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [feedItems, setFeedItems] = useState([])
+  const [activeEditActions, setActiveEditActions] = useState(null)
   const loaderRef = useRef(null)
 
   useEffect(() => {
@@ -231,9 +285,7 @@ export default function FeedView() {
         for (const map of mapsResult.data) {
           const mapNodes = map.data?.nodes || []
           const mapEdges = map.data?.edges || []
-
           mergedEdges.push(...mapEdges)
-
           for (const node of mapNodes) {
             const content = contentById.get(node.id) || ''
             mergedNodes.push({
@@ -262,7 +314,6 @@ export default function FeedView() {
         setLoading(false)
       }
     }
-
     loadAll()
   }, [])
 
@@ -296,30 +347,29 @@ export default function FeedView() {
     return () => observer.disconnect()
   }, [loadMore])
 
+  const handleEditStart = useCallback((confirm, cancel) => {
+    setActiveEditActions({ confirm, cancel })
+  }, [])
+
+  const handleEditEnd = useCallback(() => {
+    setActiveEditActions(null)
+  }, [])
+
   const handleSave = useCallback(async (node, changes) => {
-    // Optimistically update allNodes so future batches reflect the edit
     setAllNodes((prev) => prev.map((n) =>
       n.id === node.id ? { ...n, data: { ...n.data, ...changes } } : n
     ))
-
-    // Keep the map canvas in sync if the node belongs to the currently loaded map
     if (node._feedMapId === currentMapId) {
       updateNodeData(node.id, changes)
     }
-
     try {
-      // Update the nodes table (content and/or title)
       await supabase.from('nodes').update(changes).eq('id', node.id)
-
-      // Title also lives in the map's JSONB structure — update that too
       if (changes.title !== undefined) {
         const { data: map } = await supabase
           .from('maps').select('data').eq('id', node._feedMapId).single()
         if (map) {
           const updatedNodes = map.data.nodes.map((n) =>
-            n.id === node.id
-              ? { ...n, data: { ...n.data, title: changes.title } }
-              : n
+            n.id === node.id ? { ...n, data: { ...n.data, title: changes.title } } : n
           )
           await supabase
             .from('maps')
@@ -330,31 +380,11 @@ export default function FeedView() {
     } catch (err) {
       console.error('Feed save failed:', err)
     }
-  }, [])
+  }, [currentMapId, updateNodeData])
 
-  if (loading) {
-    return (
-      <div className="feed-view">
-        <div className="feed-empty"><p>Loading feed…</p></div>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="feed-view">
-        <div className="feed-empty"><p>{error}</p></div>
-      </div>
-    )
-  }
-
-  if (contentNodes.length === 0) {
-    return (
-      <div className="feed-view">
-        <div className="feed-empty"><p>No nodes with content found across your maps.</p></div>
-      </div>
-    )
-  }
+  if (loading) return <div className="feed-view"><div className="feed-empty"><p>Loading feed…</p></div></div>
+  if (error)   return <div className="feed-view"><div className="feed-empty"><p>{error}</p></div></div>
+  if (contentNodes.length === 0) return <div className="feed-view"><div className="feed-empty"><p>No nodes with content found across your maps.</p></div></div>
 
   return (
     <div className="feed-view">
@@ -367,10 +397,33 @@ export default function FeedView() {
             nodeMap={nodeMap}
             parentMap={parentMap}
             onSave={handleSave}
+            onEditStart={handleEditStart}
+            onEditEnd={handleEditEnd}
           />
         ))}
         <div ref={loaderRef} className="feed-loader" aria-hidden="true" />
       </div>
+
+      {activeEditActions && (
+        <div className="feed-edit-bar">
+          <button
+            className="feed-edit-bar__btn feed-edit-bar__btn--cancel"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={activeEditActions.cancel}
+            aria-label="Cancel edit"
+          >
+            ✕
+          </button>
+          <button
+            className="feed-edit-bar__btn feed-edit-bar__btn--confirm"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={activeEditActions.confirm}
+            aria-label="Save edit"
+          >
+            ✓
+          </button>
+        </div>
+      )}
     </div>
   )
 }

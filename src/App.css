@@ -1866,31 +1866,6 @@
   color: #3b82f6;
 }
 
-.feed-card__title-edit-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex: 1;
-}
-
-.feed-card__inline-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 6px;
-  border: none;
-  font-size: 14px;
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: background 0.15s;
-}
-
-.feed-card__inline-btn--confirm { background: #dcfce7; color: #16a34a; }
-.feed-card__inline-btn--confirm:hover { background: #bbf7d0; }
-.feed-card__inline-btn--cancel  { background: #fee2e2; color: #dc2626; }
-.feed-card__inline-btn--cancel:hover  { background: #fecaca; }
 
 .feed-card__title-input {
   flex: 1;
@@ -1930,30 +1905,6 @@
   cursor: text;
 }
 
-.feed-card__edit-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 6px;
-  margin-top: 8px;
-}
-
-.feed-card__action-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 5px 14px;
-  border-radius: 6px;
-  border: none;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.feed-card__action-btn--confirm { background: #dcfce7; color: #16a34a; }
-.feed-card__action-btn--confirm:hover { background: #bbf7d0; }
-.feed-card__action-btn--cancel  { background: #fee2e2; color: #dc2626; }
-.feed-card__action-btn--cancel:hover  { background: #fecaca; }
 
 /* Editor embedded inside a feed card */
 .feed-card__editor-wrap .rich-text-editor {
@@ -2052,4 +2003,44 @@
 .feed-loader {
   height: 40px;
 }
+
+/* ── Feed edit bar (fixed bottom) ────────────────────────────────── */
+
+.feed-edit-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 12px 20px;
+  background: rgba(15, 23, 42, 0.92);
+  backdrop-filter: blur(8px);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  z-index: 200;
+}
+
+.feed-edit-bar__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: none;
+  font-size: 20px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.15s, opacity 0.15s;
+}
+
+.feed-edit-bar__btn:active {
+  transform: scale(0.92);
+}
+
+.feed-edit-bar__btn--confirm { background: #22c55e; color: #fff; }
+.feed-edit-bar__btn--confirm:hover { background: #16a34a; }
+.feed-edit-bar__btn--cancel  { background: #64748b; color: #fff; }
+.feed-edit-bar__btn--cancel:hover  { background: #475569; }
 
