@@ -1832,9 +1832,14 @@
   color: #cbd5e1;
 }
 
-.feed-card__breadcrumb-ellipsis {
-  color: #cbd5e1;
-  font-style: normal;
+.feed-card__breadcrumb-root {
+  font-weight: 700;
+  color: #64748b;
+}
+
+.feed-card--editing {
+  outline: 2px solid #3b82f6;
+  outline-offset: -2px;
 }
 
 .feed-card__header {
@@ -1853,6 +1858,56 @@
   line-height: 1.35;
 }
 
+.feed-card__title--editable {
+  cursor: text;
+}
+
+.feed-card__title--editable:hover {
+  color: #3b82f6;
+}
+
+.feed-card__title-edit-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+}
+
+.feed-card__inline-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: none;
+  font-size: 14px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+
+.feed-card__inline-btn--confirm { background: #dcfce7; color: #16a34a; }
+.feed-card__inline-btn--confirm:hover { background: #bbf7d0; }
+.feed-card__inline-btn--cancel  { background: #fee2e2; color: #dc2626; }
+.feed-card__inline-btn--cancel:hover  { background: #fecaca; }
+
+.feed-card__title-input {
+  flex: 1;
+  font-size: 17px;
+  font-weight: 700;
+  color: #1e293b;
+  line-height: 1.35;
+  border: none;
+  outline: none;
+  background: #f8fafc;
+  border-radius: 4px;
+  padding: 1px 4px;
+  margin: -1px -4px;
+  width: 100%;
+}
+
+
 .feed-card__type-badge {
   font-size: 11px;
   font-weight: 600;
@@ -1869,6 +1924,50 @@
 
 .feed-card__content-wrap {
   position: relative;
+}
+
+.feed-card__content-wrap--clickable {
+  cursor: text;
+}
+
+.feed-card__edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.feed-card__action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px 14px;
+  border-radius: 6px;
+  border: none;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.feed-card__action-btn--confirm { background: #dcfce7; color: #16a34a; }
+.feed-card__action-btn--confirm:hover { background: #bbf7d0; }
+.feed-card__action-btn--cancel  { background: #fee2e2; color: #dc2626; }
+.feed-card__action-btn--cancel:hover  { background: #fecaca; }
+
+/* Editor embedded inside a feed card */
+.feed-card__editor-wrap .rich-text-editor {
+  min-height: 0;
+  flex: none;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.feed-card__editor-wrap .editor-content .ProseMirror {
+  min-height: 80px;
+  padding: 10px 12px;
+  font-size: 14px;
 }
 
 /* Clamped (default) */

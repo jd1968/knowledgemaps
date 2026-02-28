@@ -115,7 +115,7 @@ const EditorToolbar = ({ editor }) => {
   )
 }
 
-const RichTextEditor = ({ content, onChange, editable = true }) => {
+const RichTextEditor = ({ content, onChange, onBlur, onEscape, editable = true }) => {
   const editor = useEditor({
     extensions: [StarterKit, Underline],
     content: content || '',
@@ -123,8 +123,17 @@ const RichTextEditor = ({ content, onChange, editable = true }) => {
     onUpdate: ({ editor }) => {
       if (editable) onChange?.(editor.getHTML())
     },
+    onBlur: ({ editor }) => {
+      onBlur?.(editor.getHTML())
+    },
     editorProps: {
       attributes: { class: 'prose-editor' },
+      handleKeyDown: (_view, event) => {
+        if (event.key === 'Escape') {
+          onEscape?.()
+          return true
+        }
+      },
     },
   })
 
