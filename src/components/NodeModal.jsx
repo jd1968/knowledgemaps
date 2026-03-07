@@ -19,10 +19,10 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
   const currentMapId     = useMindMapStore((s) => s.currentMapId)
 
   const { id } = node
-  const { title, level, content, isSubmap, submapId, nodeType = 'folder', hasChildren, isTodo = false } = node.data
+  const { title, level, content, longTitle = '', isSubmap, submapId, nodeType = 'folder', hasChildren, isTodo = false } = node.data
 
   const [isEditing, setIsEditing]         = useState(isEditMode)
-  const [draft, setDraft]                 = useState(isEditMode ? { title: title || '', content: content || '', isTodo: !!isTodo, nodeType } : null)
+  const [draft, setDraft]                 = useState(isEditMode ? { title: title || '', longTitle: longTitle || '', content: content || '', isTodo: !!isTodo, nodeType } : null)
   const [showConvertMenu, setShowConvertMenu] = useState(false)
   const [converting, setConverting]       = useState(false)
   const [showSubmapChoice, setShowSubmapChoice] = useState(false)
@@ -51,7 +51,7 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
   }, [isEditMode])
 
   const startEdit = () => {
-    setDraft({ title: title || '', content: content || '', isTodo: !!isTodo, nodeType })
+    setDraft({ title: title || '', longTitle: longTitle || '', content: content || '', isTodo: !!isTodo, nodeType })
     setIsEditing(true)
   }
 
@@ -65,7 +65,7 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
       setShowSubmapChoice(true)
       return
     }
-    if (draft) updateNodeData(id, { title: draft.title.trim(), content: draft.content, isTodo: !!draft.isTodo, nodeType: nextType })
+    if (draft) updateNodeData(id, { title: draft.title.trim(), longTitle: draft.longTitle?.trim() || '', content: draft.content, isTodo: !!draft.isTodo, nodeType: nextType })
     if (nextType === 'pointer') setEdgeType(id, 'pointer-edge')
     else if (nodeType === 'pointer') setEdgeType(id, 'straight-center')
     onClose()
@@ -116,7 +116,7 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
       alert('Title is required.')
       return
     }
-    if (draft) updateNodeData(id, { title: draft.title.trim(), content: draft.content, isTodo: !!draft.isTodo })
+    if (draft) updateNodeData(id, { title: draft.title.trim(), longTitle: draft.longTitle?.trim() || '', content: draft.content, isTodo: !!draft.isTodo })
     await handleConvertToSubmap()
     setShowSubmapChoice(false)
   }, [canSave, draft, handleConvertToSubmap, id, updateNodeData])
@@ -127,11 +127,13 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
       return
     }
     const nextTitle = draft?.title?.trim() || title?.trim() || map.name
+    const nextLongTitle = draft?.longTitle?.trim() ?? longTitle
     const nextContent = draft?.content ?? content
     const nextTodo = draft?.isTodo ?? isTodo
     if (nodeType === 'pointer') setEdgeType(id, 'straight-center')
     updateNodeData(id, {
       title: nextTitle,
+      longTitle: nextLongTitle || '',
       content: nextContent,
       isTodo: !!nextTodo,
       isSubmap: true,
@@ -165,13 +167,23 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
           {isEditing ? (
             <>
               <div className="field">
-                <label className="field-label">Title</label>
+                <label className="field-label">Title <span className="field-label-hint">(shown on map)</span></label>
                 <input
                   className="field-input"
                   value={draft.title}
                   onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
                   placeholder="Node title…"
                   autoFocus
+                />
+              </div>
+
+              <div className="field">
+                <label className="field-label">Long Title <span className="field-label-hint">(shown on cards — leave blank to use title)</span></label>
+                <input
+                  className="field-input"
+                  value={draft.longTitle || ''}
+                  onChange={(e) => setDraft((d) => ({ ...d, longTitle: e.target.value }))}
+                  placeholder="More descriptive title for feed cards…"
                 />
               </div>
 

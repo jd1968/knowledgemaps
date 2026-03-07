@@ -249,7 +249,7 @@ const CustomNode = memo(({ id, data, selected }) => {
         borderRadius: level === 0 ? '50px' : nodeType === 'note' ? '2px' : nodeType === 'group' ? '12px' : nodeType === 'pointer' ? '8px' : '10px',
         fontSize: cfg.fontSize,
         fontWeight: cfg.fontWeight,
-        color: level === 0 ? '#ffffff' : '#0f172a',
+        color: level === 0 ? '#ffffff' : '#1c1917',
         cursor: reparentSourceNodeId ? 'copy' : (editing ? 'text' : 'pointer'),
         boxShadow: selected
           ? `0 0 0 3px ${borderColor}40, 2px 4px 14px rgba(0,0,0,0.18)`
@@ -262,7 +262,7 @@ const CustomNode = memo(({ id, data, selected }) => {
         userSelect: 'none',
         position: 'relative',
         boxSizing: 'border-box',
-        ...(isReparentSource ? { boxShadow: `0 0 0 3px #f59e0b99, 2px 4px 14px rgba(0,0,0,0.18)` } : {}),
+        ...(isReparentSource ? { boxShadow: `0 0 0 3px #b4530980, 2px 4px 14px rgba(0,0,0,0.18)` } : {}),
       }}
     >
       <Handle type="target" position={Position.Left} style={centerHandle} />
@@ -296,7 +296,7 @@ const CustomNode = memo(({ id, data, selected }) => {
                 background: 'transparent',
                 fontSize: '11px',
                 fontWeight: 600,
-                color: '#0f172a',
+                color: '#1c1917',
                 fontFamily: 'inherit',
                 padding: '8px 10px 4px',
                 boxSizing: 'border-box',
@@ -305,13 +305,13 @@ const CustomNode = memo(({ id, data, selected }) => {
           ) : (
             <>
               {title?.trim() && (
-                <div style={{ fontSize: '11px', fontWeight: 600, color: '#0f172a', padding: '8px 10px 4px', lineHeight: '1.3', wordBreak: 'break-word' }}>
+                <div style={{ fontSize: '11px', fontWeight: 600, color: '#1c1917', padding: '8px 10px 4px', lineHeight: '1.3', wordBreak: 'break-word' }}>
                   {title}
                 </div>
               )}
               <div
                 className="pointer-content"
-                style={{ fontSize: '11px', fontWeight: 400, color: '#334155', padding: '0 10px 8px', maxHeight: '120px', overflow: 'hidden', lineHeight: '1.4' }}
+                style={{ fontSize: '11px', fontWeight: 400, color: '#57534e', padding: '0 10px 8px', maxHeight: '120px', overflow: 'hidden', lineHeight: '1.4' }}
                 dangerouslySetInnerHTML={{ __html: hasPointerContent ? content : '<p style="margin:0;color:#94a3b8">No content yet</p>' }}
               />
             </>
@@ -376,7 +376,7 @@ const CustomNode = memo(({ id, data, selected }) => {
               right: '5px',
               fontSize: '12px',
               fontWeight: 700,
-              color: `${borderColor}90`,
+              color: `${borderColor}80`,
               lineHeight: 1,
               pointerEvents: 'none',
             }}>≡</span>

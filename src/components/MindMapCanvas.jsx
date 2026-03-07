@@ -19,21 +19,21 @@ import PointerEdge from './PointerEdge'
 const nodeTypes = { mindmap: CustomNode }
 const edgeTypes = { 'straight-center': StraightCenterEdge, 'pointer-edge': PointerEdge }
 
-// Contemporary, compatible palette — one color per L1 branch
+// Palette optimised for light backgrounds, one color per L1 branch
 const L1_PALETTE = [
-  '#3b82f6', // blue
-  '#10b981', // emerald
-  '#f97316', // orange
-  '#8b5cf6', // violet
-  '#f43f5e', // rose
-  '#06b6d4', // cyan
-  '#f59e0b', // amber
-  '#14b8a6', // teal
-  '#6366f1', // indigo
-  '#d946ef', // fuchsia
+  '#2563eb', // blue
+  '#059669', // emerald
+  '#ea580c', // orange
+  '#7c3aed', // violet
+  '#e11d48', // rose
+  '#0891b2', // cyan
+  '#b45309', // amber-brown
+  '#0f766e', // teal
+  '#4f46e5', // indigo
+  '#c026d3', // fuchsia
 ]
 
-const ROOT_BORDER = '#64748b' // slate — neutral for the central topic
+const ROOT_BORDER = '#78716c' // warm slate — neutral for the central topic
 const DEFAULT_NODE_SIZE = {
   0: { width: 200, height: 200 },
   1: { width: 170, height: 48 },
@@ -596,7 +596,7 @@ const MindMapCanvas = () => {
         maxZoom={2}
         defaultEdgeOptions={{
           type: 'straight-center',
-          style: { stroke: '#94a3b8', strokeWidth: 2 },
+          style: { stroke: '#363b56', strokeWidth: 1.5 },
         }}
         deleteKeyCode={isEditMode ? ['Backspace', 'Delete'] : null}
       >
@@ -604,7 +604,7 @@ const MindMapCanvas = () => {
           variant={BackgroundVariant.Dots}
           gap={22}
           size={1.2}
-          color="#cbd5e1"
+          color="#d4cabb"
         />
         <Controls showInteractive={false}>
           <ControlButton
@@ -616,8 +616,8 @@ const MindMapCanvas = () => {
         </Controls>
         <MiniMap
           nodeColor={(node) => node.data?.l1Color ?? ROOT_BORDER}
-          maskColor="rgba(241,245,249,0.7)"
-          style={{ background: '#f8fafc', border: '1px solid #e2e8f0' }}
+          maskColor="rgba(240,236,227,0.75)"
+          style={{ background: '#f9f6f1', border: '1px solid #e5ddd0' }}
           zoomable
           pannable
         />

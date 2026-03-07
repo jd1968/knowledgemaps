@@ -1,3 +1,27 @@
+@import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&family=Outfit:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  --ink:            #f0ece3;
+  --bg:             #ffffff;
+  --bg-surface:     #ffffff;
+  --bg-elevated:    #f9f6f1;
+  --bg-high:        #f0ece3;
+  --border:         #e5ddd0;
+  --border-strong:  #cec4b3;
+  --amber:          #b45309;
+  --amber-glow:     rgba(180, 83, 9, 0.14);
+  --amber-subtle:   rgba(180, 83, 9, 0.08);
+  --text:           #1c1917;
+  --text-2:         #57534e;
+  --text-3:         #a8a29e;
+  --green:          #15803d;
+  --red:            #dc2626;
+  --blue:           #1d4ed8;
+  --font-ui:        'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-display:   'Lora', Georgia, serif;
+  --font-mono:      'JetBrains Mono', 'Fira Code', monospace;
+}
+
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
@@ -8,10 +32,10 @@ html, body, #root {
   height: 100%;
   width: 100%;
   overflow: hidden;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, sans-serif;
+  font-family: var(--font-ui);
   font-size: 14px;
-  color: #1e293b;
-  background: #f1f5f9;
+  color: var(--text);
+  background: var(--ink);
 }
 
 button {
