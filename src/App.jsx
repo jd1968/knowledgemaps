@@ -3,6 +3,8 @@ import { ReactFlowProvider } from '@xyflow/react'
 import Toolbar from './components/Toolbar'
 import MindMapCanvas from './components/MindMapCanvas'
 import FeedView from './components/FeedView'
+import ContentsView from './components/ContentsView'
+import TextView from './components/MapTextModal'
 import NodePopup from './components/NodePopup'
 import MapListModal from './components/MapListModal'
 import LoginPage from './components/LoginPage'
@@ -11,7 +13,7 @@ import { useMindMapStore } from './store/useMindMapStore'
 import './App.css'
 
 function AppInner() {
-  const { undo, redo, loadMap, isEditMode, isFullscreen, isFeedMode } = useMindMapStore()
+  const { undo, redo, loadMap, isEditMode, isFullscreen, viewMode } = useMindMapStore()
   const { user, loading } = useAuth()
 
   // Restore the last viewed map once the user is authenticated
@@ -47,8 +49,12 @@ function AppInner() {
     <div className={`app${isFullscreen ? ' app--fullscreen' : ''}`}>
       {!isFullscreen && <Toolbar />}
       <div className="app-body">
-        {isFeedMode ? (
+        {viewMode === 'feed' ? (
           <FeedView />
+        ) : viewMode === 'contents' ? (
+          <ContentsView />
+        ) : viewMode === 'text' ? (
+          <TextView />
         ) : (
           <div className="canvas-wrapper">
             <MindMapCanvas />

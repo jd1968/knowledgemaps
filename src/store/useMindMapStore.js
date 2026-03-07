@@ -45,7 +45,7 @@ export const useMindMapStore = create((set, get) => ({
   fitViewTrigger: 0,
   isEditMode: false,
   isFullscreen: false,
-  isFeedMode: false,
+  viewMode: 'map',
   openMenuNodeId: null,
   reparentSourceNodeId: null,
 
@@ -53,7 +53,7 @@ export const useMindMapStore = create((set, get) => ({
   focusNodeId: null,
 
   setIsFullscreen: (val) => set({ isFullscreen: val }),
-  toggleFeedMode: () => set((s) => ({ isFeedMode: !s.isFeedMode })),
+  setViewMode: (mode) => set({ viewMode: mode }),
   setOpenMenuNodeId: (id) => set({ openMenuNodeId: id }),
   setReparentSourceNodeId: (id) => set({ reparentSourceNodeId: id }),
   clearReparentMode: () => set({ reparentSourceNodeId: null }),

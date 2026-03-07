@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { createPortal } from 'react-dom'
 import { useMindMapStore } from '../store/useMindMapStore'
 
 /* ── Tree builder ───────────────────────────────────────────────── */
@@ -31,7 +30,6 @@ function buildMarkdown(nodes, edges, mapName) {
     lines.push(`${'#'.repeat(headingLevel)} ${title}${typeSuffix}`)
     lines.push('')
 
-    // Sort children by vertical position to reflect visual order
     const kids = (childrenOf[nodeId] ?? [])
       .map(id => nodeById[id])
       .filter(Boolean)
@@ -40,14 +38,19 @@ function buildMarkdown(nodes, edges, mapName) {
     kids.forEach(k => visit(k.id, depth + 1))
   }
 
-  visit(rootNode.id, 0)
+  // Skip the root node itself (already used as the # heading via mapName)
+  const rootKids = (childrenOf[rootNode.id] ?? [])
+    .map(id => nodeById[id])
+    .filter(Boolean)
+    .sort((a, b) => (a.position?.y ?? 0) - (b.position?.y ?? 0))
+  rootKids.forEach(k => visit(k.id, 1))
 
   return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim()
 }
 
-/* ── Modal ──────────────────────────────────────────────────────── */
+/* ── TextView ───────────────────────────────────────────────────── */
 
-const MapTextModal = ({ onClose }) => {
+export default function MapTextModal() {
   const { nodes, edges, currentMapName } = useMindMapStore()
   const [copied, setCopied] = useState(false)
 
@@ -68,29 +71,17 @@ const MapTextModal = ({ onClose }) => {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  return createPortal(
-    <div
-      className="map-text-overlay"
-      onPointerDown={(e) => { if (e.target === e.currentTarget) onClose() }}
-    >
-      <div className="map-text-modal" onPointerDown={(e) => e.stopPropagation()}>
-        <div className="map-text-header">
-          <div className="map-text-header-left">
-            <h3>Map as Text</h3>
-            <span className="map-text-format-badge">Markdown</span>
-          </div>
-          <div className="map-text-header-actions">
-            <button className="btn btn--secondary btn--sm" onClick={handleCopy}>
-              {copied ? '✓ Copied!' : 'Copy'}
-            </button>
-            <button className="icon-btn" onClick={onClose} aria-label="Close">✕</button>
-          </div>
+  return (
+    <div className="text-view">
+      <div className="text-view__inner">
+        <div className="text-view__toolbar">
+          <span className="map-text-format-badge">Markdown</span>
+          <button className="btn btn--secondary btn--sm" onClick={handleCopy}>
+            {copied ? '✓ Copied!' : 'Copy'}
+          </button>
         </div>
-        <pre className="map-text-content">{text}</pre>
+        <pre className="text-view__content">{text}</pre>
       </div>
-    </div>,
-    document.body
+    </div>
   )
 }
-
-export default MapTextModal
