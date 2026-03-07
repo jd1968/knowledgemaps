@@ -2,7 +2,6 @@ import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useMindMapStore } from '../store/useMindMapStore'
 import { useAuth } from '../contexts/AuthContext'
-import NodeTreePanel from './NodeTreePanel'
 import MapTextModal from './MapTextModal'
 
 /* ── Icons ─────────────────────────────────────────────────────────── */
@@ -135,9 +134,7 @@ const Toolbar = () => {
   const menuRef = useRef(null)
   const [newMapDialogOpen, setNewMapDialogOpen] = useState(false)
   const [newMapName, setNewMapName] = useState('')
-  const [treeOpen, setTreeOpen] = useState(false)
-  const treeBtnRef = useRef(null)
-  const [textOpen, setTextOpen] = useState(false)
+const [textOpen, setTextOpen] = useState(false)
 
   useEffect(() => {
     if (!menuOpen) return
@@ -193,8 +190,7 @@ const Toolbar = () => {
 
   return (
     <>
-    {treeOpen && <NodeTreePanel onClose={() => setTreeOpen(false)} buttonRef={treeBtnRef} />}
-    {textOpen && <MapTextModal onClose={() => setTextOpen(false)} />}
+{textOpen && <MapTextModal onClose={() => setTextOpen(false)} />}
     <div className="toolbar">
       {/* Left: map name always here — with back+parent when in a submap */}
       <div className="toolbar-breadcrumb">
@@ -273,30 +269,21 @@ const Toolbar = () => {
           <span className="edit-mode-toggle__label">Edit</span>
         </label>
 
-        {/* Tree / contents panel */}
-        <button
-          ref={treeBtnRef}
-          className={`btn btn--ghost btn--sm${treeOpen ? ' btn--ghost-active' : ''}`}
-          onClick={() => setTreeOpen(o => !o)}
-          title="Map contents"
-          aria-label="Map contents"
-          aria-expanded={treeOpen}
+        {/* Mode selector */}
+        <select
+          className="toolbar-mode-select"
+          value={isFeedMode ? 'feed' : 'map'}
+          onChange={(e) => {
+            const mode = e.target.value
+            if (mode === 'feed' && !isFeedMode) toggleFeedMode()
+            else if (mode === 'map' && isFeedMode) toggleFeedMode()
+          }}
+          aria-label="View mode"
         >
-          <TreeIcon />
-          <span className="btn-label">Contents</span>
-        </button>
-
-        {/* Feed mode toggle */}
-        <button
-          className={`btn btn--ghost btn--sm${isFeedMode ? ' btn--ghost-active' : ''}`}
-          onClick={toggleFeedMode}
-          title={isFeedMode ? 'Back to map view' : 'Feed view'}
-          aria-label={isFeedMode ? 'Back to map view' : 'Feed view'}
-          aria-pressed={isFeedMode}
-        >
-          <FeedIcon />
-          <span className="btn-label">Feed</span>
-        </button>
+          <option value="map">Map</option>
+          <option value="feed">Feed</option>
+          <option value="contents" disabled>Contents</option>
+        </select>
 
         {/* Text view */}
         <button
