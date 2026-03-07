@@ -22,7 +22,7 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
   const { title, level, content, longTitle = '', isSubmap, submapId, nodeType = 'folder', hasChildren, isTodo = false } = node.data
 
   const [isEditing, setIsEditing]         = useState(isEditMode)
-  const [draft, setDraft]                 = useState(isEditMode ? { title: title || '', longTitle: longTitle || '', content: content || '', isTodo: !!isTodo, nodeType } : null)
+  const [draft, setDraft]                 = useState(isEditMode ? { title: title || '', longTitle: longTitle || title || '', content: content || '', isTodo: !!isTodo, nodeType } : null)
   const [showConvertMenu, setShowConvertMenu] = useState(false)
   const [converting, setConverting]       = useState(false)
   const [showSubmapChoice, setShowSubmapChoice] = useState(false)
@@ -51,7 +51,7 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
   }, [isEditMode])
 
   const startEdit = () => {
-    setDraft({ title: title || '', longTitle: longTitle || '', content: content || '', isTodo: !!isTodo, nodeType })
+    setDraft({ title: title || '', longTitle: longTitle || title || '', content: content || '', isTodo: !!isTodo, nodeType })
     setIsEditing(true)
   }
 
@@ -156,7 +156,7 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
         {/* Header */}
         <div className="node-modal-header">
           <div className="node-modal-header-left">
-            <span className="node-modal-header-title">{title || 'Untitled'}</span>
+            <span className="node-modal-header-title">{longTitle || title || 'Untitled'}</span>
             {headerIsTodo && <span className="node-modal-todo-chip">To Do</span>}
           </div>
           <button className="icon-btn" onClick={requestClose} aria-label="Close">✕</button>
@@ -167,23 +167,23 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
           {isEditing ? (
             <>
               <div className="field">
-                <label className="field-label">Title <span className="field-label-hint">(shown on map)</span></label>
-                <input
-                  className="field-input"
-                  value={draft.title}
-                  onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
-                  placeholder="Node title…"
-                  autoFocus
-                />
-              </div>
-
-              <div className="field">
-                <label className="field-label">Long Title <span className="field-label-hint">(shown on cards — leave blank to use title)</span></label>
+                <label className="field-label">Long Title <span className="field-label-hint">(shown on cards — leave blank to use short title)</span></label>
                 <input
                   className="field-input"
                   value={draft.longTitle || ''}
                   onChange={(e) => setDraft((d) => ({ ...d, longTitle: e.target.value }))}
                   placeholder="More descriptive title for feed cards…"
+                  autoFocus
+                />
+              </div>
+
+              <div className="field">
+                <label className="field-label">Short Title <span className="field-label-hint">(shown on map)</span></label>
+                <input
+                  className="field-input"
+                  value={draft.title}
+                  onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
+                  placeholder="Node title…"
                 />
               </div>
 

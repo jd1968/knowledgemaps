@@ -91,6 +91,7 @@ function FeedCard({ node, index, nodeMap, parentMap, onSave, onEditStart, onEdit
   }
 
   const startTitleEdit = () => {
+    if (!localLongTitle) setLocalLongTitle(localTitle)
     setEditingTitle(true)
     onEditStart(
       () => {  // confirm from fixed bar
