@@ -265,47 +265,51 @@ export default function FeedView() {
   const loaderRef = useRef(null)
 
   useEffect(() => {
+    if (!currentMapId) {
+      setAllNodes([])
+      setAllEdges([])
+      setFeedItems([])
+      setLoading(false)
+      return
+    }
+
+    setLoading(true)
+    setError(null)
+
     async function loadAll() {
       try {
-        const [mapsResult, contentsResult] = await Promise.all([
-          supabase.from('maps').select('id, name, data'),
-          supabase.from('nodes').select('id, content'),
+        const [mapResult, contentsResult] = await Promise.all([
+          supabase.from('maps').select('id, name, data').eq('id', currentMapId).single(),
+          supabase.from('nodes').select('id, content').eq('map_id', currentMapId),
         ])
 
-        if (mapsResult.error) throw mapsResult.error
+        if (mapResult.error) throw mapResult.error
         if (contentsResult.error) throw contentsResult.error
 
         const contentById = new Map(
           contentsResult.data.map((n) => [n.id, n.content || ''])
         )
 
-        const mergedNodes = []
-        const mergedEdges = []
+        const map = mapResult.data
+        const mapNodes = map.data?.nodes || []
+        const mapEdges = map.data?.edges || []
 
-        for (const map of mapsResult.data) {
-          const mapNodes = map.data?.nodes || []
-          const mapEdges = map.data?.edges || []
-          mergedEdges.push(...mapEdges)
-          for (const node of mapNodes) {
-            const content = contentById.get(node.id) || ''
-            mergedNodes.push({
-              ...node,
-              _feedMapId: map.id,
-              data: {
-                ...node.data,
-                nodeType: node.data.nodeType ?? (node.data.isSubmap ? 'submap' : 'folder'),
-                content,
-              },
-            })
-          }
-        }
+        const mergedNodes = mapNodes.map((node) => ({
+          ...node,
+          _feedMapId: map.id,
+          data: {
+            ...node.data,
+            nodeType: node.data.nodeType ?? (node.data.isSubmap ? 'submap' : 'folder'),
+            content: contentById.get(node.id) || '',
+          },
+        }))
 
         const initialContent = mergedNodes.filter(
           (n) => n.data.level > 0 && !n.data.isSubmap && n.data.nodeType !== 'group' && hasVisibleContent(n.data.content)
         )
 
         setAllNodes(mergedNodes)
-        setAllEdges(mergedEdges)
+        setAllEdges(mapEdges)
         setFeedItems(randomBatch(initialContent))
       } catch (err) {
         console.error('Feed load failed:', err)
@@ -315,7 +319,7 @@ export default function FeedView() {
       }
     }
     loadAll()
-  }, [])
+  }, [currentMapId])
 
   const nodeMap = useMemo(() => new Map(allNodes.map((n) => [n.id, n])), [allNodes])
   const parentMap = useMemo(() => {
@@ -384,7 +388,8 @@ export default function FeedView() {
 
   if (loading) return <div className="feed-view"><div className="feed-empty"><p>Loading feed…</p></div></div>
   if (error)   return <div className="feed-view"><div className="feed-empty"><p>{error}</p></div></div>
-  if (contentNodes.length === 0) return <div className="feed-view"><div className="feed-empty"><p>No nodes with content found across your maps.</p></div></div>
+  if (!currentMapId) return <div className="feed-view"><div className="feed-empty"><p>No map selected.</p></div></div>
+  if (contentNodes.length === 0) return <div className="feed-view"><div className="feed-empty"><p>No nodes with content found in this map.</p></div></div>
 
   return (
     <div className="feed-view">
