@@ -1,7 +1,7 @@
 import { useMindMapStore } from '../store/useMindMapStore'
 
 export default function ContentsView() {
-  const { nodes, edges, selectNode } = useMindMapStore()
+  const { nodes, edges, selectNode, focusNode, setViewMode } = useMindMapStore()
 
   // Build lookup maps
   const nodeById = {}
@@ -26,8 +26,10 @@ export default function ContentsView() {
   }
   if (rootNode) visit(rootNode.id, 0)
 
-  const handleSelect = (nodeId) => {
-    selectNode(nodeId)
+  const handleGoToMap = (e, nodeId) => {
+    e.stopPropagation()
+    setViewMode('map')
+    focusNode(nodeId)
   }
 
   return (
@@ -38,14 +40,27 @@ export default function ContentsView() {
             key={node.id}
             className={`contents-view__item contents-view__item--depth-${Math.min(depth, 4)}`}
             style={{ paddingLeft: `${20 + depth * 18}px` }}
-            onClick={() => handleSelect(node.id)}
+            onClick={() => selectNode(node.id)}
           >
             <span className="contents-view__item-title">
               {node.data?.longTitle || node.data?.title || 'Untitled'}
             </span>
-            {node.data?.nodeType && node.data.nodeType !== 'folder' && (
-              <span className="contents-view__item-type">{node.data.nodeType}</span>
-            )}
+            <span className="contents-view__item-actions">
+              {!!(node.data?.content && node.data.content !== '<p></p>' && node.data.content !== '') && (
+                <span className="contents-view__item-notes" title="Has notes" aria-label="Has notes">≡</span>
+              )}
+              {node.data?.nodeType && node.data.nodeType !== 'folder' && (
+                <span className="contents-view__item-type">{node.data.nodeType}</span>
+              )}
+              <span
+                className="contents-view__item-map-link"
+                role="button"
+                title="Show on map"
+                onClick={(e) => handleGoToMap(e, node.id)}
+              >
+                ↗
+              </span>
+            </span>
           </button>
         ))}
       </div>

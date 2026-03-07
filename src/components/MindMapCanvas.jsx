@@ -53,7 +53,10 @@ const getStableNodeSize = (node) => {
   return DEFAULT_NODE_SIZE[level]
 }
 
-// Watches focusNodeId and flies the viewport to that node at a fixed zoom
+const LEVEL_ZOOM = { 0: 0.7, 1: 1.0, 2: 1.3, 3: 1.6 }
+const zoomForLevel = (level) => LEVEL_ZOOM[Math.min(level ?? 2, 3)] ?? 1.6
+
+// Watches focusNodeId and flies the viewport to that node at a level-appropriate zoom
 const FocusNodeHandler = () => {
   const focusNodeId = useMindMapStore(s => s.focusNodeId)
   const clearFocusNode = useMindMapStore(s => s.clearFocusNode)
@@ -61,16 +64,18 @@ const FocusNodeHandler = () => {
 
   useEffect(() => {
     if (!focusNodeId) return
-    const id = requestAnimationFrame(() => {
+    // Use setTimeout to allow the canvas to fully mount and measure nodes
+    // (needed when switching from a non-map view mode)
+    const id = setTimeout(() => {
       const node = getNode(focusNodeId)
       if (node) {
         const cx = node.position.x + (node.measured?.width ?? 160) / 2
         const cy = node.position.y + (node.measured?.height ?? 60) / 2
-        setCenter(cx, cy, { zoom: 1.5, duration: 600 })
+        setCenter(cx, cy, { zoom: zoomForLevel(node.data?.level), duration: 600 })
       }
       clearFocusNode()
-    })
-    return () => cancelAnimationFrame(id)
+    }, 50)
+    return () => clearTimeout(id)
   }, [focusNodeId, getNode, setCenter, clearFocusNode])
 
   return null

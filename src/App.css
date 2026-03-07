@@ -625,7 +625,7 @@
 
 .contents-view { flex: 1; overflow-y: auto; background: var(--bg-surface); }
 .contents-view__list { max-width: 820px; margin: 0 auto; padding: 24px 0 64px; }
-.contents-view__item { display: flex; align-items: baseline; gap: 10px; width: 100%; background: none; border: none; border-bottom: 1px solid var(--border); padding-top: 11px; padding-bottom: 11px; padding-right: 24px; text-align: left; cursor: pointer; transition: background 0.1s; }
+.contents-view__item { display: flex; align-items: center; gap: 10px; width: 100%; background: none; border: none; border-bottom: 1px solid var(--border); padding-top: 11px; padding-bottom: 11px; padding-right: 24px; text-align: left; cursor: pointer; transition: background 0.1s; }
 .contents-view__item:hover { background: var(--bg-elevated); }
 .contents-view__item-title { flex: 1; color: var(--text); line-height: 1.4; }
 .contents-view__item--depth-0 .contents-view__item-title { font-size: 16px; font-weight: 700; }
@@ -633,7 +633,12 @@
 .contents-view__item--depth-2 .contents-view__item-title { font-size: 14px; font-weight: 500; color: var(--text-2); }
 .contents-view__item--depth-3 .contents-view__item-title { font-size: 13px; font-weight: 400; color: var(--text-2); }
 .contents-view__item--depth-4 .contents-view__item-title { font-size: 13px; font-weight: 400; color: var(--text-3); }
-.contents-view__item-type { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-3); flex-shrink: 0; }
+.contents-view__item-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.contents-view__item-notes { font-size: 14px; font-weight: 700; color: var(--text-3); line-height: 1; }
+.contents-view__item-type { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-3); }
+.contents-view__item-map-link { font-size: 13px; color: var(--text-3); opacity: 0; transition: opacity 0.15s, color 0.15s; cursor: pointer; padding: 2px 4px; border-radius: 4px; }
+.contents-view__item:hover .contents-view__item-map-link { opacity: 1; }
+.contents-view__item-map-link:hover { color: var(--amber); background: var(--amber-subtle); }
 
 .feed-view { flex: 1; overflow-y: auto; background: var(--ink); padding: 32px 16px 64px; }
 .feed-view__inner { max-width: 680px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
