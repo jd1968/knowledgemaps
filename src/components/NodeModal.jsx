@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useMindMapStore } from '../store/useMindMapStore'
-import RichTextEditor from './RichTextEditor'
+import MarkdownEditor from './MarkdownEditor'
 import SubmapChoiceModal from './SubmapChoiceModal'
 
 const TYPE_LABELS = { folder: 'Folder', group: 'Group', note: 'Note', pointer: 'Pointer', submap: 'Submap' }
@@ -29,7 +29,7 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
   const headerIsTodo = isEditing ? !!draft?.isTodo : isTodo
   const canSave = !!draft?.title?.trim()
 
-  const hasNotes = content && content !== '<p></p>' && content !== ''
+  const hasNotes = content && content.trim() !== ''
   const requestClose = useCallback(() => {
     if (isNew && onDelete) onDelete()
     onClose()
@@ -207,10 +207,10 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
 
               <div className="field field--grow">
                 <label className="field-label">Notes</label>
-                <RichTextEditor
+                <MarkdownEditor
                   key={`edit-${id}`}
                   content={draft.content}
-                  onChange={(html) => setDraft((d) => ({ ...d, content: html }))}
+                  onChange={(md) => setDraft((d) => ({ ...d, content: md }))}
                   editable={true}
                 />
               </div>
@@ -219,7 +219,7 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
             <>
               {hasNotes && (
                 <div className="field">
-                  <RichTextEditor key={`view-${id}`} content={content} editable={false} />
+                  <MarkdownEditor key={`view-${id}`} content={content} editable={false} />
                 </div>
               )}
 

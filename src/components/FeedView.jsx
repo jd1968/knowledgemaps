@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useMindMapStore } from '../store/useMindMapStore'
-import RichTextEditor from './RichTextEditor'
+import MarkdownEditor from './MarkdownEditor'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 
 const BATCH_SIZE = 10
 
@@ -19,8 +21,7 @@ function randomBatch(nodes) {
 }
 
 function hasVisibleContent(content) {
-  if (!content) return false
-  return content.replace(/<[^>]+>/g, '').trim() !== ''
+  return content && content.trim() !== ''
 }
 
 function getAncestorCrumbs(nodeId, nodeMap, parentMap) {
@@ -160,12 +161,12 @@ function FeedCard({ node, index, nodeMap, parentMap, onSave, onEditStart, onEdit
   }
 
   // Natural blur (clicking outside, not via fixed bar)
-  const commitContentOnBlur = (html) => {
+  const commitContentOnBlur = (md) => {
     if (contentHandledRef.current) { contentHandledRef.current = false; return }
     setEditingContent(false)
     onEditEnd()
-    setLocalContent(html)
-    if (html !== node.data.content) onSave(node, { content: html })
+    setLocalContent(md)
+    if (md !== node.data.content) onSave(node, { content: md })
   }
 
   const crumbs = getAncestorCrumbs(node.id, nodeMap, parentMap)
@@ -236,7 +237,7 @@ function FeedCard({ node, index, nodeMap, parentMap, onSave, onEditStart, onEdit
 
       {editingContent ? (
         <div className="feed-card__editor-wrap">
-          <RichTextEditor
+          <MarkdownEditor
             content={localContent}
             onChange={setLocalContent}
             onBlur={commitContentOnBlur}
@@ -253,8 +254,9 @@ function FeedCard({ node, index, nodeMap, parentMap, onSave, onEditStart, onEdit
           <div
             ref={contentRef}
             className={`feed-card__content${expanded ? ' feed-card__content--expanded' : ''}`}
-            dangerouslySetInnerHTML={{ __html: localContent }}
-          />
+          >
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{localContent || ''}</ReactMarkdown>
+          </div>
           {!expanded && isClamped && (
             <button
               className="feed-card__show-more"

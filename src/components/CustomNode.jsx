@@ -2,6 +2,8 @@ import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { Handle, Position } from '@xyflow/react'
 import { useMindMapStore } from '../store/useMindMapStore'
 import SubmapChoiceModal from './SubmapChoiceModal'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 
 const LEVEL_CONFIG = {
   0: { width: 180, height: null, fontSize: '16px', fontWeight: '700' },
@@ -57,7 +59,7 @@ const CustomNode = memo(({ id, data, selected }) => {
   const width       = groupSize?.width ?? cfg.width
   const height      = groupSize?.height ?? (nodeType === 'note' || nodeType === 'pointer' ? null : cfg.height)
   const showGroupHeader   = nodeType === 'group' && !!title?.trim()
-  const hasPointerContent = nodeType === 'pointer' && content && content !== '<p></p>' && content !== ''
+  const hasPointerContent = nodeType === 'pointer' && content && content.trim() !== ''
   const isReparentSource = reparentSourceNodeId === id
 
   const startEditing = useCallback(() => {
@@ -312,8 +314,12 @@ const CustomNode = memo(({ id, data, selected }) => {
               <div
                 className="pointer-content"
                 style={{ fontSize: '11px', fontWeight: 400, color: '#57534e', padding: '0 10px 8px', maxHeight: '120px', overflow: 'hidden', lineHeight: '1.4' }}
-                dangerouslySetInnerHTML={{ __html: hasPointerContent ? content : '<p style="margin:0;color:#94a3b8">No content yet</p>' }}
-              />
+              >
+                {hasPointerContent
+                  ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+                  : <p style={{ margin: 0, color: '#94a3b8' }}>No content yet</p>
+                }
+              </div>
             </>
           )}
         </div>
