@@ -357,8 +357,14 @@
 /* ── Markdown Editor ──────────────────────────────────────────────── */
 
 .markdown-editor { display: flex; flex-direction: column; flex: 1; }
+.markdown-editor__textarea-wrap { position: relative; display: flex; flex-direction: column; flex: 1; }
 .markdown-editor__textarea { flex: 1; font-family: var(--font-ui); font-size: 14px; line-height: 1.6; color: var(--text); background: var(--bg-surface); border: 1px solid var(--border-strong); border-radius: 0 0 8px 8px; padding: 10px 12px; resize: vertical; min-height: 160px; outline: none; }
 .markdown-editor__textarea:focus { border-color: var(--amber); }
+.markdown-editor__upload-overlay { position: absolute; inset: 0; background: rgba(255,255,255,0.75); display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px; color: var(--text-2); border-radius: 0 0 8px 8px; pointer-events: none; }
+.markdown-editor__upload-spinner { width: 15px; height: 15px; border: 2px solid var(--border-strong); border-top-color: var(--amber); border-radius: 50%; animation: spin 0.6s linear infinite; flex-shrink: 0; display: inline-block; }
+.storage-image-loading { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 80px; background: var(--bg-elevated); border-radius: 6px; margin: 0.5em 0; font-size: 12px; color: var(--text-2); }
+.storage-image-spinner { width: 18px; height: 18px; border: 2px solid var(--border-strong); border-top-color: var(--amber); border-radius: 50%; animation: spin 0.6s linear infinite; flex-shrink: 0; }
+@keyframes spin { to { transform: rotate(360deg); } }
 
 .editor-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 2px; padding: 6px 8px; background: var(--bg-elevated); border: 1px solid var(--border-strong); border-bottom: none; border-radius: 8px 8px 0 0; flex-shrink: 0; }
 .editor-toolbar-sep { width: 1px; height: 18px; background: var(--border-strong); margin: 0 3px; }
@@ -366,6 +372,8 @@
 .editor-btn { display: inline-flex; align-items: center; justify-content: center; min-width: 26px; height: 26px; padding: 0 4px; border: 1px solid transparent; border-radius: 5px; background: transparent; color: var(--text-2); font-size: 12px; cursor: pointer; transition: background 0.1s, color 0.1s; white-space: nowrap; }
 .editor-btn:hover { background: var(--bg-high); color: var(--text); }
 .editor-btn.active { background: var(--amber-subtle); color: var(--amber); border-color: rgba(180,83,9,0.25); }
+.editor-img-sizes { display: inline-flex; gap: 1px; background: var(--border); border-radius: 5px; overflow: hidden; margin-left: 1px; }
+.editor-img-size-btn { border-radius: 0 !important; min-width: 22px !important; font-size: 11px !important; }
 
 /* Markdown rendered output */
 .markdown-content { font-size: 15px; line-height: 1.6; color: var(--text); }
@@ -381,6 +389,7 @@
 .markdown-content pre { background: #1e293b; color: #e2e8f0; padding: 10px 14px; border-radius: 8px; overflow-x: auto; font-size: 12px; font-family: var(--font-mono); }
 .markdown-content pre code { background: none; color: inherit; padding: 0; font-size: inherit; }
 .markdown-content blockquote { border-left: 3px solid var(--border-strong); padding-left: 10px; color: var(--text-2); font-style: italic; }
+.markdown-content img { max-width: 100%; height: auto; border-radius: 6px; display: block; margin: 0.5em 0; }
 
 /* ── Modals ───────────────────────────────────────────────────────── */
 
@@ -693,6 +702,7 @@
 .feed-card__content blockquote { border-left: 3px solid var(--border-strong); margin: 0.6em 0; padding: 2px 0 2px 14px; color: var(--text-2); font-style: italic; }
 .feed-card__content strong { font-weight: 700; }
 .feed-card__content em { font-style: italic; }
+.feed-card__content img { max-width: 100%; height: auto; border-radius: 4px; display: block; margin: 0.4em 0; }
 
 .feed-card__show-more { background: none; border: none; color: var(--amber); font-size: 13px; font-weight: 500; cursor: pointer; padding: 6px 0 0; display: block; line-height: 1; }
 .feed-card__show-more:hover { color: #9a4508; text-decoration: underline; }

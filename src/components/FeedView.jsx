@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useMindMapStore } from '../store/useMindMapStore'
-import MarkdownEditor from './MarkdownEditor'
+import MarkdownEditor, { markdownComponents, urlTransform } from './MarkdownEditor'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
@@ -255,7 +255,7 @@ function FeedCard({ node, index, nodeMap, parentMap, onSave, onEditStart, onEdit
             ref={contentRef}
             className={`feed-card__content${expanded ? ' feed-card__content--expanded' : ''}`}
           >
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{localContent || ''}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents} urlTransform={urlTransform}>{localContent || ''}</ReactMarkdown>
           </div>
           {!expanded && isClamped && (
             <button
