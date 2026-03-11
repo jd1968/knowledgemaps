@@ -49,6 +49,9 @@ export const useMindMapStore = create((set, get) => ({
   openMenuNodeId: null,
   reparentSourceNodeId: null,
 
+  // ── Home page ─────────────────────────────────────────────────
+  showHome: true,
+
   // ── Node focus (map navigation) ───────────────────────────────
   focusNodeId: null,
 
@@ -66,6 +69,8 @@ export const useMindMapStore = create((set, get) => ({
 
   focusNode: (nodeId) => set({ focusNodeId: nodeId }),
   clearFocusNode: () => set({ focusNodeId: null }),
+
+  goHome: () => set({ showHome: true, breadcrumbs: [] }),
 
   // ── Submap navigation ─────────────────────────────────────────
   // Each entry: { mapId, mapName }  — the trail of maps above the current one
@@ -391,6 +396,7 @@ export const useMindMapStore = create((set, get) => ({
         saveStatus: 'idle',
         fitViewTrigger: state.fitViewTrigger + 1,
         breadcrumbs,
+        showHome: false,
       }))
 
       // Only persist the last-opened map when at the root level
@@ -573,6 +579,7 @@ export const useMindMapStore = create((set, get) => ({
       future: [],
       selectedNodeId: null,
       saveStatus: 'idle',
+      showHome: false,
     })
   },
 

@@ -8,20 +8,14 @@ import TextView from './components/MapTextModal'
 import NodePopup from './components/NodePopup'
 import MapListModal from './components/MapListModal'
 import LoginPage from './components/LoginPage'
+import HomePage from './components/HomePage'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { useMindMapStore } from './store/useMindMapStore'
 import './App.css'
 
 function AppInner() {
-  const { undo, redo, loadMap, isEditMode, isFullscreen, viewMode } = useMindMapStore()
+  const { undo, redo, isEditMode, isFullscreen, viewMode, showHome } = useMindMapStore()
   const { user, loading } = useAuth()
-
-  // Restore the last viewed map once the user is authenticated
-  useEffect(() => {
-    if (!user) return
-    const lastMapId = localStorage.getItem('km_lastMapId')
-    if (lastMapId) loadMap(lastMapId)
-  }, [user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Global keyboard shortcuts
   useEffect(() => {
@@ -44,6 +38,10 @@ function AppInner() {
 
   if (loading) return <div className="auth-loading" />
   if (!user) return <LoginPage />
+
+  if (showHome) {
+    return <HomePage />
+  }
 
   return (
     <div className={`app${isFullscreen ? ' app--fullscreen' : ''}`}>
