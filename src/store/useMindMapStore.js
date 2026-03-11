@@ -393,6 +393,9 @@ export const useMindMapStore = create((set, get) => ({
         breadcrumbs,
       }))
 
+      // Touch last_visited_at — fire-and-forget, not critical
+      supabase.from('maps').update({ last_visited_at: new Date().toISOString() }).eq('id', mapId).then()
+
       // Only persist the last-opened map when at the root level
       if (breadcrumbs.length === 0) {
         localStorage.setItem('km_lastMapId', mapId)

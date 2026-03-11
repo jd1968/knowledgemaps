@@ -26,9 +26,9 @@ export default function HomePage() {
     ;(async () => {
       const { data } = await supabase
         .from('maps')
-        .select('id, name, updated_at')
+        .select('id, name, updated_at, last_visited_at')
         .eq('user_id', user.id)
-        .order('updated_at', { ascending: false })
+        .order('last_visited_at', { ascending: false, nullsFirst: false })
         .limit(12)
       setMaps(data || [])
       setFetching(false)
@@ -85,7 +85,7 @@ export default function HomePage() {
                   disabled={!!opening}
                 >
                   <span className="home-map-tile__name">{map.name}</span>
-                  <span className="home-map-tile__date">{fmt(map.updated_at)}</span>
+                  <span className="home-map-tile__date">{fmt(map.last_visited_at ?? map.updated_at)}</span>
                 </button>
               ))}
             </div>
