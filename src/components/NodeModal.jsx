@@ -68,6 +68,7 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
     if (draft) updateNodeData(id, { title: draft.title.trim(), longTitle: draft.longTitle?.trim() || '', content: draft.content, isTodo: !!draft.isTodo, nodeType: nextType })
     if (nextType === 'pointer') setEdgeType(id, 'pointer-edge')
     else if (nodeType === 'pointer') setEdgeType(id, 'straight-center')
+    if (isNew) { onClose(); return }
     setIsEditing(false)
     setDraft(null)
   }
@@ -173,6 +174,11 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
                   className="field-input"
                   value={draft.longTitle || ''}
                   onChange={(e) => setDraft((d) => ({ ...d, longTitle: e.target.value }))}
+                  onBlur={(e) => {
+                    if (!draft.title && e.target.value) {
+                      setDraft((d) => ({ ...d, title: e.target.value }))
+                    }
+                  }}
                   placeholder="More descriptive title for feed cards…"
                   autoFocus
                 />
