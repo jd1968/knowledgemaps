@@ -6,8 +6,8 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
 const LEVEL_CONFIG = {
-  0: { width: 180, height: null, fontSize: '16px', fontWeight: '700' },
-  1: { width: 170, height: null,  fontSize: '14px', fontWeight: '600' },
+  0: { width: 220, height: null, fontSize: '22px', fontWeight: '700' },
+  1: { width: 190, height: null,  fontSize: '18px', fontWeight: '600' },
   2: { width: 150, height: null,  fontSize: '13px', fontWeight: '500' },
   3: { width: 130, height: null,  fontSize: '12px', fontWeight: '400' },
 }

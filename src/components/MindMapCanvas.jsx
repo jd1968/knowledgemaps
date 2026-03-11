@@ -84,13 +84,20 @@ const FocusNodeHandler = () => {
 // Must live inside the ReactFlow tree to access the ReactFlow context
 const FitViewOnLoad = () => {
   const fitViewTrigger = useMindMapStore((s) => s.fitViewTrigger)
+  const nodes = useMindMapStore((s) => s.nodes)
   const { fitView } = useReactFlow()
 
   useEffect(() => {
     if (fitViewTrigger === 0) return
-    const id = requestAnimationFrame(() => fitView({ padding: 0.3, duration: 400 }))
+    const topNodes = nodes
+      .filter((n) => (n.data?.level ?? 0) <= 1)
+      .map((n) => ({ id: n.id }))
+    const targets = topNodes.length > 0 ? topNodes : undefined
+    const id = requestAnimationFrame(() =>
+      fitView({ nodes: targets, padding: 0.3, duration: 400 })
+    )
     return () => cancelAnimationFrame(id)
-  }, [fitViewTrigger, fitView])
+  }, [fitViewTrigger, fitView, nodes])
 
   return null
 }
@@ -595,8 +602,6 @@ const MindMapCanvas = () => {
         selectionMode={SelectionMode.Partial}
         zoomOnScroll={false}
         zoomOnPinch={false}
-        fitView
-        fitViewOptions={{ padding: 0.3 }}
         minZoom={0.2}
         maxZoom={2}
         defaultEdgeOptions={{
