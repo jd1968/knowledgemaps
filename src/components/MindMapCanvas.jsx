@@ -94,7 +94,7 @@ const FitViewOnLoad = () => {
       .map((n) => ({ id: n.id }))
     const targets = topNodes.length > 0 ? topNodes : undefined
     const id = requestAnimationFrame(() =>
-      fitView({ nodes: targets, padding: 0.3, duration: 400 })
+      fitView({ nodes: targets, padding: 0.3, duration: 400, maxZoom: 0.9 })
     )
     return () => cancelAnimationFrame(id)
   }, [fitViewTrigger, fitView, nodes])
