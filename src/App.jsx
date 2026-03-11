@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { BrowserRouter, Routes, Route, Navigate, useParams, useLocation, useSearchParams, useNavigate } from 'react-router-dom'
 import { ReactFlowProvider } from '@xyflow/react'
 import Toolbar from './components/Toolbar'
 import MindMapCanvas from './components/MindMapCanvas'
@@ -13,35 +14,27 @@ import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { useMindMapStore } from './store/useMindMapStore'
 import './App.css'
 
-function AppInner() {
-  const { undo, redo, isEditMode, isFullscreen, viewMode, showHome } = useMindMapStore()
-  const { user, loading } = useAuth()
+function MapPage() {
+  const { mapId } = useParams()
+  const location = useLocation()
+  const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
+  const { loadMap, setViewMode, isFullscreen } = useMindMapStore()
 
-  // Global keyboard shortcuts
+  const viewMode = searchParams.get('view') || 'map'
+
+  // Load map when mapId changes (including browser back/forward)
   useEffect(() => {
-    const onKey = (e) => {
-      const mod = e.metaKey || e.ctrlKey
-      if (!mod) return
-      if (!isEditMode) return
+    const breadcrumbs = location.state?.breadcrumbs ?? []
+    loadMap(mapId, breadcrumbs).then((result) => {
+      if (!result?.success) navigate('/', { replace: true })
+    })
+  }, [mapId]) // eslint-disable-line react-hooks/exhaustive-deps
 
-      if (e.key === 'z' && !e.shiftKey) {
-        e.preventDefault()
-        undo()
-      } else if (e.key === 'y' || (e.key === 'z' && e.shiftKey)) {
-        e.preventDefault()
-        redo()
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [isEditMode, undo, redo])
-
-  if (loading) return <div className="auth-loading" />
-  if (!user) return <LoginPage />
-
-  if (showHome) {
-    return <HomePage />
-  }
+  // Sync view mode from URL into store
+  useEffect(() => {
+    setViewMode(viewMode)
+  }, [viewMode]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className={`app${isFullscreen ? ' app--fullscreen' : ''}`}>
@@ -65,12 +58,48 @@ function AppInner() {
   )
 }
 
+function AppInner() {
+  const { undo, redo, isEditMode } = useMindMapStore()
+  const { user, loading } = useAuth()
+
+  useEffect(() => {
+    const onKey = (e) => {
+      const mod = e.metaKey || e.ctrlKey
+      if (!mod) return
+      if (!isEditMode) return
+
+      if (e.key === 'z' && !e.shiftKey) {
+        e.preventDefault()
+        undo()
+      } else if (e.key === 'y' || (e.key === 'z' && e.shiftKey)) {
+        e.preventDefault()
+        redo()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [isEditMode, undo, redo])
+
+  if (loading) return <div className="auth-loading" />
+  if (!user) return <LoginPage />
+
+  return (
+    <Routes>
+      <Route path="/" element={<HomePage />} />
+      <Route path="/map/:mapId" element={<MapPage />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  )
+}
+
 export default function App() {
   return (
-    <AuthProvider>
-      <ReactFlowProvider>
-        <AppInner />
-      </ReactFlowProvider>
-    </AuthProvider>
+    <BrowserRouter>
+      <AuthProvider>
+        <ReactFlowProvider>
+          <AppInner />
+        </ReactFlowProvider>
+      </AuthProvider>
+    </BrowserRouter>
   )
 }

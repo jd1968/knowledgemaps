@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useMindMapStore } from '../store/useMindMapStore'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 
 const MapListModal = () => {
-  const { isMapListOpen, closeMapList, loadMap, currentMapId } = useMindMapStore()
+  const { isMapListOpen, closeMapList, currentMapId } = useMindMapStore()
+  const navigate = useNavigate()
   const { user } = useAuth()
   const [maps, setMaps] = useState([])
   const [loading, setLoading] = useState(false)
@@ -32,13 +34,9 @@ const MapListModal = () => {
     }
   }
 
-  const handleLoad = async (mapId) => {
-    const result = await loadMap(mapId)
-    if (result.success) {
-      closeMapList()
-    } else {
-      alert('Failed to load map: ' + result.error?.message)
-    }
+  const handleLoad = (mapId) => {
+    closeMapList()
+    navigate(`/map/${mapId}`)
   }
 
   const handleDelete = async (mapId, name, e) => {

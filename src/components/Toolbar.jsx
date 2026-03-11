@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useMindMapStore } from '../store/useMindMapStore'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -118,12 +119,11 @@ const Toolbar = () => {
     isEditMode,
     toggleEditMode,
     viewMode,
-    setViewMode,
     breadcrumbs,
-    navigateBack,
-    goHome,
   } = useMindMapStore()
   const { user, signOut } = useAuth()
+  const navigate = useNavigate()
+  const [, setSearchParams] = useSearchParams()
 
   const [editingName, setEditingName] = useState(false)
   const [tempName, setTempName] = useState('')
@@ -165,11 +165,15 @@ const Toolbar = () => {
     setNewMapDialogOpen(true)
   }
 
-  const confirmNewMap = () => {
+  const confirmNewMap = async () => {
     const name = newMapName.trim() || 'Untitled Map'
     setNewMapDialogOpen(false)
     newMap(name)
-    saveMap(name)
+    const result = await saveMap(name)
+    if (result.success) {
+      const { currentMapId } = useMindMapStore.getState()
+      navigate(`/map/${currentMapId}`)
+    }
   }
 
   const handleSave = async () => {
@@ -190,7 +194,7 @@ const Toolbar = () => {
       {/* Home button */}
       <button
         className="toolbar-home-btn"
-        onClick={goHome}
+        onClick={() => navigate('/')}
         title="Home"
         aria-label="Home"
       >
@@ -203,7 +207,11 @@ const Toolbar = () => {
           <>
             <button
               className="toolbar-back-crumb"
-              onClick={() => navigateBack()}
+              onClick={() => {
+                const parent = breadcrumbs[breadcrumbs.length - 1]
+                const newCrumbs = breadcrumbs.slice(0, -1)
+                navigate(`/map/${parent.mapId}`, { state: { breadcrumbs: newCrumbs } })
+              }}
               title={`Back to ${breadcrumbs[breadcrumbs.length - 1].mapName}`}
               aria-label={`Back to ${breadcrumbs[breadcrumbs.length - 1].mapName}`}
             >
@@ -278,7 +286,7 @@ const Toolbar = () => {
         <select
           className="toolbar-mode-select"
           value={viewMode}
-          onChange={(e) => setViewMode(e.target.value)}
+          onChange={(e) => setSearchParams(e.target.value === 'map' ? {} : { view: e.target.value }, { replace: true })}
           aria-label="View mode"
         >
           <option value="map">Map</option>

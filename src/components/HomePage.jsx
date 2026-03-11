@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useMindMapStore } from '../store/useMindMapStore'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
@@ -14,8 +15,9 @@ const fmt = (iso) => {
 }
 
 export default function HomePage() {
-  const { loadMap, newMap } = useMindMapStore()
+  const { newMap, saveMap } = useMindMapStore()
   const { user } = useAuth()
+  const navigate = useNavigate()
   const [maps, setMaps] = useState([])
   const [fetching, setFetching] = useState(true)
   const [opening, setOpening] = useState(null)
@@ -33,17 +35,21 @@ export default function HomePage() {
     })()
   }, [user.id])
 
-  const handleOpen = async (mapId) => {
-    setOpening(mapId)
-    const result = await loadMap(mapId)
-    if (!result.success) {
-      setOpening(null)
-      alert('Failed to load map')
-    }
+  const handleOpen = (mapId) => {
+    navigate(`/map/${mapId}`)
   }
 
-  const handleNew = () => {
+  const handleNew = async () => {
+    setOpening('new')
     newMap()
+    const result = await saveMap()
+    if (result.success) {
+      const { currentMapId } = useMindMapStore.getState()
+      navigate(`/map/${currentMapId}`)
+    } else {
+      setOpening(null)
+      alert('Failed to create map')
+    }
   }
 
   const avatarUrl = user?.user_metadata?.avatar_url

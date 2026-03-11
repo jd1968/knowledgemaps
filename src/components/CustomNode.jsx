@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { Handle, Position } from '@xyflow/react'
+import { useNavigate } from 'react-router-dom'
 import { useMindMapStore } from '../store/useMindMapStore'
 import SubmapChoiceModal from './SubmapChoiceModal'
 import ReactMarkdown from 'react-markdown'
@@ -33,7 +34,6 @@ const CustomNode = memo(({ id, data, selected }) => {
   const setEdgeType           = useMindMapStore((state) => state.setEdgeType)
   const convertToSubmap       = useMindMapStore((state) => state.convertToSubmap)
   const setDescendantsCollapsed = useMindMapStore((state) => state.setDescendantsCollapsed)
-  const navigateToSubmap      = useMindMapStore((state) => state.navigateToSubmap)
   const pushHistory           = useMindMapStore((state) => state.pushHistory)
   const selectNode            = useMindMapStore((state) => state.selectNode)
   const isEditMode            = useMindMapStore((state) => state.isEditMode)
@@ -42,6 +42,11 @@ const CustomNode = memo(({ id, data, selected }) => {
   const setReparentSourceNodeId = useMindMapStore((state) => state.setReparentSourceNodeId)
   const clearReparentMode     = useMindMapStore((state) => state.clearReparentMode)
   const currentMapId          = useMindMapStore((state) => state.currentMapId)
+  const currentMapName        = useMindMapStore((state) => state.currentMapName)
+  const breadcrumbs           = useMindMapStore((state) => state.breadcrumbs)
+  const isDirty               = useMindMapStore((state) => state.isDirty)
+  const saveMap               = useMindMapStore((state) => state.saveMap)
+  const navigate              = useNavigate()
 
   const [hovered, setHovered]             = useState(false)
   const [editing, setEditing]             = useState(false)
@@ -398,7 +403,12 @@ const CustomNode = memo(({ id, data, selected }) => {
           title="Open submap"
           style={{ background: borderColor }}
           onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => { e.stopPropagation(); navigateToSubmap(submapId) }}
+          onClick={async (e) => {
+            e.stopPropagation()
+            if (isDirty && currentMapId) await saveMap()
+            const newCrumbs = [...breadcrumbs, { mapId: currentMapId, mapName: currentMapName }]
+            navigate(`/map/${submapId}`, { state: { breadcrumbs: newCrumbs } })
+          }}
         >
           ↗
         </button>
