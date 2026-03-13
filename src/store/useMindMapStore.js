@@ -806,4 +806,34 @@ export const useMindMapStore = create((set, get) => ({
 
   openMapList: () => set({ isMapListOpen: true }),
   closeMapList: () => set({ isMapListOpen: false }),
+
+  // ── Settings ──────────────────────────────────────────────────
+
+  settings: { initialZoom: 0.9 },
+
+  loadSettings: async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    const { data } = await supabase
+      .from('user_settings')
+      .select('initial_zoom')
+      .eq('user_id', user.id)
+      .maybeSingle()
+    if (data) {
+      set({ settings: { initialZoom: data.initial_zoom } })
+    }
+  },
+
+  saveSettings: async (updates) => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false }
+    const row = { user_id: user.id, updated_at: new Date().toISOString() }
+    if ('initialZoom' in updates) row.initial_zoom = updates.initialZoom
+    const { error } = await supabase
+      .from('user_settings')
+      .upsert(row, { onConflict: 'user_id' })
+    if (error) return { success: false, error }
+    set((state) => ({ settings: { ...state.settings, ...updates } }))
+    return { success: true }
+  },
 }))

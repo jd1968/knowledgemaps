@@ -9,6 +9,7 @@ import {
   SelectionMode,
   Panel,
   useReactFlow,
+  useViewport,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useMindMapStore } from '../store/useMindMapStore'
@@ -85,19 +86,26 @@ const FocusNodeHandler = () => {
 const FitViewOnLoad = () => {
   const fitViewTrigger = useMindMapStore((s) => s.fitViewTrigger)
   const nodes = useMindMapStore((s) => s.nodes)
+  const initialZoom = useMindMapStore((s) => s.settings.initialZoom)
   const { fitView } = useReactFlow()
+
+  // Keep refs so the effect can read latest values without re-triggering on every node change
+  const nodesRef = useRef(nodes)
+  nodesRef.current = nodes
+  const initialZoomRef = useRef(initialZoom)
+  initialZoomRef.current = initialZoom
 
   useEffect(() => {
     if (fitViewTrigger === 0) return
-    const topNodes = nodes
+    const topNodes = nodesRef.current
       .filter((n) => (n.data?.level ?? 0) <= 1)
       .map((n) => ({ id: n.id }))
     const targets = topNodes.length > 0 ? topNodes : undefined
     const id = requestAnimationFrame(() =>
-      fitView({ nodes: targets, padding: 0.3, duration: 400, maxZoom: 0.9 })
+      fitView({ nodes: targets, padding: 0.3, duration: 400, minZoom: initialZoomRef.current, maxZoom: initialZoomRef.current })
     )
     return () => cancelAnimationFrame(id)
-  }, [fitViewTrigger, fitView, nodes])
+  }, [fitViewTrigger, fitView]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return null
 }
@@ -161,6 +169,13 @@ const PinchZoomHandler = ({ containerRef }) => {
   }, [containerRef, getViewport, setViewport])
 
   return null
+}
+
+const ZoomDisplay = () => {
+  const { zoom } = useViewport()
+  return (
+    <div className="zoom-display">{Math.round(zoom * 100)}%</div>
+  )
 }
 
 const ExpandIcon = () => (
@@ -617,6 +632,7 @@ const MindMapCanvas = () => {
           color="#d4cabb"
         />
         <Controls showInteractive={false}>
+          <ZoomDisplay />
           <ControlButton
             onClick={toggleFullscreen}
             title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}

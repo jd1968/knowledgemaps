@@ -59,8 +59,12 @@ function MapPage() {
 }
 
 function AppInner() {
-  const { undo, redo, isEditMode } = useMindMapStore()
+  const { undo, redo, isEditMode, loadSettings } = useMindMapStore()
   const { user, loading } = useAuth()
+
+  useEffect(() => {
+    if (user) loadSettings()
+  }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const onKey = (e) => {

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useMindMapStore } from '../store/useMindMapStore'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import SettingsModal from './SettingsModal'
 
 const fmt = (iso) => {
   const d = new Date(iso)
@@ -21,6 +22,7 @@ export default function HomePage() {
   const [maps, setMaps] = useState([])
   const [fetching, setFetching] = useState(true)
   const [opening, setOpening] = useState(null)
+  const [showSettings, setShowSettings] = useState(false)
 
   useEffect(() => {
     ;(async () => {
@@ -56,12 +58,24 @@ export default function HomePage() {
   const initial = (user?.user_metadata?.full_name?.[0] ?? user?.email?.[0] ?? '?').toUpperCase()
 
   return (
+    <>
     <div className="home-page">
       <div className="home-page__inner">
 
         <header className="home-page__header">
           <span className="home-page__brand">Knowledge Maps</span>
           <div className="home-page__user">
+            <button
+              className="icon-btn"
+              onClick={() => setShowSettings(true)}
+              title="Settings"
+              aria-label="Settings"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+              </svg>
+            </button>
             {avatarUrl
               ? <img className="user-avatar" src={avatarUrl} alt="" />
               : <div className="user-avatar user-avatar--initials">{initial}</div>
@@ -104,5 +118,7 @@ export default function HomePage() {
 
       </div>
     </div>
+    {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+    </>
   )
 }
