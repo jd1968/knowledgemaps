@@ -45,13 +45,6 @@ function buildRenderTree(orderedItems) {
   return root.children
 }
 
-const GROUP_PALETTE = [
-  { bg: 'rgba(59, 130, 246, 0.05)',  border: 'rgba(59, 130, 246, 0.22)',  accent: '#3b82f6' },
-  { bg: 'rgba(16, 185, 129, 0.05)',  border: 'rgba(16, 185, 129, 0.22)',  accent: '#059669' },
-  { bg: 'rgba(139, 92, 246, 0.05)',  border: 'rgba(139, 92, 246, 0.22)',  accent: '#7c3aed' },
-  { bg: 'rgba(245, 158, 11, 0.06)',  border: 'rgba(245, 158, 11, 0.28)',  accent: '#d97706' },
-  { bg: 'rgba(236, 72, 153, 0.05)',  border: 'rgba(236, 72, 153, 0.22)',  accent: '#db2777' },
-]
 
 function getAncestorCrumbs(nodeId, nodeMap, parentMap) {
   const ancestors = []
@@ -265,7 +258,7 @@ function FeedCard({ node, nodeMap, parentMap, onSave, onEditStart, onEditEnd, on
         )}
         {!editingTitle && !editingContent && (
           <div className="feed-card__actions">
-            <button className="feed-card__action-btn" onClick={startTitleEdit} title="Edit">✎</button>
+            <button className="feed-card__action-btn" onClick={startContentEdit} title="Edit">✎</button>
             <button className="feed-card__action-btn" onClick={() => onGoToMap(node.id)} title="Open in map">↗</button>
           </div>
         )}
@@ -323,15 +316,10 @@ function FeedSection({ items, paletteIndex = 0, cardProps }) {
       return <FeedCard key={item.node.id} node={item.node} {...cardProps} />
     }
     // group
-    const color = GROUP_PALETTE[paletteIndex % GROUP_PALETTE.length]
     const title = item.node.data.longTitle || item.node.data.title
     return (
-      <div
-        key={item.node.id}
-        className="feed-group-section"
-        style={{ backgroundColor: color.bg, borderColor: color.border }}
-      >
-        <div className="feed-group-header" style={{ color: color.accent, borderBottomColor: item.node.data.content?.trim() || item.children.length ? color.border : 'transparent' }}>
+      <div key={item.node.id} className="feed-group-section">
+        <div className="feed-group-header" data-level={item.node.data.level}>
           {title}
         </div>
         {item.node.data.content?.trim() && (
@@ -428,7 +416,7 @@ export default function FeedView() {
   }, [allEdges])
 
   const orderedNodes = useMemo(
-    () => buildDFSOrder(allNodes, allEdges).filter((item) => item.node.data.level > 0),
+    () => buildDFSOrder(allNodes, allEdges),
     [allNodes, allEdges]
   )
 
