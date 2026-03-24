@@ -1,28 +1,57 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useMindMapStore } from '../store/useMindMapStore'
 import MarkdownEditor, { markdownComponents, urlTransform } from './MarkdownEditor'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
-const BATCH_SIZE = 10
-
-function shuffle(arr) {
-  const a = [...arr]
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
-    ;[a[i], a[j]] = [a[j], a[i]]
+function buildDFSOrder(nodes, edges) {
+  const nodeById = new Map(nodes.map((n) => [n.id, n]))
+  const childrenOf = new Map()
+  for (const e of edges) {
+    if (!childrenOf.has(e.source)) childrenOf.set(e.source, [])
+    childrenOf.get(e.source).push(e.target)
   }
-  return a
+  const root = nodes.find((n) => n.data?.level === 0) ?? nodes[0]
+  const result = []
+  const visit = (nodeId, depth) => {
+    const node = nodeById.get(nodeId)
+    if (!node) return
+    result.push({ node, depth })
+    for (const childId of (childrenOf.get(nodeId) ?? [])) visit(childId, depth + 1)
+  }
+  if (root) visit(root.id, 0)
+  return result
 }
 
-function randomBatch(nodes) {
-  return shuffle(nodes).slice(0, BATCH_SIZE)
+// Converts a flat DFS list (with depths) into a nested group/card tree
+function buildRenderTree(orderedItems) {
+  const root = { children: [] }
+  const stack = [{ container: root, depth: -1 }]
+  for (let i = 0; i < orderedItems.length; i++) {
+    const { node, depth } = orderedItems[i]
+    const hasChildren = i + 1 < orderedItems.length && orderedItems[i + 1].depth > depth
+    while (stack.length > 1 && depth <= stack[stack.length - 1].depth) stack.pop()
+    const parent = stack[stack.length - 1].container
+    if (hasChildren && (node.data.nodeType === 'group' || node.data.nodeType === 'folder')) {
+      const groupItem = { type: 'group', node, depth, children: [] }
+      parent.children.push(groupItem)
+      stack.push({ container: groupItem, depth })
+    } else {
+      parent.children.push({ type: 'card', node })
+    }
+  }
+  return root.children
 }
 
-function hasVisibleContent(content) {
-  return content && content.trim() !== ''
-}
+const GROUP_PALETTE = [
+  { bg: 'rgba(59, 130, 246, 0.05)',  border: 'rgba(59, 130, 246, 0.22)',  accent: '#3b82f6' },
+  { bg: 'rgba(16, 185, 129, 0.05)',  border: 'rgba(16, 185, 129, 0.22)',  accent: '#059669' },
+  { bg: 'rgba(139, 92, 246, 0.05)',  border: 'rgba(139, 92, 246, 0.22)',  accent: '#7c3aed' },
+  { bg: 'rgba(245, 158, 11, 0.06)',  border: 'rgba(245, 158, 11, 0.28)',  accent: '#d97706' },
+  { bg: 'rgba(236, 72, 153, 0.05)',  border: 'rgba(236, 72, 153, 0.22)',  accent: '#db2777' },
+]
 
 function getAncestorCrumbs(nodeId, nodeMap, parentMap) {
   const ancestors = []
@@ -40,7 +69,7 @@ function getAncestorCrumbs(nodeId, nodeMap, parentMap) {
 
 /* ── FeedCard ──────────────────────────────────────────────────────── */
 
-function FeedCard({ node, index, nodeMap, parentMap, onSave, onEditStart, onEditEnd }) {
+function FeedCard({ node, nodeMap, parentMap, onSave, onEditStart, onEditEnd, onGoToMap }) {
   const [editingTitle, setEditingTitle] = useState(false)
   const [editingContent, setEditingContent] = useState(false)
   const [localTitle, setLocalTitle] = useState(node.data.title)
@@ -171,13 +200,14 @@ function FeedCard({ node, index, nodeMap, parentMap, onSave, onEditStart, onEdit
 
   const crumbs = getAncestorCrumbs(node.id, nodeMap, parentMap)
   const typeLabel = node.data.nodeType !== 'folder' ? node.data.nodeType : null
+  const showBreadcrumbs = import.meta.env.FEED_SHOW_BREADCRUMBS !== 'false'
 
   return (
     <div
       className={`feed-card${(editingTitle || editingContent) ? ' feed-card--editing' : ''}`}
-      style={{ animationDelay: `${(index % BATCH_SIZE) * 40}ms` }}
+      style={{ animationDelay: '0ms' }}
     >
-      {crumbs && (
+      {showBreadcrumbs && crumbs && (
         <div className="feed-card__breadcrumb" aria-label="Location">
           {crumbs.map((crumb, i) => (
             <span key={i}>
@@ -233,6 +263,12 @@ function FeedCard({ node, index, nodeMap, parentMap, onSave, onEditStart, onEdit
         {typeLabel && !editingTitle && (
           <span className="feed-card__type-badge">{typeLabel}</span>
         )}
+        {!editingTitle && !editingContent && (
+          <div className="feed-card__actions">
+            <button className="feed-card__action-btn" onClick={startTitleEdit} title="Edit">✎</button>
+            <button className="feed-card__action-btn" onClick={() => onGoToMap(node.id)} title="Open in map">↗</button>
+          </div>
+        )}
       </div>
 
       {editingContent ? (
@@ -279,25 +315,60 @@ function FeedCard({ node, index, nodeMap, parentMap, onSave, onEditStart, onEdit
   )
 }
 
+/* ── FeedSection (recursive group renderer) ───────────────────────── */
+
+function FeedSection({ items, paletteIndex = 0, cardProps }) {
+  return items.map((item) => {
+    if (item.type === 'card') {
+      return <FeedCard key={item.node.id} node={item.node} {...cardProps} />
+    }
+    // group
+    const color = GROUP_PALETTE[paletteIndex % GROUP_PALETTE.length]
+    const title = item.node.data.longTitle || item.node.data.title
+    return (
+      <div
+        key={item.node.id}
+        className="feed-group-section"
+        style={{ backgroundColor: color.bg, borderColor: color.border }}
+      >
+        <div className="feed-group-header" style={{ color: color.accent, borderBottomColor: item.node.data.content?.trim() || item.children.length ? color.border : 'transparent' }}>
+          {title}
+        </div>
+        {item.node.data.content?.trim() && (
+          <div className="feed-group-section__inline-content">
+            <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents} urlTransform={urlTransform}>
+              {item.node.data.content}
+            </ReactMarkdown>
+          </div>
+        )}
+        {item.children.length > 0 && (
+          <div className="feed-group-section__body">
+            <FeedSection items={item.children} paletteIndex={paletteIndex + 1} cardProps={cardProps} />
+          </div>
+        )}
+      </div>
+    )
+  })
+}
+
 /* ── FeedView ──────────────────────────────────────────────────────── */
 
 export default function FeedView() {
   const currentMapId = useMindMapStore((s) => s.currentMapId)
   const updateNodeData = useMindMapStore((s) => s.updateNodeData)
+  const focusNode = useMindMapStore((s) => s.focusNode)
+  const [, setSearchParams] = useSearchParams()
 
   const [allNodes, setAllNodes] = useState([])
   const [allEdges, setAllEdges] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [feedItems, setFeedItems] = useState([])
   const [activeEditActions, setActiveEditActions] = useState(null)
-  const loaderRef = useRef(null)
 
   useEffect(() => {
     if (!currentMapId) {
       setAllNodes([])
       setAllEdges([])
-      setFeedItems([])
       setLoading(false)
       return
     }
@@ -337,13 +408,8 @@ export default function FeedView() {
           }
         })
 
-        const initialContent = mergedNodes.filter(
-          (n) => n.data.level > 0 && !n.data.isSubmap && n.data.nodeType !== 'group' && hasVisibleContent(n.data.content)
-        )
-
         setAllNodes(mergedNodes)
         setAllEdges(mapEdges)
-        setFeedItems(randomBatch(initialContent))
       } catch (err) {
         console.error('Feed load failed:', err)
         setError('Failed to load feed.')
@@ -361,28 +427,12 @@ export default function FeedView() {
     return m
   }, [allEdges])
 
-  const contentNodes = useMemo(
-    () => allNodes.filter(
-      (n) => n.data.level > 0 && !n.data.isSubmap && n.data.nodeType !== 'group' && hasVisibleContent(n.data.content)
-    ),
-    [allNodes]
+  const orderedNodes = useMemo(
+    () => buildDFSOrder(allNodes, allEdges).filter((item) => item.node.data.level > 0),
+    [allNodes, allEdges]
   )
 
-  const loadMore = useCallback(() => {
-    if (contentNodes.length === 0) return
-    setFeedItems((prev) => [...prev, ...randomBatch(contentNodes)])
-  }, [contentNodes])
-
-  useEffect(() => {
-    const el = loaderRef.current
-    if (!el) return
-    const observer = new IntersectionObserver(
-      (entries) => { if (entries[0].isIntersecting) loadMore() },
-      { rootMargin: '200px' }
-    )
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [loadMore])
+  const renderTree = useMemo(() => buildRenderTree(orderedNodes), [orderedNodes])
 
   const handleEditStart = useCallback((confirm, cancel) => {
     setActiveEditActions({ confirm, cancel })
@@ -391,6 +441,11 @@ export default function FeedView() {
   const handleEditEnd = useCallback(() => {
     setActiveEditActions(null)
   }, [])
+
+  const handleGoToMap = useCallback((nodeId) => {
+    focusNode(nodeId)
+    setSearchParams({}, { replace: true })
+  }, [focusNode, setSearchParams])
 
   const handleSave = useCallback(async (node, changes) => {
     setAllNodes((prev) => prev.map((n) =>
@@ -427,24 +482,14 @@ export default function FeedView() {
   if (loading) return <div className="feed-view"><div className="feed-empty"><p>Loading feed…</p></div></div>
   if (error)   return <div className="feed-view"><div className="feed-empty"><p>{error}</p></div></div>
   if (!currentMapId) return <div className="feed-view"><div className="feed-empty"><p>No map selected.</p></div></div>
-  if (contentNodes.length === 0) return <div className="feed-view"><div className="feed-empty"><p>No nodes with content found in this map.</p></div></div>
+  if (orderedNodes.length === 0) return <div className="feed-view"><div className="feed-empty"><p>No nodes found in this map.</p></div></div>
+
+  const cardProps = { nodeMap, parentMap, onSave: handleSave, onEditStart: handleEditStart, onEditEnd: handleEditEnd, onGoToMap: handleGoToMap }
 
   return (
     <div className="feed-view">
       <div className="feed-view__inner">
-        {feedItems.map((node, i) => (
-          <FeedCard
-            key={`${node.id}-${i}`}
-            node={node}
-            index={i}
-            nodeMap={nodeMap}
-            parentMap={parentMap}
-            onSave={handleSave}
-            onEditStart={handleEditStart}
-            onEditEnd={handleEditEnd}
-          />
-        ))}
-        <div ref={loaderRef} className="feed-loader" aria-hidden="true" />
+        <FeedSection items={renderTree} cardProps={cardProps} />
       </div>
 
       {activeEditActions && (

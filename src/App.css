@@ -700,6 +700,10 @@
 .feed-card__title-edit-group .feed-card__title-input { margin: 0; }
 .feed-card__title-input--short { font-size: 12px; font-weight: 500; color: var(--text-2); }
 
+.feed-card__actions { display: flex; align-items: center; gap: 2px; margin-left: auto; flex-shrink: 0; opacity: 0; transition: opacity 0.15s; }
+.feed-card:hover .feed-card__actions { opacity: 1; }
+.feed-card__action-btn { background: none; border: none; cursor: pointer; color: var(--text-3); font-size: 14px; padding: 3px 5px; border-radius: 5px; line-height: 1; transition: color 0.12s, background 0.12s; }
+.feed-card__action-btn:hover { color: var(--amber); background: var(--amber-subtle); }
 .feed-card__type-badge { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-2); background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 4px; padding: 2px 7px; flex-shrink: 0; margin-top: 2px; }
 
 .feed-card__content-wrap { position: relative; }
@@ -731,7 +735,15 @@
 .feed-card__show-more { background: none; border: none; color: var(--amber); font-size: 13px; font-weight: 500; cursor: pointer; padding: 6px 0 0; display: block; line-height: 1; }
 .feed-card__show-more:hover { color: #9a4508; text-decoration: underline; }
 
-.feed-loader { height: 40px; }
+.feed-group-section { border: 1.5px solid; border-radius: 14px; overflow: hidden; }
+.feed-group-header { display: flex; align-items: center; gap: 7px; padding: 10px 18px; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; border-bottom: 1px solid; }
+.feed-group-header__icon { font-size: 10px; opacity: 0.7; }
+.feed-group-section__body { display: flex; flex-direction: column; gap: 12px; padding: 14px; }
+.feed-group-section__inline-content { font-size: 14px; line-height: 1.65; color: var(--text-2); padding: 12px 20px 16px 20px; }
+.feed-group-section__inline-content p { margin: 0 0 0.5em; }
+.feed-group-section__inline-content p:last-child { margin-bottom: 0; }
+.feed-group-section__inline-content ul, .feed-group-section__inline-content ol { margin: 0.3em 0 0.5em; padding-left: 1.6em; }
+.feed-group-section__inline-content li { margin: 0.2em 0; }
 
 /* ── Home Page ────────────────────────────────────────────────────── */
 
