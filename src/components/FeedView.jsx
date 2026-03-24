@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useMindMapStore } from '../store/useMindMapStore'
 import MarkdownEditor, { markdownComponents, urlTransform } from './MarkdownEditor'
+import { NodeIconDisplay, NodeIconUpload } from './NodeIcon'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
@@ -35,7 +36,8 @@ function buildRenderTree(orderedItems) {
     while (stack.length > 1 && depth <= stack[stack.length - 1].depth) stack.pop()
     const parent = stack[stack.length - 1].container
     if (hasChildren && (node.data.nodeType === 'group' || node.data.nodeType === 'folder')) {
-      const groupItem = { type: 'group', node, depth, children: [] }
+      const showSelfCard = node.data.level === 1 || node.data.content?.trim()
+      const groupItem = { type: 'group', node, depth, children: showSelfCard ? [{ type: 'card', node }] : [] }
       parent.children.push(groupItem)
       stack.push({ container: groupItem, depth })
     } else {
@@ -62,7 +64,7 @@ function getAncestorCrumbs(nodeId, nodeMap, parentMap) {
 
 /* ── FeedCard ──────────────────────────────────────────────────────── */
 
-function FeedCard({ node, nodeMap, parentMap, onSave, onEditStart, onEditEnd, onGoToMap }) {
+function FeedCard({ node, nodeMap, parentMap, onSave, onEditStart, onEditEnd, onGoToMap, onIconSave }) {
   const [editingTitle, setEditingTitle] = useState(false)
   const [editingContent, setEditingContent] = useState(false)
   const [localTitle, setLocalTitle] = useState(node.data.title)
@@ -214,6 +216,9 @@ function FeedCard({ node, nodeMap, parentMap, onSave, onEditStart, onEditEnd, on
       )}
 
       <div className="feed-card__header">
+        {node.data.iconUrl && !editingTitle && (
+          <NodeIconDisplay iconUrl={node.data.iconUrl} className="feed-card__icon" />
+        )}
         {editingTitle ? (
           <div
             className="feed-card__title-edit-group"
@@ -258,6 +263,11 @@ function FeedCard({ node, nodeMap, parentMap, onSave, onEditStart, onEditEnd, on
         )}
         {!editingTitle && !editingContent && (
           <div className="feed-card__actions">
+            <NodeIconUpload
+              iconUrl={node.data.iconUrl}
+              onUpload={(url) => onIconSave(node, url)}
+              className="feed-card__action-btn"
+            >⊕</NodeIconUpload>
             <button className="feed-card__action-btn" onClick={startContentEdit} title="Edit">✎</button>
             <button className="feed-card__action-btn" onClick={() => onGoToMap(node.id)} title="Open in map">↗</button>
           </div>
@@ -449,12 +459,15 @@ export default function FeedView() {
       if (Object.keys(nodeTableChanges).length > 0) {
         await supabase.from('nodes').update(nodeTableChanges).eq('id', node.id)
       }
-      if (changes.title !== undefined) {
+      const mapDataChanges = {}
+      if (changes.title !== undefined) mapDataChanges.title = changes.title
+      if (changes.iconUrl !== undefined) mapDataChanges.iconUrl = changes.iconUrl
+      if (Object.keys(mapDataChanges).length > 0) {
         const { data: map } = await supabase
           .from('maps').select('data').eq('id', node._feedMapId).single()
         if (map) {
           const updatedNodes = map.data.nodes.map((n) =>
-            n.id === node.id ? { ...n, data: { ...n.data, title: changes.title } } : n
+            n.id === node.id ? { ...n, data: { ...n.data, ...mapDataChanges } } : n
           )
           await supabase
             .from('maps')
@@ -467,12 +480,16 @@ export default function FeedView() {
     }
   }, [currentMapId, updateNodeData])
 
+  const handleIconSave = useCallback((node, iconUrl) => {
+    handleSave(node, { iconUrl })
+  }, [handleSave])
+
   if (loading) return <div className="feed-view"><div className="feed-empty"><p>Loading feed…</p></div></div>
   if (error)   return <div className="feed-view"><div className="feed-empty"><p>{error}</p></div></div>
   if (!currentMapId) return <div className="feed-view"><div className="feed-empty"><p>No map selected.</p></div></div>
   if (orderedNodes.length === 0) return <div className="feed-view"><div className="feed-empty"><p>No nodes found in this map.</p></div></div>
 
-  const cardProps = { nodeMap, parentMap, onSave: handleSave, onEditStart: handleEditStart, onEditEnd: handleEditEnd, onGoToMap: handleGoToMap }
+  const cardProps = { nodeMap, parentMap, onSave: handleSave, onEditStart: handleEditStart, onEditEnd: handleEditEnd, onGoToMap: handleGoToMap, onIconSave: handleIconSave }
 
   return (
     <div className="feed-view">

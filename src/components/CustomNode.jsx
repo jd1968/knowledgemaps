@@ -3,6 +3,7 @@ import { Handle, Position } from '@xyflow/react'
 import { useNavigate } from 'react-router-dom'
 import { useMindMapStore } from '../store/useMindMapStore'
 import SubmapChoiceModal from './SubmapChoiceModal'
+import { NodeIconDisplay, NodeIconUpload } from './NodeIcon'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
@@ -58,7 +59,7 @@ const CustomNode = memo(({ id, data, selected }) => {
   const selectTimerRef = useRef(null)
   const nodeRef        = useRef(null)
 
-  const { title, level, l1Color, hasChildren, collapsed, hasCollapsibleDescendants, allDescendantsCollapsed, isSubmap, submapId, hasNotes, nodeType, groupSize, content, isTodo = false, groupNestingLevel = 0 } = data
+  const { title, level, l1Color, hasChildren, collapsed, hasCollapsibleDescendants, allDescendantsCollapsed, isSubmap, submapId, hasNotes, nodeType, groupSize, content, isTodo = false, groupNestingLevel = 0, iconUrl = '' } = data
   const cfg         = getConfig(level)
   const borderColor = l1Color ?? '#94a3b8'
   const width       = groupSize?.width ?? cfg.width
@@ -332,10 +333,11 @@ const CustomNode = memo(({ id, data, selected }) => {
         <div style={{
           flex: nodeType === 'group' ? '0 0 auto' : 1,
           display: 'flex',
+          flexDirection: 'row',
           alignItems: nodeType === 'group' ? 'flex-start' : 'center',
-          justifyContent: nodeType === 'group' ? 'flex-start' : 'center',
-          padding: nodeType === 'group' ? '8px 12px' : '10px 14px',
-          textAlign: nodeType === 'group' ? 'left' : 'center',
+          justifyContent: nodeType === 'group' || (iconUrl && nodeType !== 'group') ? 'flex-start' : 'center',
+          padding: nodeType === 'group' ? '8px 12px' : (iconUrl && !editing ? '10px 14px 10px 8px' : '10px 14px'),
+          textAlign: nodeType === 'group' || (iconUrl && nodeType !== 'group') ? 'left' : 'center',
           wordBreak: 'break-word',
           lineHeight: '1.35',
           position: 'relative',
@@ -349,6 +351,9 @@ const CustomNode = memo(({ id, data, selected }) => {
               }
             : {}),
         }}>
+          {!editing && iconUrl && nodeType !== 'group' && (
+            <NodeIconDisplay iconUrl={iconUrl} className="node-icon" />
+          )}
           {editing ? (
             <input
               ref={inputRef}
@@ -458,6 +463,17 @@ const CustomNode = memo(({ id, data, selected }) => {
         >
           {allDescendantsCollapsed ? '▸▸' : '▾▾'}
         </button>
+      )}
+
+      {/* Icon upload — shown on hover in edit mode for non-root nodes */}
+      {hovered && isEditMode && level > 0 && !editing && (
+        <NodeIconUpload
+          iconUrl={iconUrl}
+          onUpload={(url) => updateNodeData(id, { iconUrl: url })}
+          className="node-icon-upload-btn nodrag nopan"
+        >
+          ⊕
+        </NodeIconUpload>
       )}
 
       {/* Convert-type glyph — top-left, shown on hover for non-root, non-submap nodes */}

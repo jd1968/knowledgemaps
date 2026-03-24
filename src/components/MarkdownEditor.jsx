@@ -8,14 +8,14 @@ export function urlTransform(url) {
   return defaultUrlTransform(url)
 }
 
-const BUCKET = 'knowledge-files'
-const STORAGE_PREFIX = `storage:${BUCKET}/`
+export const BUCKET = 'knowledge-files'
+export const STORAGE_PREFIX = `storage:${BUCKET}/`
 const SIZE_WIDTHS = { s: '25%', m: '50%', l: '75%' }
 
 // Session-scoped cache: filePath → blob URL (no expiry, freed when page closes)
 const blobUrlCache = new Map()
 
-async function fetchBlobUrl(filePath) {
+export async function fetchBlobUrl(filePath) {
   if (blobUrlCache.has(filePath)) return blobUrlCache.get(filePath)
   const { data, error } = await supabase.storage.from(BUCKET).download(filePath)
   if (error) { console.error('[StorageImage] download failed:', error.message); return null }
