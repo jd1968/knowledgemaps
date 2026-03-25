@@ -306,7 +306,7 @@ export const useMindMapStore = create((set, get) => ({
 
     // Strip content from diagram JSON — content lives in the nodes table
     const mapData = {
-      nodes: nodes.map(({ data: { content: _c, ...rest }, ...node }) => ({
+      nodes: nodes.map(({ data: { content: _c, ...rest }, selected: _s, dragging: _d, measured: _m, ...node }) => ({
         ...node,
         data: rest,
       })),

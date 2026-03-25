@@ -98,11 +98,11 @@ const FitViewOnLoad = () => {
   useEffect(() => {
     if (fitViewTrigger === 0) return
     const topNodes = nodesRef.current
-      .filter((n) => (n.data?.level ?? 0) <= 1)
+      .filter((n) => (n.data?.level ?? 0) === 1)
       .map((n) => ({ id: n.id }))
     const targets = topNodes.length > 0 ? topNodes : undefined
     const id = requestAnimationFrame(() =>
-      fitView({ nodes: targets, padding: 0.3, duration: 400, minZoom: initialZoomRef.current, maxZoom: initialZoomRef.current })
+      fitView({ nodes: targets, padding: 0.3, duration: 400 })
     )
     return () => cancelAnimationFrame(id)
   }, [fitViewTrigger, fitView]) // eslint-disable-line react-hooks/exhaustive-deps
