@@ -20,7 +20,7 @@ function MapPage() {
   const location = useLocation()
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
-  const { loadMap, setViewMode, isFullscreen } = useMindMapStore()
+  const { loadMap, setViewMode, isFullscreen, isEditMode } = useMindMapStore()
 
   const viewMode = searchParams.get('view') || 'map'
 
@@ -41,7 +41,7 @@ function MapPage() {
     <div className={`app${isFullscreen ? ' app--fullscreen' : ''}`}>
       {!isFullscreen && <Toolbar />}
       <div className="app-body">
-        {viewMode === 'map' && !isFullscreen && <Toolbox />}
+        {viewMode === 'map' && !isFullscreen && isEditMode && <Toolbox />}
         {viewMode === 'feed' ? (
           <FeedView />
         ) : viewMode === 'contents' ? (

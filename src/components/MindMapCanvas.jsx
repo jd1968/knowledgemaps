@@ -666,7 +666,7 @@ const MindMapCanvas = () => {
           size={1.2}
           color="#d4cabb"
         />
-        <Controls showInteractive={false}>
+        {!isTouch && <Controls showInteractive={false}>
           <ZoomDisplay />
           <ControlButton
             onClick={toggleFullscreen}
@@ -674,14 +674,14 @@ const MindMapCanvas = () => {
           >
             {isFullscreen ? <CompressIcon /> : <ExpandIcon />}
           </ControlButton>
-        </Controls>
-        <MiniMap
+        </Controls>}
+        {!isTouch && <MiniMap
           nodeColor={(node) => node.data?.l1Color ?? ROOT_BORDER}
           maskColor="rgba(240,236,227,0.75)"
           style={{ background: '#f9f6f1', border: '1px solid #e5ddd0' }}
           zoomable
           pannable
-        />
+        />}
         <Panel position="bottom-center">
           <div className="canvas-hint">
             {isTouch
