@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
-import { Handle, Position } from '@xyflow/react'
+import { Handle, Position, NodeResizer } from '@xyflow/react'
 import { useNavigate } from 'react-router-dom'
 import { useMindMapStore } from '../store/useMindMapStore'
 import SubmapChoiceModal from './SubmapChoiceModal'
@@ -47,6 +47,7 @@ const CustomNode = memo(({ id, data, selected }) => {
   const breadcrumbs           = useMindMapStore((state) => state.breadcrumbs)
   const isDirty               = useMindMapStore((state) => state.isDirty)
   const saveMap               = useMindMapStore((state) => state.saveMap)
+  const scheduleAutosave      = useMindMapStore((state) => state.scheduleAutosave)
   const navigate              = useNavigate()
 
   const [hovered, setHovered]             = useState(false)
@@ -62,8 +63,8 @@ const CustomNode = memo(({ id, data, selected }) => {
   const { title, level, l1Color, hasChildren, collapsed, hasCollapsibleDescendants, allDescendantsCollapsed, isSubmap, submapId, hasNotes, nodeType, groupSize, content, isTodo = false, groupNestingLevel = 0, iconUrl = '', imageUrl = '', imageBorder = false } = data
   const cfg         = getConfig(level)
   const borderColor = l1Color ?? '#94a3b8'
-  const width       = groupSize?.width ?? cfg.width
-  const height      = groupSize?.height ?? (['note', 'pointer', 'image'].includes(nodeType) ? null : cfg.height)
+  const width       = nodeType === 'image' ? '100%' : (groupSize?.width ?? cfg.width)
+  const height      = nodeType === 'image' ? '100%' : (groupSize?.height ?? (['note', 'pointer'].includes(nodeType) ? null : cfg.height))
   const showGroupHeader   = nodeType === 'group' && !!title?.trim()
   const hasPointerContent = nodeType === 'pointer' && content && content.trim() !== ''
   const isReparentSource = reparentSourceNodeId === id
@@ -293,6 +294,12 @@ const CustomNode = memo(({ id, data, selected }) => {
       {/* Image node body */}
       {nodeType === 'image' && (
         <div className="image-node-body">
+          <NodeResizer
+            isVisible={isEditMode && (selected || hovered)}
+            minWidth={80}
+            minHeight={80}
+            onResizeEnd={() => scheduleAutosave()}
+          />
           {imageUrl ? (
             <>
               <NodeIconDisplay iconUrl={imageUrl} className="image-node-img" />

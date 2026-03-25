@@ -139,6 +139,7 @@ export const useMindMapStore = create((set, get) => ({
       id,
       type: 'mindmap',
       position,
+      ...(nodeType === 'image' ? { style: { width: 200, height: 200 } } : {}),
       data: {
         title,
         key: id,
