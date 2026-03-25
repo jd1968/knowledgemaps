@@ -16,7 +16,7 @@ const initialNodes = [
       title: 'Central Topic',
       key: ROOT_ID,
       level: 0,
-      nodeType: 'folder',
+      nodeType: 'node',
       content: '',
     },
   },
@@ -48,6 +48,7 @@ export const useMindMapStore = create((set, get) => ({
   viewMode: 'map',
   openMenuNodeId: null,
   reparentSourceNodeId: null,
+  pendingToolboxType: null,
 
   // ── Node focus (map navigation) ───────────────────────────────
   focusNodeId: null,
@@ -57,6 +58,8 @@ export const useMindMapStore = create((set, get) => ({
   setOpenMenuNodeId: (id) => set({ openMenuNodeId: id }),
   setReparentSourceNodeId: (id) => set({ reparentSourceNodeId: id }),
   clearReparentMode: () => set({ reparentSourceNodeId: null }),
+  setPendingToolboxType: (type) => set({ pendingToolboxType: type }),
+  clearPendingToolboxType: () => set({ pendingToolboxType: null }),
 
   setEditMode: (isEditMode) => set({ isEditMode, reparentSourceNodeId: isEditMode ? get().reparentSourceNodeId : null }),
   toggleEditMode: () => set((state) => ({
@@ -128,7 +131,7 @@ export const useMindMapStore = create((set, get) => ({
 
   // ── Node CRUD ─────────────────────────────────────────────────
 
-  addNode: ({ position, level = 1, title = '' }) => {
+  addNode: ({ position, level = 1, title = '', nodeType = 'node' }) => {
     if (!get().isEditMode) return null
     get().pushHistory()
     const id = uuidv4()
@@ -140,7 +143,7 @@ export const useMindMapStore = create((set, get) => ({
         title,
         key: id,
         level,
-        nodeType: 'folder',
+        nodeType,
         content: '',
       },
     }
@@ -374,7 +377,7 @@ export const useMindMapStore = create((set, get) => ({
         ...n,
         data: {
           ...n.data,
-          nodeType: n.data.nodeType ?? (n.data.isSubmap ? 'submap' : 'folder'),
+          nodeType: n.data.nodeType ?? (n.data.isSubmap ? 'submap' : 'node'),
           content: '',
         },
       }))
@@ -585,7 +588,7 @@ export const useMindMapStore = create((set, get) => ({
 
   // ── Add child node ────────────────────────────────────────────
 
-  addChildNode: (parentId, nodeType = 'folder') => {
+  addChildNode: (parentId, nodeType = 'node') => {
     if (!get().isEditMode) return
     const { nodes, edges } = get()
     const parent = nodes.find((n) => n.id === parentId)
@@ -663,7 +666,15 @@ export const useMindMapStore = create((set, get) => ({
     }
 
     set((state) => ({
-      nodes: [...state.nodes.map((n) => ({ ...n, selected: false })), newNode],
+      nodes: [
+        ...state.nodes.map((n) => {
+          if (n.id === parentId && n.data.nodeType === 'node') {
+            return { ...n, selected: false, data: { ...n.data, nodeType: 'group' } }
+          }
+          return { ...n, selected: false }
+        }),
+        newNode,
+      ],
       edges: [...state.edges, newEdge],
       pendingNewNodeId: id,
       isDirty: true,
@@ -743,6 +754,9 @@ export const useMindMapStore = create((set, get) => ({
       return {
         nodes: state.nodes.map(n => {
           const nextLevel = levelMap[n.id]
+          if (n.id === newParentId && n.data.nodeType === 'node') {
+            return { ...n, data: { ...n.data, nodeType: 'group' } }
+          }
           if (n.id === nodeId && isGroupParent) {
             return {
               ...n,

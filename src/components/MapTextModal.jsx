@@ -23,8 +23,8 @@ function buildMarkdown(nodes, edges, mapName) {
     if (!node) return
 
     const title = node.data?.title || 'Untitled'
-    const nodeType = node.data?.nodeType || 'folder'
-    const typeSuffix = nodeType !== 'folder' ? ` *(${nodeType})*` : ''
+    const nodeType = node.data?.nodeType || 'node'
+    const typeSuffix = nodeType !== 'node' ? ` *(${nodeType})*` : ''
 
     const headingLevel = Math.min(depth + 1, 6)
     lines.push(`${'#'.repeat(headingLevel)} ${title}${typeSuffix}`)

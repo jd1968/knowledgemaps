@@ -208,10 +208,13 @@ const MindMapCanvas = () => {
     reparentNode,
     moveSubtreeBy,
     scheduleAutosave,
+    addNode,
     isEditMode,
     openMenuNodeId,
     reparentSourceNodeId,
     clearReparentMode,
+    pendingToolboxType,
+    clearPendingToolboxType,
     isFullscreen,
     setIsFullscreen,
   } = useMindMapStore()
@@ -599,8 +602,29 @@ const MindMapCanvas = () => {
     delete dragStartRef.current[draggedNode.id]
   }, [allDropTargets, isEditMode, reparentNode, scheduleAutosave, parentMap])
 
+  const { screenToFlowPosition } = useReactFlow()
+
+  // Cancel toolbox placement on Escape
+  useEffect(() => {
+    if (!pendingToolboxType) return
+    const onKey = (e) => { if (e.key === 'Escape') clearPendingToolboxType() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [pendingToolboxType, clearPendingToolboxType])
+
+  const onCanvasPointerUp = useCallback((e) => {
+    if (!pendingToolboxType || !isEditMode) return
+    const position = screenToFlowPosition({ x: e.clientX, y: e.clientY })
+    addNode({ position, level: 1, nodeType: pendingToolboxType })
+    clearPendingToolboxType()
+  }, [pendingToolboxType, isEditMode, screenToFlowPosition, addNode, clearPendingToolboxType])
+
   return (
-    <div ref={containerRef} style={{ width: '100%', height: '100%' }}>
+    <div
+      ref={containerRef}
+      style={{ width: '100%', height: '100%', cursor: pendingToolboxType ? 'crosshair' : undefined }}
+      onPointerUp={onCanvasPointerUp}
+    >
       <ReactFlow
         nodes={nodesWithColor}
         edges={displayEdges}
@@ -663,9 +687,11 @@ const MindMapCanvas = () => {
             {isTouch
               ? 'Tap a node to select · Drag to pan · Pinch to zoom'
               : isEditMode
-                ? reparentSourceNodeId
-                  ? 'Click a new parent node to reparent · Click source node or canvas to cancel'
-                  : 'Hover a node and click + to add a child · Drag to lasso-select · Trackpad to pan & zoom'
+                ? pendingToolboxType
+                  ? `Click to place ${pendingToolboxType} · Press Escape to cancel`
+                  : reparentSourceNodeId
+                    ? 'Click a new parent node to reparent · Click source node or canvas to cancel'
+                    : 'Hover a node and click + to add a child · Drag to lasso-select · Trackpad to pan & zoom'
                 : 'Edit Mode is off · Drag to lasso-select · Trackpad to pan & zoom'}
           </div>
         </Panel>

@@ -1,82 +1,59 @@
 import { useMindMapStore } from '../store/useMindMapStore'
 
-const NODE_TEMPLATES = [
-  {
-    level: 1,
-    label: 'Main Topic',
-    desc: 'Level 1',
-    bg: '#dbeafe',
-    border: '#3b82f6',
-    text: '#1e3a8a',
-  },
-  {
-    level: 2,
-    label: 'Subtopic',
-    desc: 'Level 2',
-    bg: '#d1fae5',
-    border: '#10b981',
-    text: '#064e3b',
-  },
-  {
-    level: 3,
-    label: 'Detail',
-    desc: 'Level 3',
-    bg: '#ede9fe',
-    border: '#7c3aed',
-    text: '#3b0764',
-  },
+const NodeIcon = () => (
+  <svg width="28" height="16" viewBox="0 0 28 16" fill="none">
+    <rect x="1" y="1" width="26" height="14" rx="7" stroke="currentColor" strokeWidth="1.5" />
+  </svg>
+)
+
+const ImageIcon = () => (
+  <svg width="24" height="22" viewBox="0 0 24 22" fill="none">
+    <rect x="1" y="1" width="22" height="20" rx="3" stroke="currentColor" strokeWidth="1.5" />
+    <circle cx="7" cy="7.5" r="2" fill="currentColor" opacity="0.6" />
+    <path d="M1 16l6-5 4 4 4-4 8 7" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+  </svg>
+)
+
+const ITEMS = [
+  { type: 'node',  label: 'Node',  Icon: NodeIcon },
+  { type: 'image', label: 'Image', Icon: ImageIcon },
 ]
 
-const NodeTemplate = ({ level, label, desc, bg, border, text, isEditMode }) => {
-  const onDragStart = (e) => {
-    if (!isEditMode) return
-    e.dataTransfer.setData(
-      'application/reactflow',
-      JSON.stringify({ level, title: label })
-    )
-    e.dataTransfer.effectAllowed = 'copy'
-  }
+const ToolboxItem = ({ type, label, Icon, isEditMode, isActive }) => {
+  const setPendingToolboxType = useMindMapStore((s) => s.setPendingToolboxType)
 
   return (
     <div
-      draggable={isEditMode}
-      onDragStart={onDragStart}
-      className="node-template"
-      style={{
-        background: bg,
-        border: `2px solid ${border}`,
-        color: text,
-        opacity: isEditMode ? 1 : 0.55,
-        cursor: isEditMode ? 'grab' : 'not-allowed',
+      className={`toolbox-item${!isEditMode ? ' toolbox-item--disabled' : ''}${isActive ? ' toolbox-item--active' : ''}`}
+      title={isEditMode ? `Click then click canvas to place ${label}` : 'Enable Edit Mode to add items'}
+      onPointerDown={(e) => {
+        if (!isEditMode) return
+        e.preventDefault()
+        setPendingToolboxType(type)
       }}
     >
-      <span className="node-template-label">{label}</span>
-      <span className="node-template-desc">{desc} · drag to add</span>
+      <span className="toolbox-item-icon"><Icon /></span>
+      <span className="toolbox-item-name">{label}</span>
     </div>
   )
 }
 
-const NodePalette = () => {
-  const isEditMode = useMindMapStore((s) => s.isEditMode)
+const Toolbox = () => {
+  const isEditMode          = useMindMapStore((s) => s.isEditMode)
+  const pendingToolboxType  = useMindMapStore((s) => s.pendingToolboxType)
 
   return (
-    <div className="node-palette">
-      <div className="palette-title">Add Nodes</div>
-      <p className="palette-hint">
-        {isEditMode ? 'Drag a node onto the canvas to add it' : 'Enable Edit Mode to add nodes'}
-      </p>
-
-      {NODE_TEMPLATES.map((t) => (
-        <NodeTemplate key={t.level} {...t} isEditMode={isEditMode} />
+    <div className="toolbox">
+      {ITEMS.map((item) => (
+        <ToolboxItem
+          key={item.type}
+          {...item}
+          isEditMode={isEditMode}
+          isActive={pendingToolboxType === item.type}
+        />
       ))}
-
-      <div className="palette-tip">
-        <strong>Connect nodes:</strong>
-        <br />
-        Drag from a handle (circle) on one node to a handle on another.
-      </div>
     </div>
   )
 }
 
-export default NodePalette
+export default Toolbox

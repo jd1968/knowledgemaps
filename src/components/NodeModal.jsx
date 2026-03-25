@@ -4,8 +4,8 @@ import { useMindMapStore } from '../store/useMindMapStore'
 import MarkdownEditor from './MarkdownEditor'
 import SubmapChoiceModal from './SubmapChoiceModal'
 
-const TYPE_LABELS = { folder: 'Folder', group: 'Group', note: 'Note', pointer: 'Pointer', submap: 'Submap' }
-const CREATE_TYPE_OPTIONS = ['folder', 'group', 'note', 'pointer', 'submap']
+const TYPE_LABELS = { node: 'Node', pointer: 'Pointer', submap: 'Submap' }
+const CREATE_TYPE_OPTIONS = ['node', 'pointer', 'submap']
 
 const isTouch = typeof window !== 'undefined' && window.matchMedia('(hover: none) and (pointer: coarse)').matches
 
@@ -19,7 +19,7 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
   const currentMapId     = useMindMapStore((s) => s.currentMapId)
 
   const { id } = node
-  const { title, level, content, longTitle = '', isSubmap, submapId, nodeType = 'folder', hasChildren, isTodo = false } = node.data
+  const { title, level, content, longTitle = '', isSubmap, submapId, nodeType = 'node', hasChildren, isTodo = false } = node.data
 
   const [isEditing, setIsEditing]         = useState(isEditMode)
   const [draft, setDraft]                 = useState(isEditMode ? { title: title || '', longTitle: longTitle || title || '', content: content || '', isTodo: !!isTodo, nodeType } : null)
@@ -251,7 +251,7 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
             showConvertMenu ? (
               <>
                 <span className="node-modal-convert-label">Convert to:</span>
-                {['folder', 'group', 'note', 'pointer', 'submap'].map((t) => (
+                {['node', 'pointer', 'submap'].map((t) => (
                   <button
                     key={t}
                     className={`btn btn--sm${nodeType === t ? ' btn--disabled' : ' btn--secondary'}`}

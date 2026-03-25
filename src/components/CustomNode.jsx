@@ -24,7 +24,7 @@ const blendWithWhite = (hex, alpha) => {
   return `rgb(${Math.round(255 * (1 - alpha) + r * alpha)}, ${Math.round(255 * (1 - alpha) + g * alpha)}, ${Math.round(255 * (1 - alpha) + b * alpha)})`
 }
 
-const CONVERT_LABELS = { folder: 'Folder', group: 'Group', note: 'Note', pointer: 'Pointer', submap: '↗ Submap' }
+const CONVERT_LABELS = { node: 'Node', pointer: 'Pointer', submap: '↗ Submap' }
 
 const CustomNode = memo(({ id, data, selected }) => {
   const setOpenMenuNodeId     = useMindMapStore((state) => state.setOpenMenuNodeId)
@@ -59,11 +59,11 @@ const CustomNode = memo(({ id, data, selected }) => {
   const selectTimerRef = useRef(null)
   const nodeRef        = useRef(null)
 
-  const { title, level, l1Color, hasChildren, collapsed, hasCollapsibleDescendants, allDescendantsCollapsed, isSubmap, submapId, hasNotes, nodeType, groupSize, content, isTodo = false, groupNestingLevel = 0, iconUrl = '' } = data
+  const { title, level, l1Color, hasChildren, collapsed, hasCollapsibleDescendants, allDescendantsCollapsed, isSubmap, submapId, hasNotes, nodeType, groupSize, content, isTodo = false, groupNestingLevel = 0, iconUrl = '', imageUrl = '', imageBorder = false } = data
   const cfg         = getConfig(level)
   const borderColor = l1Color ?? '#94a3b8'
   const width       = groupSize?.width ?? cfg.width
-  const height      = groupSize?.height ?? (nodeType === 'note' || nodeType === 'pointer' ? null : cfg.height)
+  const height      = groupSize?.height ?? (['note', 'pointer', 'image'].includes(nodeType) ? null : cfg.height)
   const showGroupHeader   = nodeType === 'group' && !!title?.trim()
   const hasPointerContent = nodeType === 'pointer' && content && content.trim() !== ''
   const isReparentSource = reparentSourceNodeId === id
@@ -238,6 +238,8 @@ const CustomNode = memo(({ id, data, selected }) => {
         flexDirection: 'column',
         background: level === 0
           ? '#3a3a3a'
+          : nodeType === 'image'
+            ? 'transparent'
           : nodeType === 'group'
             ? blendWithWhite(borderColor, Math.min(0.08 + groupNestingLevel * 0.1, 0.42))
             : isSubmap
@@ -249,6 +251,8 @@ const CustomNode = memo(({ id, data, selected }) => {
             : '#ffffff',
         border: level === 0
           ? 'none'
+          : nodeType === 'image'
+            ? (imageBorder ? `1.5px solid ${borderColor}` : 'none')
           : nodeType === 'note'
             ? `1px solid ${borderColor}90`
             : nodeType === 'group'
@@ -262,13 +266,15 @@ const CustomNode = memo(({ id, data, selected }) => {
         fontWeight: cfg.fontWeight,
         color: level === 0 ? '#ffffff' : '#1c1917',
         cursor: reparentSourceNodeId ? 'copy' : (editing ? 'text' : 'pointer'),
-        boxShadow: selected
-          ? `0 0 0 3px ${borderColor}40, 2px 4px 14px rgba(0,0,0,0.18)`
-          : hovered
-            ? `0 0 0 2px ${borderColor}70, 2px 4px 10px rgba(0,0,0,0.12)`
-            : nodeType === 'note'
-              ? '1px 2px 6px rgba(0,0,0,0.09)'
-              : '0 2px 8px rgba(0,0,0,0.08)',
+        boxShadow: nodeType === 'image'
+          ? (selected ? `0 0 0 2px ${borderColor}60` : hovered ? `0 0 0 1.5px ${borderColor}40` : 'none')
+          : selected
+            ? `0 0 0 3px ${borderColor}40, 2px 4px 14px rgba(0,0,0,0.18)`
+            : hovered
+              ? `0 0 0 2px ${borderColor}70, 2px 4px 10px rgba(0,0,0,0.12)`
+              : nodeType === 'note'
+                ? '1px 2px 6px rgba(0,0,0,0.09)'
+                : '0 2px 8px rgba(0,0,0,0.08)',
         transition: 'box-shadow 0.15s ease',
         userSelect: 'none',
         position: 'relative',
@@ -282,6 +288,49 @@ const CustomNode = memo(({ id, data, selected }) => {
         <span className="node-todo-indicator" title="Marked as To Do">
           To Do
         </span>
+      )}
+
+      {/* Image node body */}
+      {nodeType === 'image' && (
+        <div className="image-node-body">
+          {imageUrl ? (
+            <>
+              <NodeIconDisplay iconUrl={imageUrl} className="image-node-img" />
+              {isEditMode && hovered && (
+                <>
+                  <NodeIconUpload
+                    iconUrl={imageUrl}
+                    onUpload={(url) => updateNodeData(id, { imageUrl: url })}
+                    className="image-node-replace nodrag nopan"
+                  >
+                    Replace
+                  </NodeIconUpload>
+                  <button
+                    className="image-node-border-toggle nodrag nopan"
+                    title={imageBorder ? 'Hide border' : 'Show border'}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => { e.stopPropagation(); updateNodeData(id, { imageBorder: !imageBorder }) }}
+                  >
+                    {imageBorder ? '⊟' : '⊞'}
+                  </button>
+                </>
+              )}
+            </>
+          ) : (
+            <NodeIconUpload
+              iconUrl=""
+              onUpload={(url) => updateNodeData(id, { imageUrl: url })}
+              className="image-node-placeholder nodrag nopan"
+            >
+              <svg width="28" height="28" viewBox="0 0 24 22" fill="none" style={{ opacity: 0.35 }}>
+                <rect x="1" y="1" width="22" height="20" rx="3" stroke="currentColor" strokeWidth="1.5" />
+                <circle cx="7" cy="7.5" r="2" fill="currentColor" opacity="0.6" />
+                <path d="M1 16l6-5 4 4 4-4 8 7" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+              </svg>
+              <span>Add image</span>
+            </NodeIconUpload>
+          )}
+        </div>
       )}
 
       {/* Header — title (or pointer callout layout) */}
@@ -332,7 +381,7 @@ const CustomNode = memo(({ id, data, selected }) => {
             </>
           )}
         </div>
-      ) : (nodeType !== 'group' || showGroupHeader) && (
+      ) : (nodeType !== 'group' || showGroupHeader) && nodeType !== 'image' && (
         <div style={{
           flex: nodeType === 'group' ? '0 0 auto' : 1,
           display: 'flex',
@@ -437,7 +486,7 @@ const CustomNode = memo(({ id, data, selected }) => {
         </button>
       )}
 
-      {!editing && !collapsed && !isSubmap && nodeType !== 'note' && nodeType !== 'pointer' && isEditMode && (
+      {!editing && !collapsed && !isSubmap && nodeType !== 'note' && nodeType !== 'pointer' && nodeType !== 'image' && isEditMode && (
         <button
           className="add-child-btn"
           title="Add child node"
@@ -445,7 +494,7 @@ const CustomNode = memo(({ id, data, selected }) => {
           onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => {
             e.stopPropagation()
-            const newId = addChildNode(id, 'folder')
+            const newId = addChildNode(id, 'node')
             if (newId) selectNode(newId)
           }}
         >
@@ -470,7 +519,7 @@ const CustomNode = memo(({ id, data, selected }) => {
 
       {/* Icon upload — always rendered in edit mode so the portal input stays
           mounted during file-picker use; visibility toggled via CSS */}
-      {isEditMode && level > 0 && !editing && (
+      {isEditMode && level > 0 && !editing && nodeType !== 'image' && (
         <NodeIconUpload
           iconUrl={iconUrl}
           onUpload={(url) => updateNodeData(id, { iconUrl: url })}
@@ -533,7 +582,7 @@ const CustomNode = memo(({ id, data, selected }) => {
       {showConvertMenu && (
         <div className="node-convert-menu nodrag nopan" onPointerDown={(e) => e.stopPropagation()}>
           <span className="node-convert-menu-label">Convert to</span>
-          {['folder', 'group', 'note', 'pointer', 'submap'].map((t) => (
+          {['node', 'pointer', 'submap'].map((t) => (
             <button
               key={t}
               className="node-convert-menu-item"

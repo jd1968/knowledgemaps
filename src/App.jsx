@@ -7,6 +7,7 @@ import FeedView from './components/FeedView'
 import ContentsView from './components/ContentsView'
 import TextView from './components/MapTextModal'
 import NodePopup from './components/NodePopup'
+import Toolbox from './components/NodePalette'
 import MapListModal from './components/MapListModal'
 import LoginPage from './components/LoginPage'
 import HomePage from './components/HomePage'
@@ -40,6 +41,7 @@ function MapPage() {
     <div className={`app${isFullscreen ? ' app--fullscreen' : ''}`}>
       {!isFullscreen && <Toolbar />}
       <div className="app-body">
+        {viewMode === 'map' && !isFullscreen && <Toolbox />}
         {viewMode === 'feed' ? (
           <FeedView />
         ) : viewMode === 'contents' ? (

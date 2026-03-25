@@ -35,7 +35,7 @@ function buildRenderTree(orderedItems) {
     const hasChildren = i + 1 < orderedItems.length && orderedItems[i + 1].depth > depth
     while (stack.length > 1 && depth <= stack[stack.length - 1].depth) stack.pop()
     const parent = stack[stack.length - 1].container
-    if (hasChildren && (node.data.nodeType === 'group' || node.data.nodeType === 'folder')) {
+    if (hasChildren && (node.data.nodeType === 'group' || node.data.nodeType === 'node')) {
       const showSelfCard = node.data.level === 1 || node.data.content?.trim()
       const groupItem = { type: 'group', node, depth, children: showSelfCard ? [{ type: 'card', node }] : [] }
       parent.children.push(groupItem)
@@ -194,7 +194,7 @@ function FeedCard({ node, nodeMap, parentMap, onSave, onEditStart, onEditEnd, on
   }
 
   const crumbs = getAncestorCrumbs(node.id, nodeMap, parentMap)
-  const typeLabel = node.data.nodeType !== 'folder' ? node.data.nodeType : null
+  const typeLabel = node.data.nodeType !== 'node' ? node.data.nodeType : null
   const showBreadcrumbs = import.meta.env.FEED_SHOW_BREADCRUMBS !== 'false'
 
   return (
@@ -500,7 +500,7 @@ export default function FeedView() {
             _feedMapId: map.id,
             data: {
               ...node.data,
-              nodeType: node.data.nodeType ?? (node.data.isSubmap ? 'submap' : 'folder'),
+              nodeType: node.data.nodeType ?? (node.data.isSubmap ? 'submap' : 'node'),
               content,
               longTitle,
             },

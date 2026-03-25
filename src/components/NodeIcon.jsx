@@ -19,7 +19,7 @@ export function NodeIconDisplay({ iconUrl, className, style }) {
   }, [filePath])
 
   if (!blobUrl) return null
-  return <img src={blobUrl} alt="" className={className} style={style} />
+  return <img src={blobUrl} alt="" draggable={false} className={className} style={style} />
 }
 
 /* Upload label — the file input is portalled to document.body to escape React
