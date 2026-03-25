@@ -458,7 +458,7 @@ const MindMapCanvas = () => {
         ...(groupLayout ? { position: { x: groupLayout.x, y: groupLayout.y } } : {}),
         zIndex: node.id === openMenuNodeId ? 9999 : node.data?.nodeType === 'group' ? 0 : 10,
         className: node.data?.nodeType === 'group' ? 'km-group-node' : 'km-content-node',
-        hidden: hiddenNodeIds.has(node.id),
+        hidden: hiddenNodeIds.has(node.id) || node.data?.level === 0,
         data: {
           ...node.data,
           l1Color,
@@ -520,7 +520,7 @@ const MindMapCanvas = () => {
       const isIntraGroup = groupDescendantsSet.has(e.source)
       return {
         ...e,
-        hidden: hiddenNodeIds.has(e.target) || isGroupConnector,
+        hidden: hiddenNodeIds.has(e.target) || isGroupConnector || e.source === rootId,
         zIndex: isIntraGroup ? 5 : undefined,
       }
     }),
