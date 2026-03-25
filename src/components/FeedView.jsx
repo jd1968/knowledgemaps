@@ -64,7 +64,7 @@ function getAncestorCrumbs(nodeId, nodeMap, parentMap) {
 
 /* ── FeedCard ──────────────────────────────────────────────────────── */
 
-function FeedCard({ node, nodeMap, parentMap, onSave, onEditStart, onEditEnd, onGoToMap, onIconSave }) {
+function FeedCard({ node, nodeMap, parentMap, onSave, onEditStart, onEditEnd, onGoToMap, onIconSave, onDelete }) {
   const [editingTitle, setEditingTitle] = useState(false)
   const [editingContent, setEditingContent] = useState(false)
   const [localTitle, setLocalTitle] = useState(node.data.title)
@@ -270,6 +270,7 @@ function FeedCard({ node, nodeMap, parentMap, onSave, onEditStart, onEditEnd, on
             >⊕</NodeIconUpload>
             <button className="feed-card__action-btn" onClick={startContentEdit} title="Edit">✎</button>
             <button className="feed-card__action-btn" onClick={() => onGoToMap(node.id)} title="Open in map">↗</button>
+            <button className="feed-card__action-btn feed-card__action-btn--delete" onClick={() => onDelete(node)} title="Delete node">✕</button>
           </div>
         )}
       </div>
@@ -318,6 +319,109 @@ function FeedCard({ node, nodeMap, parentMap, onSave, onEditStart, onEditEnd, on
   )
 }
 
+/* ── FeedGroupHeader ───────────────────────────────────────────────── */
+
+function FeedGroupHeader({ node, cardProps }) {
+  const { onSave, onEditStart, onEditEnd, onGoToMap, onIconSave, onDelete } = cardProps
+  const [hovered, setHovered] = useState(false)
+  const [editingTitle, setEditingTitle] = useState(false)
+  const [localTitle, setLocalTitle] = useState(node.data.title)
+  const [localLongTitle, setLocalLongTitle] = useState(node.data.longTitle || '')
+  const titleHandledRef = useRef(false)
+  const longTitleInputRef = useRef(null)
+
+  const localTitleRef = useRef(localTitle)
+  useEffect(() => { localTitleRef.current = localTitle }, [localTitle])
+  const localLongTitleRef = useRef(localLongTitle)
+  useEffect(() => { localLongTitleRef.current = localLongTitle }, [localLongTitle])
+
+  const commitTitle = () => {
+    const trimmedTitle = localTitleRef.current.trim() || node.data.title
+    const trimmedLongTitle = localLongTitleRef.current.trim()
+    setLocalTitle(trimmedTitle)
+    setLocalLongTitle(trimmedLongTitle)
+    const changes = {}
+    if (trimmedTitle !== node.data.title) changes.title = trimmedTitle
+    if (trimmedLongTitle !== (node.data.longTitle || '')) changes.longTitle = trimmedLongTitle
+    if (Object.keys(changes).length > 0) onSave(node, changes)
+  }
+
+  const startEdit = () => {
+    if (!localLongTitle) setLocalLongTitle(localTitle)
+    setEditingTitle(true)
+    onEditStart(
+      () => { if (titleHandledRef.current) return; titleHandledRef.current = true; setEditingTitle(false); onEditEnd(); commitTitle() },
+      () => { if (titleHandledRef.current) return; titleHandledRef.current = true; setLocalTitle(node.data.title); setLocalLongTitle(node.data.longTitle || ''); setEditingTitle(false); onEditEnd() }
+    )
+    // focus after render
+    setTimeout(() => longTitleInputRef.current?.focus(), 0)
+  }
+
+  const commitOnBlur = (e) => {
+    if (e.currentTarget.contains(e.relatedTarget)) return
+    if (titleHandledRef.current) { titleHandledRef.current = false; return }
+    setEditingTitle(false)
+    onEditEnd()
+    commitTitle()
+  }
+
+  const cancelOnEscape = () => {
+    if (titleHandledRef.current) return
+    titleHandledRef.current = true
+    setLocalTitle(node.data.title)
+    setLocalLongTitle(node.data.longTitle || '')
+    setEditingTitle(false)
+    onEditEnd()
+  }
+
+  const displayTitle = localLongTitle || localTitle
+
+  return (
+    <div
+      className="feed-group-header-wrap"
+      data-level={node.data.level}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      {node.data.iconUrl && (
+        <NodeIconDisplay iconUrl={node.data.iconUrl} className="feed-card__icon" />
+      )}
+      {editingTitle ? (
+        <div
+          className="feed-group-header__title-edit"
+          onBlur={commitOnBlur}
+        >
+          <input
+            ref={longTitleInputRef}
+            className="feed-card__title-input feed-card__title-input--long"
+            value={localLongTitle}
+            onChange={(e) => setLocalLongTitle(e.target.value)}
+            placeholder="Long title…"
+            onKeyDown={(e) => { if (e.key === 'Escape') cancelOnEscape() }}
+          />
+          <input
+            className="feed-card__title-input feed-card__title-input--short"
+            value={localTitle}
+            onChange={(e) => setLocalTitle(e.target.value)}
+            placeholder="Short title (shown on map)…"
+            onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); if (e.key === 'Escape') cancelOnEscape() }}
+          />
+        </div>
+      ) : (
+        <span className="feed-group-header__title">{displayTitle}</span>
+      )}
+      {(hovered || editingTitle) && (
+        <div className="feed-card__actions feed-group-header__actions">
+          <NodeIconUpload iconUrl={node.data.iconUrl} onUpload={(url) => onIconSave(node, url)} className="feed-card__action-btn">⊕</NodeIconUpload>
+          <button className="feed-card__action-btn" onClick={startEdit} title="Edit title">✎</button>
+          <button className="feed-card__action-btn" onClick={() => onGoToMap(node.id)} title="Open in map">↗</button>
+          <button className="feed-card__action-btn feed-card__action-btn--delete" onClick={() => onDelete(node)} title="Delete node">✕</button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 /* ── FeedSection (recursive group renderer) ───────────────────────── */
 
 function FeedSection({ items, paletteIndex = 0, cardProps }) {
@@ -326,12 +430,9 @@ function FeedSection({ items, paletteIndex = 0, cardProps }) {
       return <FeedCard key={item.node.id} node={item.node} {...cardProps} />
     }
     // group
-    const title = item.node.data.longTitle || item.node.data.title
     return (
       <div key={item.node.id} className="feed-group-section">
-        <div className="feed-group-header" data-level={item.node.data.level}>
-          {title}
-        </div>
+        <FeedGroupHeader node={item.node} cardProps={cardProps} />
         {item.node.data.content?.trim() && (
           <div className="feed-group-section__inline-content">
             <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents} urlTransform={urlTransform}>
@@ -484,12 +585,45 @@ export default function FeedView() {
     handleSave(node, { iconUrl })
   }, [handleSave])
 
+  const handleDelete = useCallback(async (node) => {
+    if (!confirm(`Delete "${node.data.title || 'Untitled'}"?`)) return
+    // Update local feed state immediately
+    setAllNodes((prev) => prev.filter((n) => n.id !== node.id))
+    setAllEdges((prev) => prev.filter((e) => e.source !== node.id && e.target !== node.id))
+    // If this node is in the currently open map, update the store too
+    if (node._feedMapId === currentMapId) {
+      useMindMapStore.setState((state) => ({
+        nodes: state.nodes.filter((n) => n.id !== node.id),
+        edges: state.edges.filter((e) => e.source !== node.id && e.target !== node.id),
+        isDirty: true,
+      }))
+    }
+    // Persist: remove from nodes table and from map data
+    try {
+      await supabase.from('nodes').delete().eq('id', node.id)
+      const { data: map } = await supabase
+        .from('maps').select('data').eq('id', node._feedMapId).single()
+      if (map) {
+        const updatedNodes = map.data.nodes.filter((n) => n.id !== node.id)
+        const updatedEdges = (map.data.edges || []).filter(
+          (e) => e.source !== node.id && e.target !== node.id
+        )
+        await supabase
+          .from('maps')
+          .update({ data: { ...map.data, nodes: updatedNodes, edges: updatedEdges } })
+          .eq('id', node._feedMapId)
+      }
+    } catch (err) {
+      console.error('Feed delete failed:', err)
+    }
+  }, [currentMapId])
+
   if (loading) return <div className="feed-view"><div className="feed-empty"><p>Loading feed…</p></div></div>
   if (error)   return <div className="feed-view"><div className="feed-empty"><p>{error}</p></div></div>
   if (!currentMapId) return <div className="feed-view"><div className="feed-empty"><p>No map selected.</p></div></div>
   if (orderedNodes.length === 0) return <div className="feed-view"><div className="feed-empty"><p>No nodes found in this map.</p></div></div>
 
-  const cardProps = { nodeMap, parentMap, onSave: handleSave, onEditStart: handleEditStart, onEditEnd: handleEditEnd, onGoToMap: handleGoToMap, onIconSave: handleIconSave }
+  const cardProps = { nodeMap, parentMap, onSave: handleSave, onEditStart: handleEditStart, onEditEnd: handleEditEnd, onGoToMap: handleGoToMap, onIconSave: handleIconSave, onDelete: handleDelete }
 
   return (
     <div className="feed-view">

@@ -385,7 +385,18 @@ const MindMapCanvas = () => {
           .map((id) => nodeById[id])
           .filter((n) => n && !hiddenNodeIds.has(n.id))
 
-        if (visibleChildren.length === 0) return
+        if (visibleChildren.length === 0) {
+          // No visible children (e.g. all collapsed, or node has no children).
+          // Give the group a minimum layout at its current position so it stays
+          // visible rather than collapsing to zero height.
+          groupLayouts[groupId] = {
+            x: groupNode?.position?.x ?? 0,
+            y: groupNode?.position?.y ?? 0,
+            width: 180,
+            height: 80,
+          }
+          return
+        }
 
         let minX = Infinity
         let minY = Infinity

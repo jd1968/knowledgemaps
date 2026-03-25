@@ -131,7 +131,10 @@ const CustomNode = memo(({ id, data, selected }) => {
       setEdgeType(id, 'pointer-edge')
     } else {
       if (nodeType === 'pointer') setEdgeType(id, 'straight-center')
-      updateNodeData(id, { nodeType: newType })
+      // When converting to group, clear collapsed so the group's children are
+      // visible and the group layout can compute a size.
+      const extra = newType === 'group' ? { collapsed: false } : {}
+      updateNodeData(id, { nodeType: newType, ...extra })
     }
     setShowConvertMenu(false); setOpenMenuNodeId(null)
   }, [nodeType, title, id, hasChildren, convertToSubmap, updateNodeData, setEdgeType, setOpenMenuNodeId])
@@ -465,12 +468,13 @@ const CustomNode = memo(({ id, data, selected }) => {
         </button>
       )}
 
-      {/* Icon upload — shown on hover in edit mode for non-root nodes */}
-      {hovered && isEditMode && level > 0 && !editing && (
+      {/* Icon upload — always rendered in edit mode so the portal input stays
+          mounted during file-picker use; visibility toggled via CSS */}
+      {isEditMode && level > 0 && !editing && (
         <NodeIconUpload
           iconUrl={iconUrl}
           onUpload={(url) => updateNodeData(id, { iconUrl: url })}
-          className="node-icon-upload-btn nodrag nopan"
+          className={`node-icon-upload-btn nodrag nopan${hovered ? '' : ' node-icon-upload-btn--hidden'}`}
         >
           ⊕
         </NodeIconUpload>
