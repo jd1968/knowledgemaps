@@ -14,9 +14,27 @@ const ImageIcon = () => (
   </svg>
 )
 
+const NoteIcon = () => (
+  <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+    <path d="M2 2h18v14l-4 4H2V2z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+    <path d="M16 16v4l4-4h-4z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+    <line x1="5" y1="7" x2="17" y2="7" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+    <line x1="5" y1="11" x2="17" y2="11" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+    <line x1="5" y1="15" x2="12" y2="15" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+  </svg>
+)
+
+const TextIcon = () => (
+  <svg width="24" height="16" viewBox="0 0 24 16" fill="none">
+    <text x="0" y="13" fontFamily="serif" fontSize="16" fontWeight="bold" fill="currentColor">Aa</text>
+  </svg>
+)
+
 const ITEMS = [
   { type: 'node',  label: 'Node',  Icon: NodeIcon },
   { type: 'image', label: 'Image', Icon: ImageIcon },
+  { type: 'note',  label: 'Note',  Icon: NoteIcon },
+  { type: 'text',  label: 'Text',  Icon: TextIcon },
 ]
 
 const ToolboxItem = ({ type, label, Icon, isEditMode, isActive }) => {

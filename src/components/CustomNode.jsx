@@ -60,11 +60,12 @@ const CustomNode = memo(({ id, data, selected }) => {
   const selectTimerRef = useRef(null)
   const nodeRef        = useRef(null)
 
-  const { title, level, l1Color, hasChildren, collapsed, hasCollapsibleDescendants, allDescendantsCollapsed, isSubmap, submapId, hasNotes, nodeType, groupSize, content, isTodo = false, groupNestingLevel = 0, iconUrl = '', imageUrl = '', imageBorder = false } = data
+  const { title, level, l1Color, hasChildren, collapsed, hasCollapsibleDescendants, allDescendantsCollapsed, isSubmap, submapId, hasNotes, nodeType, groupSize, content, isTodo = false, groupNestingLevel = 0, iconUrl = '', imageUrl = '', imageBorder = false, textSize = 'm' } = data
   const cfg         = getConfig(level)
   const borderColor = l1Color ?? '#94a3b8'
-  const width       = nodeType === 'image' ? '100%' : (groupSize?.width ?? cfg.width)
-  const height      = nodeType === 'image' ? '100%' : (groupSize?.height ?? (['note', 'pointer'].includes(nodeType) ? null : cfg.height))
+  const TEXT_SIZES  = { s: 14, m: 22, l: 36 }
+  const width       = ['image', 'note'].includes(nodeType) ? '100%' : nodeType === 'text' ? 'auto' : (groupSize?.width ?? cfg.width)
+  const height      = ['image', 'note'].includes(nodeType) ? '100%' : (nodeType === 'pointer' || nodeType === 'text' ? null : (groupSize?.height ?? cfg.height))
   const showGroupHeader   = nodeType === 'group' && !!title?.trim()
   const hasPointerContent = nodeType === 'pointer' && content && content.trim() !== ''
   const isReparentSource = reparentSourceNodeId === id
@@ -228,6 +229,7 @@ const CustomNode = memo(({ id, data, selected }) => {
       }}
       onDoubleClick={(e) => {
         if (!isEditMode) return
+        if (nodeType === 'note') return
         e.stopPropagation()
         clearTimeout(selectTimerRef.current) // cancel pending modal open
         startEditing()
@@ -239,42 +241,44 @@ const CustomNode = memo(({ id, data, selected }) => {
         flexDirection: 'column',
         background: level === 0
           ? '#3a3a3a'
-          : nodeType === 'image'
+          : nodeType === 'image' || nodeType === 'text'
             ? 'transparent'
           : nodeType === 'group'
             ? blendWithWhite(borderColor, Math.min(0.08 + groupNestingLevel * 0.1, 0.42))
             : isSubmap
               ? blendWithWhite(borderColor, 0.08)
             : nodeType === 'note'
-              ? 'repeating-linear-gradient(to bottom, #ffffff 0px, #ffffff 17px, #e8edf2 17px, #e8edf2 18px)'
+              ? '#fef9c3'
             : nodeType === 'pointer'
               ? blendWithWhite(borderColor, 0.05)
             : '#ffffff',
         border: level === 0
           ? 'none'
+          : nodeType === 'text'
+            ? 'none'
           : nodeType === 'image'
             ? (imageBorder ? `1.5px solid ${borderColor}` : 'none')
           : nodeType === 'note'
-            ? `1px solid ${borderColor}90`
+            ? 'none'
             : nodeType === 'group'
               ? `2px solid ${borderColor}90`
             : nodeType === 'pointer'
               ? `1px solid ${borderColor}40`
               : `2px ${isSubmap ? 'dashed' : 'solid'} ${borderColor}`,
         ...(nodeType === 'pointer' ? { borderLeft: `3px solid ${borderColor}` } : {}),
-        borderRadius: level === 0 ? '50px' : nodeType === 'note' ? '2px' : nodeType === 'group' ? '12px' : nodeType === 'pointer' ? '8px' : '10px',
+        borderRadius: level === 0 ? '50px' : nodeType === 'note' ? '1px 1px 1px 4px' : nodeType === 'group' ? '12px' : nodeType === 'pointer' ? '8px' : '10px',
         fontSize: cfg.fontSize,
         fontWeight: cfg.fontWeight,
         color: level === 0 ? '#ffffff' : '#1c1917',
         cursor: reparentSourceNodeId ? 'copy' : (editing ? 'text' : 'pointer'),
-        boxShadow: nodeType === 'image'
+        boxShadow: nodeType === 'image' || nodeType === 'text'
           ? (selected ? `0 0 0 2px ${borderColor}60` : hovered ? `0 0 0 1.5px ${borderColor}40` : 'none')
           : selected
             ? `0 0 0 3px ${borderColor}40, 2px 4px 14px rgba(0,0,0,0.18)`
             : hovered
               ? `0 0 0 2px ${borderColor}70, 2px 4px 10px rgba(0,0,0,0.12)`
               : nodeType === 'note'
-                ? '1px 2px 6px rgba(0,0,0,0.09)'
+                ? '3px 4px 10px rgba(0,0,0,0.18), 1px 1px 0 rgba(0,0,0,0.06)'
                 : '0 2px 8px rgba(0,0,0,0.08)',
         transition: 'box-shadow 0.15s ease',
         userSelect: 'none',
@@ -340,6 +344,66 @@ const CustomNode = memo(({ id, data, selected }) => {
         </div>
       )}
 
+      {/* Sticky note body */}
+      {nodeType === 'note' && (
+        <div className="sticky-note-body">
+          <NodeResizer
+            isVisible={isEditMode && (selected || hovered)}
+            minWidth={100}
+            minHeight={80}
+            onResizeEnd={() => scheduleAutosave()}
+          />
+          {title?.trim() && (
+            <div className="sticky-note-title">{title}</div>
+          )}
+          {content?.trim() ? (
+            <div className="sticky-note-text sticky-note-markdown">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+            </div>
+          ) : !title?.trim() && (
+            <p className="sticky-note-text"><span className="sticky-note-placeholder">Click to edit…</span></p>
+          )}
+        </div>
+      )}
+
+      {/* Text node body */}
+      {nodeType === 'text' && (
+        <div className="text-node-body">
+          {editing ? (
+            <input
+              ref={inputRef}
+              className="nodrag nopan"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onBlur={commitEdit}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') { e.preventDefault(); commitEdit() }
+                if (e.key === 'Escape') { e.preventDefault(); cancelEdit() }
+                e.stopPropagation()
+              }}
+              style={{ fontSize: TEXT_SIZES[textSize], fontWeight: 600, color: borderColor, background: 'transparent', border: 'none', outline: 'none', fontFamily: 'inherit', width: '100%', minWidth: 60 }}
+            />
+          ) : (
+            <span className="text-node-label" style={{ fontSize: TEXT_SIZES[textSize], color: borderColor }}>
+              {title?.trim() || <span style={{ opacity: 0.35 }}>Text</span>}
+            </span>
+          )}
+          {isEditMode && hovered && !editing && (
+            <div className="text-node-size-toggle nodrag nopan" onPointerDown={(e) => e.stopPropagation()}>
+              {['s', 'm', 'l'].map((s) => (
+                <button
+                  key={s}
+                  className={`text-node-size-btn${textSize === s ? ' text-node-size-btn--active' : ''}`}
+                  onClick={(e) => { e.stopPropagation(); updateNodeData(id, { textSize: s }) }}
+                >
+                  {s.toUpperCase()}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Header — title (or pointer callout layout) */}
       {nodeType === 'pointer' ? (
         <div style={{ flex: 1 }}>
@@ -388,7 +452,7 @@ const CustomNode = memo(({ id, data, selected }) => {
             </>
           )}
         </div>
-      ) : (nodeType !== 'group' || showGroupHeader) && nodeType !== 'image' && (
+      ) : (nodeType !== 'group' || showGroupHeader) && nodeType !== 'image' && nodeType !== 'note' && nodeType !== 'text' && (
         <div style={{
           flex: nodeType === 'group' ? '0 0 auto' : 1,
           display: 'flex',
@@ -493,7 +557,7 @@ const CustomNode = memo(({ id, data, selected }) => {
         </button>
       )}
 
-      {!editing && !collapsed && !isSubmap && nodeType !== 'note' && nodeType !== 'pointer' && nodeType !== 'image' && isEditMode && (
+      {!editing && !collapsed && !isSubmap && nodeType !== 'note' && nodeType !== 'pointer' && nodeType !== 'image' && nodeType !== 'text' && isEditMode && (
         <button
           className="add-child-btn"
           title="Add child node"
@@ -526,7 +590,7 @@ const CustomNode = memo(({ id, data, selected }) => {
 
       {/* Icon upload — always rendered in edit mode so the portal input stays
           mounted during file-picker use; visibility toggled via CSS */}
-      {isEditMode && level > 0 && !editing && nodeType !== 'image' && (
+      {isEditMode && level > 0 && !editing && nodeType !== 'image' && nodeType !== 'note' && nodeType !== 'text' && (
         <NodeIconUpload
           iconUrl={iconUrl}
           onUpload={(url) => updateNodeData(id, { iconUrl: url })}
