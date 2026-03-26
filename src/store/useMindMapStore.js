@@ -168,35 +168,7 @@ export const useMindMapStore = create((set, get) => ({
     get().scheduleAutosave()
   },
 
-  setDescendantsCollapsed: (nodeId, collapse) => {
-    if (!get().isEditMode) return
-    const { edges } = get()
-    const childrenMap = {}
-    edges.forEach(e => {
-      if (!childrenMap[e.source]) childrenMap[e.source] = []
-      childrenMap[e.source].push(e.target)
-    })
-    // Collect the node itself and all descendants that have children
-    const toUpdate = new Set()
-    if (childrenMap[nodeId]?.length) toUpdate.add(nodeId)
-    const collect = (id) => {
-      ;(childrenMap[id] || []).forEach(kid => {
-        if (childrenMap[kid]?.length) toUpdate.add(kid)
-        collect(kid)
-      })
-    }
-    collect(nodeId)
-    if (toUpdate.size === 0) return
-    get().pushHistory()
-    set((state) => ({
-      nodes: state.nodes.map(node =>
-        toUpdate.has(node.id)
-          ? { ...node, data: { ...node.data, collapsed: collapse } }
-          : node
-      ),
-      isDirty: true,
-    }))
-    get().scheduleAutosave()
+  setDescendantsCollapsed: () => {
   },
 
   setEdgeType: (targetNodeId, edgeType) => {
@@ -475,7 +447,6 @@ export const useMindMapStore = create((set, get) => ({
         // Clear submap pointer fields — nodes are "real" inside the submap
         isSubmap: undefined,
         submapId: undefined,
-        collapsed: n.id === nodeId ? false : n.data.collapsed,
       },
     }))
 
@@ -518,7 +489,7 @@ export const useMindMapStore = create((set, get) => ({
           .filter((n) => !descendantIds.has(n.id))
           .map((n) =>
             n.id === nodeId
-              ? { ...n, data: { ...n.data, isSubmap: true, submapId: newMap.id, nodeType: 'submap', collapsed: false } }
+              ? { ...n, data: { ...n.data, isSubmap: true, submapId: newMap.id, nodeType: 'submap' } }
               : n
           ),
         edges: state.edges.filter(
@@ -598,10 +569,7 @@ export const useMindMapStore = create((set, get) => ({
     get().pushHistory()
 
     const parentLevel = parent.data.level ?? 0
-    const isGroupParent = parent.data.nodeType === 'group'
     const childLevel = parentLevel + 1
-    const NODE_WIDTHS = [190, 160, 135, 115]
-    const parentWidth = NODE_WIDTHS[Math.min(parentLevel, 3)]
 
     // Find existing children of this parent to stack below them
     const childIds = new Set(
@@ -609,44 +577,19 @@ export const useMindMapStore = create((set, get) => ({
     )
     const childNodes = nodes.filter((n) => childIds.has(n.id))
 
-    const hGap = 70
-    const vSpacing = 70
-    const groupPaddingX = 24
-    const groupPaddingTop = parent.data.title?.trim() ? 58 : 16
+    // Place child inside the parent node
+    const NEST_PAD_LEFT = 16
+    const NEST_PAD_TOP = 58  // approx header height
+    const V_SPACING = 8
 
-    // Check if parent lives inside a group (walk up the edge tree)
-    const parentEdgeMap = {}
-    edges.forEach((e) => { parentEdgeMap[e.target] = e.source })
-    let ancestor = parentEdgeMap[parentId]
-    let isInsideGroup = false
-    while (ancestor) {
-      const an = nodes.find((n) => n.id === ancestor)
-      if (an?.data?.nodeType === 'group') { isInsideGroup = true; break }
-      ancestor = parentEdgeMap[ancestor]
-    }
+    let x = parent.position.x + NEST_PAD_LEFT
+    let y = parent.position.y + NEST_PAD_TOP
 
-    let x = parent.position.x + parentWidth + hGap
-    let y = parent.position.y
-
-    if (isGroupParent) {
-      x = parent.position.x + groupPaddingX
-      y = parent.position.y + groupPaddingTop
-      if (childNodes.length > 0) {
-        const sorted = [...childNodes].sort((a, b) => a.position.y - b.position.y)
-        y = sorted[sorted.length - 1].position.y + vSpacing
-      }
-    } else if (isInsideGroup) {
-      // Indent right of parent to show hierarchy, stacked below existing children
-      const childIndent = 24
-      x = parent.position.x + childIndent
-      y = parent.position.y + vSpacing
-      if (childNodes.length > 0) {
-        const sorted = [...childNodes].sort((a, b) => a.position.y - b.position.y)
-        y = sorted[sorted.length - 1].position.y + vSpacing
-      }
-    } else if (childNodes.length > 0) {
+    if (childNodes.length > 0) {
       const sorted = [...childNodes].sort((a, b) => a.position.y - b.position.y)
-      y = sorted[sorted.length - 1].position.y + vSpacing
+      const last = sorted[sorted.length - 1]
+      const lastHeight = last.data?.level >= 3 ? 76 : last.data?.level >= 2 ? 88 : 48
+      y = last.position.y + lastHeight + V_SPACING
     }
 
     const id = uuidv4()
@@ -668,12 +611,7 @@ export const useMindMapStore = create((set, get) => ({
 
     set((state) => ({
       nodes: [
-        ...state.nodes.map((n) => {
-          if (n.id === parentId && n.data.nodeType === 'node') {
-            return { ...n, selected: false, data: { ...n.data, nodeType: 'group' } }
-          }
-          return { ...n, selected: false }
-        }),
+        ...state.nodes.map((n) => ({ ...n, selected: false })),
         newNode,
       ],
       edges: [...state.edges, newEdge],
@@ -710,7 +648,6 @@ export const useMindMapStore = create((set, get) => ({
 
     const newParentNode = nodes.find(n => n.id === newParentId)
     const newParentLevel = newParentNode?.data?.level ?? 0
-    const isGroupParent = newParentNode?.data?.nodeType === 'group'
 
     // Preserve the existing edge type (e.g. pointer-edge) when reparenting
     const existingEdgeType = currentParentEdge?.type ?? 'straight-center'
@@ -736,50 +673,28 @@ export const useMindMapStore = create((set, get) => ({
     }
     assignLevels(nodeId, newParentLevel + 1)
 
-    set(state => {
-      const groupPaddingX = 24
-      const groupPaddingTop = newParentNode?.data?.title?.trim() ? 58 : 16
-      const vSpacing = 70
+    // Position the moved node inside the new parent
+    const NEST_PAD_LEFT = 16
+    const NEST_PAD_TOP = 58
+    const V_SPACING = 8
+    const existingSiblingCount = newEdges.filter(e => e.source === newParentId && e.target !== nodeId).length
+    const newX = newParentNode.position.x + NEST_PAD_LEFT
+    const newY = newParentNode.position.y + NEST_PAD_TOP + existingSiblingCount * (88 + V_SPACING)
 
-      let reparentedNodeY = null
-      if (isGroupParent) {
-        const siblingIds = newEdges
-          .filter(e => e.source === newParentId && e.target !== nodeId)
-          .map(e => e.target)
-        const siblingNodes = state.nodes.filter(n => siblingIds.includes(n.id))
-        reparentedNodeY = siblingNodes.length
-          ? Math.max(...siblingNodes.map(n => n.position.y)) + vSpacing
-          : (newParentNode?.position?.y ?? 0) + groupPaddingTop
-      }
-
-      return {
-        nodes: state.nodes.map(n => {
-          const nextLevel = levelMap[n.id]
-          if (n.id === newParentId && n.data.nodeType === 'node') {
-            return { ...n, data: { ...n.data, nodeType: 'group' } }
-          }
-          if (n.id === nodeId && isGroupParent) {
-            return {
-              ...n,
-              position: {
-                x: (newParentNode?.position?.x ?? 0) + groupPaddingX,
-                y: reparentedNodeY ?? n.position.y,
-              },
-              data: {
-                ...n.data,
-                ...(nextLevel !== undefined ? { level: nextLevel } : {}),
-              },
-            }
-          }
-          if (nextLevel !== undefined) {
-            return { ...n, data: { ...n.data, level: nextLevel } }
-          }
-          return n
-        }),
-        edges: newEdges,
-        isDirty: true,
-      }
-    })
+    set(state => ({
+      nodes: state.nodes.map(n => {
+        const nextLevel = levelMap[n.id]
+        if (n.id === nodeId) {
+          return { ...n, position: { x: newX, y: newY }, data: { ...n.data, level: levelMap[n.id] ?? n.data.level } }
+        }
+        if (nextLevel !== undefined) {
+          return { ...n, data: { ...n.data, level: nextLevel } }
+        }
+        return n
+      }),
+      edges: newEdges,
+      isDirty: true,
+    }))
 
     get().scheduleAutosave()
   },

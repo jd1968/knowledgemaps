@@ -8,9 +8,11 @@ function buildMarkdown(nodes, edges, mapName) {
   nodes.forEach(n => { nodeById[n.id] = n })
 
   const childrenOf = {}
+  const hasParent = new Set()
   edges.forEach(e => {
     if (!childrenOf[e.source]) childrenOf[e.source] = []
     childrenOf[e.source].push(e.target)
+    hasParent.add(e.target)
   })
 
   const lines = [`# ${mapName}`, '']
@@ -18,12 +20,22 @@ function buildMarkdown(nodes, edges, mapName) {
   const rootNode = nodes.find(n => n.data?.level === 0) ?? nodes[0]
   if (!rootNode) return lines.join('\n')
 
+  const CANVAS_ONLY = new Set(['image', 'text', 'note'])
+  const visited = new Set([rootNode.id])
   const visit = (nodeId, depth) => {
+    if (visited.has(nodeId)) return
+    visited.add(nodeId)
     const node = nodeById[nodeId]
     if (!node) return
+    if (CANVAS_ONLY.has(node.data?.nodeType)) {
+      // Still visit children in case they're content nodes
+      const kids = (childrenOf[nodeId] ?? []).map(id => nodeById[id]).filter(Boolean)
+      kids.forEach(k => visit(k.id, depth))
+      return
+    }
 
     const title = node.data?.title || 'Untitled'
-    const nodeType = node.data?.nodeType || 'node'
+    const nodeType = (node.data?.nodeType === 'folder' ? 'node' : node.data?.nodeType) || 'node'
     const typeSuffix = nodeType !== 'node' ? ` *(${nodeType})*` : ''
 
     const headingLevel = Math.min(depth + 1, 6)
@@ -44,6 +56,12 @@ function buildMarkdown(nodes, edges, mapName) {
     .filter(Boolean)
     .sort((a, b) => (a.position?.y ?? 0) - (b.position?.y ?? 0))
   rootKids.forEach(k => visit(k.id, 1))
+
+  // Also include level-1 nodes with no parent edge (placed without edge to root)
+  nodes
+    .filter(n => n.data?.level === 1 && !hasParent.has(n.id) && !visited.has(n.id))
+    .sort((a, b) => (a.position?.y ?? 0) - (b.position?.y ?? 0))
+    .forEach(n => visit(n.id, 1))
 
   return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim()
 }

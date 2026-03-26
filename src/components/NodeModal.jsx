@@ -141,7 +141,6 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
       isSubmap: true,
       submapId: map.id,
       nodeType: 'submap',
-      collapsed: false,
     })
     setShowSubmapChoice(false)
     setShowConvertMenu(false)

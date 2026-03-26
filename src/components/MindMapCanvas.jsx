@@ -41,15 +41,13 @@ const DEFAULT_NODE_SIZE = {
   2: { width: 150, height: 88 },
   3: { width: 130, height: 76 },
 }
-const GROUP_PADDING_X = 16
-const GROUP_PADDING_TOP_WITH_HEADER = 58
-const GROUP_PADDING_TOP_NO_HEADER = 16
-const GROUP_PADDING_BOTTOM = 24
+const NEST_PAD_LEFT = 16
+const NEST_PAD_RIGHT = 16
+const NEST_PAD_TOP = 58
+const NEST_PAD_BOTTOM = 24
 
 const getStableNodeSize = (node) => {
-  if (node?.data?.nodeType === 'group' && node?.data?.groupSize) {
-    return node.data.groupSize
-  }
+  if (node?.data?.groupSize) return node.data.groupSize
   const level = Math.min(Math.max(node?.data?.level ?? 1, 0), 3)
   return DEFAULT_NODE_SIZE[level]
 }
@@ -207,7 +205,6 @@ const MindMapCanvas = () => {
     deselectNode,
     reparentNode,
     moveSubtreeBy,
-    scheduleAutosave,
     addNode,
     isEditMode,
     openMenuNodeId,
@@ -278,19 +275,6 @@ const MindMapCanvas = () => {
     return map
   }, [edges])
 
-  // All node IDs that should be hidden (descendants of any collapsed node)
-  const hiddenNodeIds = useMemo(() => {
-    const hidden = new Set()
-    const collect = (nodeId) => {
-      ;(childrenMap[nodeId] || []).forEach(childId => {
-        hidden.add(childId)
-        collect(childId)
-      })
-    }
-    nodes.forEach(node => { if (node.data?.collapsed) collect(node.id) })
-    return hidden
-  }, [nodes, childrenMap])
-
   // Fast node lookup for descendant checks
   const nodeById = useMemo(() => {
     const map = {}
@@ -298,236 +282,131 @@ const MindMapCanvas = () => {
     return map
   }, [nodes])
 
-  // Nodes that have at least one descendant which itself has children (i.e. can offer collapse-all)
-  const hasCollapsibleDescendantsSet = useMemo(() => {
-    const result = new Set()
-    const markAncestors = (nodeId) => {
-      let cur = parentMap[nodeId]
-      while (cur) {
-        if (result.has(cur)) break
-        result.add(cur)
-        cur = parentMap[cur]
-      }
-    }
-    nodes.forEach(node => {
-      if (childrenMap[node.id]?.length) markAncestors(node.id)
-    })
-    return result
-  }, [nodes, childrenMap, parentMap])
-
-  // For each node with collapsible descendants, are ALL of those descendants currently collapsed?
-  const allDescendantsCollapsedSet = useMemo(() => {
-    const result = new Set()
-    nodes.forEach(node => {
-      if (!hasCollapsibleDescendantsSet.has(node.id)) return
-      let allCollapsed = true
-      const stack = [...(childrenMap[node.id] || [])]
-      const visited = new Set()
-      outer: while (stack.length > 0) {
-        const curr = stack.pop()
-        if (visited.has(curr)) continue
-        visited.add(curr)
-        const kids = childrenMap[curr] || []
-        if (kids.length > 0 && !nodeById[curr]?.data?.collapsed) {
-          allCollapsed = false
-          break outer
-        }
-        stack.push(...kids)
-      }
-      if (allCollapsed) result.add(node.id)
-    })
-    return result
-  }, [nodes, childrenMap, hasCollapsibleDescendantsSet, nodeById])
-
-  // Inject display-only props into node data; apply hidden flag
+  // Compute nested layout: every non-root parent node expands to visually contain its children
   const nodesWithColor = useMemo(() => {
-    const groupChildrenMap = {}
-    nodes.forEach((n) => {
-      if (n.data?.nodeType === 'group') groupChildrenMap[n.id] = []
+    // All nodes that have children (excluding root — it's hidden and L1 nodes float freely)
+    const parentChildrenMap = {}
+    edges.forEach(e => {
+      if (!parentChildrenMap[e.source]) parentChildrenMap[e.source] = []
+      parentChildrenMap[e.source].push(e.target)
     })
-    edges.forEach((e) => {
-      if (groupChildrenMap[e.source]) groupChildrenMap[e.source].push(e.target)
-    })
+    const parentIdSet = new Set(
+      Object.keys(parentChildrenMap).filter(id => id !== rootId && parentChildrenMap[id].length > 0)
+    )
 
-    // Process groups innermost-first so outer groups can use sub-group computed layouts
-    const groupIdSet = new Set(Object.keys(groupChildrenMap))
-    const groupDepth = {}
-    const computeGroupDepth = (id) => {
-      if (id in groupDepth) return groupDepth[id]
+    // Process innermost parents first so outer parents can use sub-parent computed bounds
+    const nestDepth = {}
+    const computeDepth = (id) => {
+      if (id in nestDepth) return nestDepth[id]
       let max = 0
-      ;(groupChildrenMap[id] || []).forEach(childId => {
-        if (groupIdSet.has(childId)) max = Math.max(max, computeGroupDepth(childId) + 1)
+      ;(parentChildrenMap[id] || []).forEach(cid => {
+        if (parentIdSet.has(cid)) max = Math.max(max, computeDepth(cid) + 1)
       })
-      groupDepth[id] = max
+      nestDepth[id] = max
       return max
     }
-    groupIdSet.forEach(id => computeGroupDepth(id))
+    parentIdSet.forEach(id => computeDepth(id))
 
-    const groupLayouts = {}
-    Object.entries(groupChildrenMap)
-      .sort(([a], [b]) => groupDepth[a] - groupDepth[b])
-      .forEach(([groupId, childIds]) => {
-        const groupNode = nodeById[groupId]
-        const hasGroupHeader = !!groupNode?.data?.title?.trim()
-        const topPadding = hasGroupHeader ? GROUP_PADDING_TOP_WITH_HEADER : GROUP_PADDING_TOP_NO_HEADER
+    const layouts = {}
+    Array.from(parentIdSet)
+      .sort((a, b) => (nestDepth[a] ?? 0) - (nestDepth[b] ?? 0))
+      .forEach(parentId => {
+        const parentNode = nodeById[parentId]
+        const childIds = parentChildrenMap[parentId] || []
 
-        // Collect descendants; stop at sub-groups that already have computed layouts —
-        // their full bounds (including padding) are captured via groupLayouts[id] below.
-        const allDescendantIds = []
-        const collectDescendants = (ids) => {
-          ids.forEach((cid) => {
-            allDescendantIds.push(cid)
-            if (groupIdSet.has(cid) && groupLayouts[cid]) return
-            const grandchildren = childrenMap[cid]
-            if (grandchildren?.length) collectDescendants(grandchildren)
+        // Collect all descendants, using sub-parent layout bounds for already-computed sub-parents
+        const allDescIds = []
+        const collectDesc = (ids) => {
+          ids.forEach(cid => {
+            allDescIds.push(cid)
+            if (parentIdSet.has(cid) && layouts[cid]) return
+            const grandkids = parentChildrenMap[cid]
+            if (grandkids?.length) collectDesc(grandkids)
           })
         }
-        collectDescendants(childIds)
+        collectDesc(childIds)
 
-        const visibleChildren = allDescendantIds
-          .map((id) => nodeById[id])
-          .filter((n) => n && !hiddenNodeIds.has(n.id))
-
-        if (visibleChildren.length === 0) {
-          // No visible children (e.g. all collapsed, or node has no children).
-          // Give the group a minimum layout at its current position so it stays
-          // visible rather than collapsing to zero height.
-          groupLayouts[groupId] = {
-            x: groupNode?.position?.x ?? 0,
-            y: groupNode?.position?.y ?? 0,
-            width: 180,
-            height: 80,
-          }
+        const children = allDescIds.map(id => nodeById[id]).filter(Boolean)
+        if (children.length === 0) {
+          layouts[parentId] = { x: parentNode?.position?.x ?? 0, y: parentNode?.position?.y ?? 0, width: 200, height: 80 }
           return
         }
 
-        let minX = Infinity
-        let minY = Infinity
-        let maxX = -Infinity
-        let maxY = -Infinity
-
-        visibleChildren.forEach((child) => {
-          if (groupIdSet.has(child.id) && groupLayouts[child.id]) {
-            // Use the sub-group's already-computed layout bounds (includes its own padding)
-            const layout = groupLayouts[child.id]
-            minX = Math.min(minX, layout.x)
-            minY = Math.min(minY, layout.y)
-            maxX = Math.max(maxX, layout.x + layout.width)
-            maxY = Math.max(maxY, layout.y + layout.height)
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+        children.forEach(child => {
+          if (parentIdSet.has(child.id) && layouts[child.id]) {
+            const l = layouts[child.id]
+            minX = Math.min(minX, l.x); minY = Math.min(minY, l.y)
+            maxX = Math.max(maxX, l.x + l.width); maxY = Math.max(maxY, l.y + l.height)
           } else {
-            const stableSize = getStableNodeSize(child)
-            const childWidth = stableSize.width
-            const childHeight = child.measured?.height ?? child.height ?? stableSize.height
-            minX = Math.min(minX, child.position.x)
-            minY = Math.min(minY, child.position.y)
-            maxX = Math.max(maxX, child.position.x + childWidth)
-            maxY = Math.max(maxY, child.position.y + childHeight)
+            const sz = getStableNodeSize(child)
+            const w = sz.width
+            const h = child.measured?.height ?? child.height ?? sz.height
+            minX = Math.min(minX, child.position.x); minY = Math.min(minY, child.position.y)
+            maxX = Math.max(maxX, child.position.x + w); maxY = Math.max(maxY, child.position.y + h)
           }
         })
 
-        const anchorX = groupNode?.position?.x ?? (minX - GROUP_PADDING_X)
-        const anchorY = groupNode?.position?.y ?? (minY - topPadding)
-        const x = Math.min(anchorX, minX - GROUP_PADDING_X)
-        const y = Math.min(anchorY, minY - topPadding)
+        const anchorX = parentNode?.position?.x ?? (minX - NEST_PAD_LEFT)
+        const anchorY = parentNode?.position?.y ?? (minY - NEST_PAD_TOP)
+        const x = Math.min(anchorX, minX - NEST_PAD_LEFT)
+        const y = Math.min(anchorY, minY - NEST_PAD_TOP)
 
-        // Keep the group anchored unless children move beyond its top/left bounds.
-        // This allows children (including a single child) to be repositioned within the group.
-        groupLayouts[groupId] = {
+        layouts[parentId] = {
           x,
           y,
-          width: Math.max(180, (maxX - x) + GROUP_PADDING_X),
-          height: Math.max(80, (maxY - y) + GROUP_PADDING_BOTTOM),
+          width: Math.max(220, (maxX - x) + NEST_PAD_RIGHT),
+          height: Math.max(80, (maxY - y) + NEST_PAD_BOTTOM),
         }
       })
 
-    const decoratedNodes = nodes.map(node => {
+    return nodes.map(node => {
       const level = node.data?.level ?? 0
       const l1Color = level === 0
         ? ROOT_BORDER
         : (l1ColorMap[getL1Id(node.id)] ?? L1_PALETTE[0])
-      let groupNestingLevel = 0
-      let ancestorId = parentMap[node.id]
-      while (ancestorId) {
-        if (nodeById[ancestorId]?.data?.nodeType === 'group') groupNestingLevel++
-        ancestorId = parentMap[ancestorId]
-      }
       const hasChildren = !!(childrenMap[node.id]?.length)
-      const hasCollapsibleDescendants = hasCollapsibleDescendantsSet.has(node.id)
-      const allDescendantsCollapsed = allDescendantsCollapsedSet.has(node.id)
       const hasNotes = !!(node.data.content && node.data.content !== '<p></p>' && node.data.content !== '')
-      const groupLayout = groupLayouts[node.id]
+      const layout = layouts[node.id]
       return {
         ...node,
-        ...(groupLayout ? { position: { x: groupLayout.x, y: groupLayout.y } } : {}),
-        zIndex: node.id === openMenuNodeId ? 9999 : node.data?.nodeType === 'group' ? 0 : 10,
-        className: node.data?.nodeType === 'group' ? 'km-group-node' : 'km-content-node',
-        hidden: hiddenNodeIds.has(node.id) || node.data?.level === 0,
+        ...(layout ? { position: { x: layout.x, y: layout.y } } : {}),
+        zIndex: node.id === openMenuNodeId ? 9999 : level * 10,
+        className: 'km-content-node',
+        hidden: level === 0,
         data: {
           ...node.data,
           l1Color,
           hasChildren,
-          hasCollapsibleDescendants,
-          allDescendantsCollapsed,
           hasNotes,
-          groupNestingLevel,
-          groupSize: groupLayout ? { width: groupLayout.width, height: groupLayout.height } : undefined,
+          groupSize: layout ? { width: layout.width, height: layout.height } : undefined,
         },
       }
+    }).sort((a, b) => {
+      if (a.id === openMenuNodeId) return 1
+      if (b.id === openMenuNodeId) return -1
+      return (a.data?.level ?? 0) - (b.data?.level ?? 0)
     })
-
-    // Keep container groups behind regular nodes; elevated (menu-open) node last so it renders on top.
-    return decoratedNodes.sort((a, b) => {
-      const rank = (n) => n.id === openMenuNodeId ? 2 : n.data?.nodeType === 'group' ? 0 : 1
-      return rank(a) - rank(b)
-    })
-  }, [nodes, edges, l1ColorMap, getL1Id, childrenMap, hiddenNodeIds, hasCollapsibleDescendantsSet, allDescendantsCollapsedSet, nodeById, openMenuNodeId])
+  }, [nodes, edges, l1ColorMap, getL1Id, childrenMap, nodeById, openMenuNodeId, rootId])
 
   const allDropTargets = useMemo(
     () =>
       nodesWithColor
         .filter((n) => !n.hidden)
-        .map((n) => {
-          let width, height
-          if (n.data?.nodeType === 'group') {
-            const size = n.data?.groupSize ?? getStableNodeSize(n)
-            width = size.width
-            height = size.height
-          } else {
-            width = n.measured?.width ?? getStableNodeSize(n).width
-            height = n.measured?.height ?? getStableNodeSize(n).height
-          }
-          return { id: n.id, x: n.position.x, y: n.position.y, width, height }
-        }),
+        .map((n) => ({
+          id: n.id,
+          x: n.position.x,
+          y: n.position.y,
+          width: n.measured?.width ?? getStableNodeSize(n).width,
+          height: n.measured?.height ?? getStableNodeSize(n).height,
+        })),
     [nodesWithColor]
   )
 
-  // All node IDs that are descendants (direct or indirect) of a group node
-  const groupDescendantsSet = useMemo(() => {
-    const groupIds = new Set(nodes.filter(n => n.data?.nodeType === 'group').map(n => n.id))
-    const result = new Set()
-    const visit = (id) => {
-      ;(childrenMap[id] || []).forEach(childId => {
-        result.add(childId)
-        visit(childId)
-      })
-    }
-    groupIds.forEach(visit)
-    return result
-  }, [nodes, childrenMap])
-
+  // No edge connectors — hierarchy is shown through visual nesting
   const displayEdges = useMemo(() =>
-    edges.map(e => {
-      const sourceNode = nodeById[e.source]
-      const isGroupConnector = sourceNode?.data?.nodeType === 'group'
-      // Edges between nodes inside a group need elevated zIndex to render above the group background
-      const isIntraGroup = groupDescendantsSet.has(e.source)
-      return {
-        ...e,
-        hidden: hiddenNodeIds.has(e.target) || isGroupConnector || e.source === rootId,
-        zIndex: isIntraGroup ? 5 : undefined,
-      }
-    }),
-    [edges, hiddenNodeIds, nodeById, groupDescendantsSet]
+    edges.map(e => ({ ...e, hidden: true })),
+    [edges]
   )
 
   const [isTouch] = useState(
@@ -553,7 +432,7 @@ const MindMapCanvas = () => {
 
   const onNodeDrag = useCallback((_, draggedNode) => {
     if (!isEditMode) return
-    if (draggedNode.data?.nodeType !== 'group') return
+    if (!draggedNode.data?.groupSize) return  // only parent nodes need subtree dragging
     const prev = dragStartRef.current[draggedNode.id]
     if (!prev) {
       dragStartRef.current[draggedNode.id] = { x: draggedNode.position.x, y: draggedNode.position.y }
@@ -567,8 +446,8 @@ const MindMapCanvas = () => {
     dragStartRef.current[draggedNode.id] = { x: draggedNode.position.x, y: draggedNode.position.y }
   }, [isEditMode, moveSubtreeBy])
 
-  // When a node is dropped, check if its centre landed inside a group node.
-  // If so, reparent it to that group.
+  // When a node is dropped, check if its centre landed inside another node.
+  // If so, reparent it to that node.
   const onNodeDragStop = useCallback((_, draggedNode) => {
     if (!isEditMode) return
     if (draggedNode.data?.level === 0) return // root is not reparentable
@@ -577,8 +456,7 @@ const MindMapCanvas = () => {
     const cx = draggedNode.position.x + dW / 2
     const cy = draggedNode.position.y + dH / 2
 
-    // Build ancestor set so dragging within a group never accidentally reparents
-    // the node to one of its own ancestors (e.g. the containing group node)
+    // Build ancestor set so a node can never be reparented to one of its own ancestors
     const ancestorIds = new Set()
     let cur = parentMap[draggedNode.id]
     while (cur) {
@@ -597,10 +475,8 @@ const MindMapCanvas = () => {
 
     if (target) reparentNode(draggedNode.id, target.id)
 
-    if (draggedNode.data?.nodeType === 'group') scheduleAutosave()
-
     delete dragStartRef.current[draggedNode.id]
-  }, [allDropTargets, isEditMode, reparentNode, scheduleAutosave, parentMap])
+  }, [allDropTargets, isEditMode, reparentNode, parentMap])
 
   const { screenToFlowPosition } = useReactFlow()
 

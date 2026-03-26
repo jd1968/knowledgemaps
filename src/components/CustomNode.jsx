@@ -34,7 +34,6 @@ const CustomNode = memo(({ id, data, selected }) => {
   const deselectNode          = useMindMapStore((state) => state.deselectNode)
   const setEdgeType           = useMindMapStore((state) => state.setEdgeType)
   const convertToSubmap       = useMindMapStore((state) => state.convertToSubmap)
-  const setDescendantsCollapsed = useMindMapStore((state) => state.setDescendantsCollapsed)
   const pushHistory           = useMindMapStore((state) => state.pushHistory)
   const selectNode            = useMindMapStore((state) => state.selectNode)
   const isEditMode            = useMindMapStore((state) => state.isEditMode)
@@ -60,13 +59,13 @@ const CustomNode = memo(({ id, data, selected }) => {
   const selectTimerRef = useRef(null)
   const nodeRef        = useRef(null)
 
-  const { title, level, l1Color, hasChildren, collapsed, hasCollapsibleDescendants, allDescendantsCollapsed, isSubmap, submapId, hasNotes, nodeType, groupSize, content, isTodo = false, groupNestingLevel = 0, iconUrl = '', imageUrl = '', imageBorder = false, textSize = 'm' } = data
+  const { title, level, l1Color, hasChildren, isSubmap, submapId, hasNotes, nodeType, groupSize, content, isTodo = false, iconUrl = '', imageUrl = '', imageBorder = false, textSize = 'm' } = data
   const cfg         = getConfig(level)
   const borderColor = l1Color ?? '#94a3b8'
   const TEXT_SIZES  = { s: 14, m: 22, l: 36 }
+  const isParent    = !!groupSize
   const width       = ['image', 'note'].includes(nodeType) ? '100%' : nodeType === 'text' ? 'auto' : (groupSize?.width ?? cfg.width)
   const height      = ['image', 'note'].includes(nodeType) ? '100%' : (nodeType === 'pointer' || nodeType === 'text' ? null : (groupSize?.height ?? cfg.height))
-  const showGroupHeader   = nodeType === 'group' && !!title?.trim()
   const hasPointerContent = nodeType === 'pointer' && content && content.trim() !== ''
   const isReparentSource = reparentSourceNodeId === id
 
@@ -133,10 +132,7 @@ const CustomNode = memo(({ id, data, selected }) => {
       setEdgeType(id, 'pointer-edge')
     } else {
       if (nodeType === 'pointer') setEdgeType(id, 'straight-center')
-      // When converting to group, clear collapsed so the group's children are
-      // visible and the group layout can compute a size.
-      const extra = newType === 'group' ? { collapsed: false } : {}
-      updateNodeData(id, { nodeType: newType, ...extra })
+      updateNodeData(id, { nodeType: newType })
     }
     setShowConvertMenu(false); setOpenMenuNodeId(null)
   }, [nodeType, title, id, hasChildren, convertToSubmap, updateNodeData, setEdgeType, setOpenMenuNodeId])
@@ -162,7 +158,6 @@ const CustomNode = memo(({ id, data, selected }) => {
       isSubmap: true,
       submapId: map.id,
       nodeType: 'submap',
-      collapsed: false,
       title: title?.trim() ? title : map.name,
     })
     setShowSubmapChoice(false)
@@ -243,15 +238,15 @@ const CustomNode = memo(({ id, data, selected }) => {
           ? '#3a3a3a'
           : nodeType === 'image' || nodeType === 'text'
             ? 'transparent'
-          : nodeType === 'group'
-            ? blendWithWhite(borderColor, Math.min(0.08 + groupNestingLevel * 0.1, 0.42))
-            : isSubmap
-              ? blendWithWhite(borderColor, 0.08)
-            : nodeType === 'note'
-              ? '#fef9c3'
-            : nodeType === 'pointer'
-              ? blendWithWhite(borderColor, 0.05)
-            : '#ffffff',
+          : isParent
+            ? blendWithWhite(borderColor, 0.07)
+          : isSubmap
+            ? blendWithWhite(borderColor, 0.08)
+          : nodeType === 'note'
+            ? '#fef9c3'
+          : nodeType === 'pointer'
+            ? blendWithWhite(borderColor, 0.05)
+          : '#ffffff',
         border: level === 0
           ? 'none'
           : nodeType === 'text'
@@ -260,13 +255,13 @@ const CustomNode = memo(({ id, data, selected }) => {
             ? (imageBorder ? `1.5px solid ${borderColor}` : 'none')
           : nodeType === 'note'
             ? 'none'
-            : nodeType === 'group'
-              ? `2px solid ${borderColor}90`
-            : nodeType === 'pointer'
-              ? `1px solid ${borderColor}40`
-              : `2px ${isSubmap ? 'dashed' : 'solid'} ${borderColor}`,
+          : isParent
+            ? `2px solid ${borderColor}60`
+          : nodeType === 'pointer'
+            ? `1px solid ${borderColor}40`
+            : `2px ${isSubmap ? 'dashed' : 'solid'} ${borderColor}`,
         ...(nodeType === 'pointer' ? { borderLeft: `3px solid ${borderColor}` } : {}),
-        borderRadius: level === 0 ? '50px' : nodeType === 'note' ? '1px 1px 1px 4px' : nodeType === 'group' ? '12px' : nodeType === 'pointer' ? '8px' : '10px',
+        borderRadius: level === 0 ? '50px' : nodeType === 'note' ? '1px 1px 1px 4px' : isParent ? '12px' : nodeType === 'pointer' ? '8px' : '10px',
         fontSize: cfg.fontSize,
         fontWeight: cfg.fontWeight,
         color: level === 0 ? '#ffffff' : '#1c1917',
@@ -452,29 +447,21 @@ const CustomNode = memo(({ id, data, selected }) => {
             </>
           )}
         </div>
-      ) : (nodeType !== 'group' || showGroupHeader) && nodeType !== 'image' && nodeType !== 'note' && nodeType !== 'text' && (
+      ) : nodeType !== 'image' && nodeType !== 'note' && nodeType !== 'text' && (!isParent || !!title?.trim()) && (
         <div style={{
-          flex: nodeType === 'group' ? '0 0 auto' : 1,
+          flex: isParent ? '0 0 auto' : 1,
           display: 'flex',
           flexDirection: 'row',
-          alignItems: nodeType === 'group' ? 'flex-start' : 'center',
-          justifyContent: nodeType === 'group' || (iconUrl && nodeType !== 'group') ? 'flex-start' : 'center',
-          padding: nodeType === 'group' ? '8px 12px' : (iconUrl && !editing ? '10px 14px 10px 8px' : '10px 14px'),
-          textAlign: nodeType === 'group' || (iconUrl && nodeType !== 'group') ? 'left' : 'center',
+          alignItems: 'center',
+          justifyContent: isParent || iconUrl ? 'flex-start' : 'center',
+          padding: isParent ? '10px 14px' : (iconUrl && !editing ? '10px 14px 10px 8px' : '10px 14px'),
+          textAlign: isParent || iconUrl ? 'left' : 'center',
           wordBreak: 'break-word',
           lineHeight: '1.35',
           position: 'relative',
-          pointerEvents: nodeType === 'group' ? 'none' : 'auto',
-          ...(nodeType === 'group'
-            ? {
-                margin: '6px',
-                borderRadius: '8px',
-                background: 'transparent',
-                border: 'none',
-              }
-            : {}),
+          pointerEvents: isParent ? 'none' : 'auto',
         }}>
-          {!editing && iconUrl && nodeType !== 'group' && (
+          {!editing && iconUrl && (
             <NodeIconDisplay iconUrl={iconUrl} className="node-icon" />
           )}
           {editing ? (
@@ -497,16 +484,14 @@ const CustomNode = memo(({ id, data, selected }) => {
                 fontSize: 'inherit',
                 fontWeight: 'inherit',
                 color: 'inherit',
-                textAlign: nodeType === 'group' ? 'left' : 'center',
+                textAlign: isParent ? 'left' : 'center',
                 fontFamily: 'inherit',
                 lineHeight: 'inherit',
                 padding: 0,
               }}
             />
           ) : (
-            <span style={nodeType === 'note' && !hasNotes ? { color: '#94a3b8' } : undefined}>
-              {title || 'Untitled'}
-            </span>
+            <span>{title || 'Untitled'}</span>
           )}
           {!editing && hasNotes && (
             <span style={{
@@ -542,22 +527,7 @@ const CustomNode = memo(({ id, data, selected }) => {
         </button>
       )}
 
-      {!isSubmap && level !== 0 && hasChildren && (hovered || collapsed) && !editing && isEditMode && nodeType !== 'pointer' && (
-        <button
-          className="collapse-btn nodrag nopan"
-          title={collapsed ? 'Expand' : 'Collapse'}
-          style={{ background: borderColor }}
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => {
-            e.stopPropagation()
-            updateNodeData(id, { collapsed: !collapsed })
-          }}
-        >
-          {collapsed ? '▸' : '▾'}
-        </button>
-      )}
-
-      {!editing && !collapsed && !isSubmap && nodeType !== 'note' && nodeType !== 'pointer' && nodeType !== 'image' && nodeType !== 'text' && isEditMode && (
+      {!editing && !isSubmap && nodeType !== 'note' && nodeType !== 'pointer' && nodeType !== 'image' && nodeType !== 'text' && isEditMode && (
         <button
           className="add-child-btn"
           title="Add child node"
@@ -573,20 +543,6 @@ const CustomNode = memo(({ id, data, selected }) => {
         </button>
       )}
 
-      {!isSubmap && hovered && hasCollapsibleDescendants && !editing && isEditMode && (
-        <button
-          className="collapse-all-btn nodrag nopan"
-          title={allDescendantsCollapsed ? 'Expand all' : 'Collapse all'}
-          style={{ background: borderColor }}
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => {
-            e.stopPropagation()
-            setDescendantsCollapsed(id, !allDescendantsCollapsed)
-          }}
-        >
-          {allDescendantsCollapsed ? '▸▸' : '▾▾'}
-        </button>
-      )}
 
       {/* Icon upload — always rendered in edit mode so the portal input stays
           mounted during file-picker use; visibility toggled via CSS */}

@@ -7,22 +7,36 @@ import { NodeIconDisplay, NodeIconUpload } from './NodeIcon'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
+const CANVAS_ONLY_TYPES = new Set(['image', 'text', 'note'])
+
 function buildDFSOrder(nodes, edges) {
   const nodeById = new Map(nodes.map((n) => [n.id, n]))
   const childrenOf = new Map()
+  const hasParent = new Set()
   for (const e of edges) {
     if (!childrenOf.has(e.source)) childrenOf.set(e.source, [])
     childrenOf.get(e.source).push(e.target)
+    hasParent.add(e.target)
   }
   const root = nodes.find((n) => n.data?.level === 0) ?? nodes[0]
   const result = []
+  const visited = new Set()
   const visit = (nodeId, depth) => {
+    if (visited.has(nodeId)) return
+    visited.add(nodeId)
     const node = nodeById.get(nodeId)
     if (!node) return
-    result.push({ node, depth })
+    if (!CANVAS_ONLY_TYPES.has(node.data?.nodeType)) result.push({ node, depth })
     for (const childId of (childrenOf.get(nodeId) ?? [])) visit(childId, depth + 1)
   }
-  if (root) visit(root.id, 0)
+  if (root) {
+    visit(root.id, 0)
+    // Also include level-1 nodes that have no parent edge (placed via toolbox without edge to root)
+    nodes
+      .filter(n => n.data?.level === 1 && !hasParent.has(n.id))
+      .sort((a, b) => (a.position?.y ?? 0) - (b.position?.y ?? 0))
+      .forEach(n => visit(n.id, 1))
+  }
   return result
 }
 
@@ -35,7 +49,8 @@ function buildRenderTree(orderedItems) {
     const hasChildren = i + 1 < orderedItems.length && orderedItems[i + 1].depth > depth
     while (stack.length > 1 && depth <= stack[stack.length - 1].depth) stack.pop()
     const parent = stack[stack.length - 1].container
-    if (hasChildren && (node.data.nodeType === 'group' || node.data.nodeType === 'node')) {
+    const nt = node.data.nodeType === 'folder' ? 'node' : node.data.nodeType
+    if (hasChildren && (nt === 'group' || nt === 'node')) {
       const showSelfCard = node.data.level === 1 || node.data.content?.trim()
       const groupItem = { type: 'group', node, depth, children: showSelfCard ? [{ type: 'card', node }] : [] }
       parent.children.push(groupItem)
@@ -64,7 +79,7 @@ function getAncestorCrumbs(nodeId, nodeMap, parentMap) {
 
 /* ── FeedCard ──────────────────────────────────────────────────────── */
 
-function FeedCard({ node, nodeMap, parentMap, onSave, onEditStart, onEditEnd, onGoToMap, onIconSave, onDelete }) {
+function FeedCard({ node, nodeMap, parentMap, onSave, onEditStart, onEditEnd, onGoToMap, onIconSave, onDelete, onShowProps }) {
   const [editingTitle, setEditingTitle] = useState(false)
   const [editingContent, setEditingContent] = useState(false)
   const [localTitle, setLocalTitle] = useState(node.data.title)
@@ -194,7 +209,8 @@ function FeedCard({ node, nodeMap, parentMap, onSave, onEditStart, onEditEnd, on
   }
 
   const crumbs = getAncestorCrumbs(node.id, nodeMap, parentMap)
-  const typeLabel = node.data.nodeType !== 'node' ? node.data.nodeType : null
+  const rawType = node.data.nodeType === 'folder' ? 'node' : node.data.nodeType
+  const typeLabel = rawType !== 'node' ? rawType : null
   const showBreadcrumbs = import.meta.env.FEED_SHOW_BREADCRUMBS !== 'false'
 
   return (
@@ -270,6 +286,7 @@ function FeedCard({ node, nodeMap, parentMap, onSave, onEditStart, onEditEnd, on
             >⊕</NodeIconUpload>
             <button className="feed-card__action-btn" onClick={startContentEdit} title="Edit">✎</button>
             <button className="feed-card__action-btn" onClick={() => onGoToMap(node.id)} title="Open in map">↗</button>
+            <button className="feed-card__action-btn" onClick={() => onShowProps(node)} title="Properties">⋯</button>
             <button className="feed-card__action-btn feed-card__action-btn--delete" onClick={() => onDelete(node)} title="Delete node">✕</button>
           </div>
         )}
@@ -322,7 +339,7 @@ function FeedCard({ node, nodeMap, parentMap, onSave, onEditStart, onEditEnd, on
 /* ── FeedGroupHeader ───────────────────────────────────────────────── */
 
 function FeedGroupHeader({ node, cardProps }) {
-  const { onSave, onEditStart, onEditEnd, onGoToMap, onIconSave, onDelete } = cardProps
+  const { onSave, onEditStart, onEditEnd, onGoToMap, onIconSave, onDelete, onShowProps } = cardProps
   const [hovered, setHovered] = useState(false)
   const [editingTitle, setEditingTitle] = useState(false)
   const [localTitle, setLocalTitle] = useState(node.data.title)
@@ -415,9 +432,213 @@ function FeedGroupHeader({ node, cardProps }) {
           <NodeIconUpload iconUrl={node.data.iconUrl} onUpload={(url) => onIconSave(node, url)} className="feed-card__action-btn">⊕</NodeIconUpload>
           <button className="feed-card__action-btn" onClick={startEdit} title="Edit title">✎</button>
           <button className="feed-card__action-btn" onClick={() => onGoToMap(node.id)} title="Open in map">↗</button>
+          <button className="feed-card__action-btn" onClick={() => onShowProps(node)} title="Properties">⋯</button>
           <button className="feed-card__action-btn feed-card__action-btn--delete" onClick={() => onDelete(node)} title="Delete node">✕</button>
         </div>
       )}
+    </div>
+  )
+}
+
+/* ── NodePropertiesDialog ──────────────────────────────────────────── */
+
+// Fields computed/injected by the canvas — shown read-only
+const COMPUTED_DATA_FIELDS = new Set(['l1Color','hasChildren','hasNotes','allDescendantsCollapsed','hasCollapsibleDescendants','key'])
+const NODE_TYPES = ['node','group','note','image','text','pointer','submap','folder']
+const TEXT_SIZES = ['s','m','l']
+
+function NodePropertiesDialog({ node, allNodes, allEdges, onClose, onSaveProps }) {
+  const nodeById = new Map(allNodes.map(n => [n.id, n]))
+  const parentEdge = allEdges.find(e => e.target === node.id)
+  const childEdges = allEdges.filter(e => e.source === node.id)
+  const parentNode = parentEdge ? nodeById.get(parentEdge.source) : null
+
+  // Editable state
+  const [data, setData] = useState({ ...node.data })
+  const [pos, setPos] = useState({ x: node.position?.x ?? 0, y: node.position?.y ?? 0 })
+  const [styleW, setStyleW] = useState(node.style?.width ?? '')
+  const [styleH, setStyleH] = useState(node.style?.height ?? '')
+  const [saving, setSaving] = useState(false)
+
+  const setField = (key, value) => setData(d => ({ ...d, [key]: value }))
+
+  const hasChanges = JSON.stringify(data) !== JSON.stringify(node.data)
+    || pos.x !== (node.position?.x ?? 0) || pos.y !== (node.position?.y ?? 0)
+    || String(styleW) !== String(node.style?.width ?? '')
+    || String(styleH) !== String(node.style?.height ?? '')
+
+  const handleApply = async () => {
+    setSaving(true)
+    const style = {}
+    if (styleW !== '') style.width = Number(styleW)
+    if (styleH !== '') style.height = Number(styleH)
+    await onSaveProps(node, { data, position: pos, style: Object.keys(style).length ? style : node.style })
+    setSaving(false)
+    onClose()
+  }
+
+  // Diagnostics use the live editable data
+  const diagnostics = []
+  const nt = data?.nodeType
+  if (data?.level === 0) diagnostics.push({ type: 'info', msg: 'Root node — hidden on canvas (level 0)' })
+  if (CANVAS_ONLY_TYPES.has(nt)) diagnostics.push({ type: 'warn', msg: `Type "${nt}" is canvas-only — excluded from feed, contents and text views` })
+  if (data?.level === 1 && !parentEdge) diagnostics.push({ type: 'warn', msg: 'No parent edge — placed via toolbox without connection to root (shows on canvas via level attribute)' })
+  if (nt === 'folder') diagnostics.push({ type: 'warn', msg: "Legacy type 'folder' — treated as 'node'" })
+  if (data?.isSubmap) diagnostics.push({ type: 'info', msg: 'Submap node — clicking opens a linked map' })
+  if (!data?.title?.trim()) diagnostics.push({ type: 'warn', msg: 'No title set' })
+  if (diagnostics.length === 0) diagnostics.push({ type: 'ok', msg: 'No display issues detected' })
+
+  const ReadRow = ({ label, value }) => (
+    <tr>
+      <td className="node-props__label">{label}</td>
+      <td className="node-props__value node-props__value--mono">{value == null ? <em style={{color:'#94a3b8'}}>—</em> : String(value)}</td>
+    </tr>
+  )
+
+  const renderDataField = (key, value) => {
+    if (COMPUTED_DATA_FIELDS.has(key)) {
+      if (typeof value === 'object' && value !== null) return <ReadRow key={key} label={key} value={JSON.stringify(value)} />
+      return <ReadRow key={key} label={key} value={value === false ? 'false' : value === true ? 'true' : value} />
+    }
+    if (key === 'nodeType') return (
+      <tr key={key}>
+        <td className="node-props__label">nodeType</td>
+        <td className="node-props__value">
+          <select className="node-props__input" value={data.nodeType ?? ''} onChange={e => setField('nodeType', e.target.value)}>
+            {NODE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </td>
+      </tr>
+    )
+    if (key === 'textSize') return (
+      <tr key={key}>
+        <td className="node-props__label">textSize</td>
+        <td className="node-props__value">
+          <select className="node-props__input" value={data.textSize ?? 'm'} onChange={e => setField('textSize', e.target.value)}>
+            {TEXT_SIZES.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </td>
+      </tr>
+    )
+    if (key === 'level') return (
+      <tr key={key}>
+        <td className="node-props__label">level</td>
+        <td className="node-props__value">
+          <input className="node-props__input node-props__input--num" type="number" value={data.level ?? 0} onChange={e => setField('level', parseInt(e.target.value) || 0)} />
+        </td>
+      </tr>
+    )
+    if (key === 'content') return (
+      <tr key={key}>
+        <td className="node-props__label">content</td>
+        <td className="node-props__value">
+          <textarea className="node-props__input node-props__input--textarea" value={data.content ?? ''} onChange={e => setField('content', e.target.value)} rows={3} />
+        </td>
+      </tr>
+    )
+    if (typeof value === 'boolean' || key === 'isTodo' || key === 'imageBorder') return (
+      <tr key={key}>
+        <td className="node-props__label">{key}</td>
+        <td className="node-props__value">
+          <input type="checkbox" checked={!!data[key]} onChange={e => setField(key, e.target.checked)} />
+        </td>
+      </tr>
+    )
+    if (typeof value === 'object' && value !== null) return <ReadRow key={key} label={key} value={JSON.stringify(value)} />
+    return (
+      <tr key={key}>
+        <td className="node-props__label">{key}</td>
+        <td className="node-props__value">
+          <input className="node-props__input" type="text" value={data[key] ?? ''} onChange={e => setField(key, e.target.value)} />
+        </td>
+      </tr>
+    )
+  }
+
+  return (
+    <div className="node-props-overlay" onClick={onClose}>
+      <div className="node-props-dialog" onClick={e => e.stopPropagation()}>
+        <div className="node-props-dialog__header">
+          <span className="node-props-dialog__title">Node Properties</span>
+          <button className="node-props-dialog__close" onClick={onClose}>✕</button>
+        </div>
+
+        <div className="node-props-dialog__body">
+          <section className="node-props-section">
+            <h4>Identity</h4>
+            <table className="node-props__table"><tbody>
+              <ReadRow label="ID" value={node.id} />
+              <ReadRow label="RF type" value={node.type} />
+            </tbody></table>
+          </section>
+
+          <section className="node-props-section">
+            <h4>Data</h4>
+            <table className="node-props__table"><tbody>
+              {Object.entries(node.data ?? {}).map(([k, v]) => renderDataField(k, v))}
+            </tbody></table>
+          </section>
+
+          <section className="node-props-section">
+            <h4>Position &amp; Size</h4>
+            <table className="node-props__table"><tbody>
+              <tr>
+                <td className="node-props__label">x</td>
+                <td className="node-props__value"><input className="node-props__input node-props__input--num" type="number" value={pos.x} onChange={e => setPos(p => ({ ...p, x: parseFloat(e.target.value) || 0 }))} /></td>
+              </tr>
+              <tr>
+                <td className="node-props__label">y</td>
+                <td className="node-props__value"><input className="node-props__input node-props__input--num" type="number" value={pos.y} onChange={e => setPos(p => ({ ...p, y: parseFloat(e.target.value) || 0 }))} /></td>
+              </tr>
+              <tr>
+                <td className="node-props__label">style width</td>
+                <td className="node-props__value"><input className="node-props__input node-props__input--num" type="number" placeholder="auto" value={styleW} onChange={e => setStyleW(e.target.value)} /></td>
+              </tr>
+              <tr>
+                <td className="node-props__label">style height</td>
+                <td className="node-props__value"><input className="node-props__input node-props__input--num" type="number" placeholder="auto" value={styleH} onChange={e => setStyleH(e.target.value)} /></td>
+              </tr>
+              {node.measured?.width  != null && <ReadRow label="measured w" value={node.measured.width?.toFixed(1)} />}
+              {node.measured?.height != null && <ReadRow label="measured h" value={node.measured.height?.toFixed(1)} />}
+            </tbody></table>
+          </section>
+
+          <section className="node-props-section">
+            <h4>Connections</h4>
+            <table className="node-props__table"><tbody>
+              <ReadRow label="parent" value={parentNode ? (parentNode.data?.title || parentNode.id) : parentEdge ? parentEdge.source : '— none —'} />
+              <ReadRow label="children" value={childEdges.length} />
+              {childEdges.length > 0 && (
+                <tr>
+                  <td className="node-props__label">child nodes</td>
+                  <td className="node-props__value" style={{ fontSize: 12 }}>
+                    {childEdges.map(e => {
+                      const cn = nodeById.get(e.target)
+                      return <div key={e.target} className="node-props__value--mono">{cn?.data?.title || e.target}</div>
+                    })}
+                  </td>
+                </tr>
+              )}
+            </tbody></table>
+          </section>
+
+          <section className="node-props-section">
+            <h4>Display diagnostics</h4>
+            <ul className="node-props__diagnostics">
+              {diagnostics.map((d, i) => (
+                <li key={i} className={`node-props__diag node-props__diag--${d.type}`}>{d.msg}</li>
+              ))}
+            </ul>
+          </section>
+        </div>
+
+        <div className="node-props-dialog__footer">
+          <button className="node-props__btn node-props__btn--cancel" onClick={onClose}>Cancel</button>
+          <button className="node-props__btn node-props__btn--apply" disabled={!hasChanges || saving} onClick={handleApply}>
+            {saving ? 'Saving…' : 'Apply Changes'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -463,6 +684,7 @@ export default function FeedView() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [activeEditActions, setActiveEditActions] = useState(null)
+  const [propsNode, setPropsNode] = useState(null)
 
   useEffect(() => {
     if (!currentMapId) {
@@ -618,18 +840,68 @@ export default function FeedView() {
     }
   }, [currentMapId])
 
+  const handleSaveProps = useCallback(async (node, { data: newData, position, style }) => {
+    // 1. Update local feed state
+    setAllNodes(prev => prev.map(n => n.id === node.id
+      ? { ...n, position, style, data: newData }
+      : n
+    ))
+    // 2. Update store if this is the current map
+    if (node._feedMapId === currentMapId) {
+      useMindMapStore.setState(state => ({
+        nodes: state.nodes.map(n => n.id === node.id
+          ? { ...n, position, style, data: { ...n.data, ...newData } }
+          : n
+        ),
+        isDirty: true,
+      }))
+    }
+    // 3. Persist to nodes table (content + longTitle)
+    try {
+      const nodeTableChanges = {}
+      if (newData.content !== node.data.content) nodeTableChanges.content = newData.content
+      if (newData.longTitle !== node.data.longTitle) nodeTableChanges.long_title = newData.longTitle
+      if (Object.keys(nodeTableChanges).length > 0) {
+        await supabase.from('nodes').update(nodeTableChanges).eq('id', node.id)
+      }
+      // 4. Persist position, style, and all data fields to map data
+      const { data: map } = await supabase.from('maps').select('data').eq('id', node._feedMapId).single()
+      if (map) {
+        const { content: _c, longTitle: _lt, ...mapDataFields } = newData
+        const updatedNodes = map.data.nodes.map(n =>
+          n.id === node.id
+            ? { ...n, position, ...(style ? { style } : {}), data: { ...n.data, ...mapDataFields } }
+            : n
+        )
+        await supabase.from('maps').update({ data: { ...map.data, nodes: updatedNodes } }).eq('id', node._feedMapId)
+      }
+    } catch (err) {
+      console.error('Props save failed:', err)
+    }
+  }, [currentMapId])
+
   if (loading) return <div className="feed-view"><div className="feed-empty"><p>Loading feed…</p></div></div>
   if (error)   return <div className="feed-view"><div className="feed-empty"><p>{error}</p></div></div>
   if (!currentMapId) return <div className="feed-view"><div className="feed-empty"><p>No map selected.</p></div></div>
   if (orderedNodes.length === 0) return <div className="feed-view"><div className="feed-empty"><p>No nodes found in this map.</p></div></div>
 
-  const cardProps = { nodeMap, parentMap, onSave: handleSave, onEditStart: handleEditStart, onEditEnd: handleEditEnd, onGoToMap: handleGoToMap, onIconSave: handleIconSave, onDelete: handleDelete }
+  const cardProps = { nodeMap, parentMap, onSave: handleSave, onEditStart: handleEditStart, onEditEnd: handleEditEnd, onGoToMap: handleGoToMap, onIconSave: handleIconSave, onDelete: handleDelete, onShowProps: setPropsNode }
 
   return (
     <div className="feed-view">
       <div className="feed-view__inner">
         <FeedSection items={renderTree} cardProps={cardProps} />
       </div>
+
+      {propsNode && (
+        <NodePropertiesDialog
+          node={propsNode}
+          allNodes={allNodes}
+          allEdges={allEdges}
+          onClose={() => setPropsNode(null)}
+          onSaveProps={handleSaveProps}
+        />
+      )}
 
       {activeEditActions && (
         <div className="feed-edit-bar">
