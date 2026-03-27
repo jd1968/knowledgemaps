@@ -242,28 +242,12 @@ const MindMapCanvas = () => {
     [nodes]
   )
 
-  // Assign each L1 node (direct child of root) a palette color, in creation order
-  const l1ColorMap = useMemo(() => {
-    if (!rootId) return {}
+  // Fast node lookup
+  const nodeById = useMemo(() => {
     const map = {}
-    let idx = 0
-    nodes.forEach(n => {
-      if (parentMap[n.id] === rootId) {
-        map[n.id] = L1_PALETTE[idx % L1_PALETTE.length]
-        idx++
-      }
-    })
+    nodes.forEach(n => { map[n.id] = n })
     return map
-  }, [nodes, parentMap, rootId])
-
-  // Walk up the parent chain to find the L1 ancestor of any node
-  const getL1Id = useCallback((nodeId) => {
-    let current = nodeId
-    while (parentMap[current] && parentMap[current] !== rootId) {
-      current = parentMap[current]
-    }
-    return parentMap[current] === rootId ? current : null
-  }, [parentMap, rootId])
+  }, [nodes])
 
   // sourceId -> [targetIds] lookup
   const childrenMap = useMemo(() => {
@@ -275,12 +259,31 @@ const MindMapCanvas = () => {
     return map
   }, [edges])
 
-  // Fast node lookup for descendant checks
-  const nodeById = useMemo(() => {
+  // Assign each L1 node a palette color in creation order — includes both
+  // root-connected nodes and orphan nodes placed via the toolbox (level === 1, no root edge)
+  const l1ColorMap = useMemo(() => {
     const map = {}
-    nodes.forEach(n => { map[n.id] = n })
+    let idx = 0
+    nodes.forEach(n => {
+      if (n.data?.level === 1) {
+        map[n.id] = L1_PALETTE[idx % L1_PALETTE.length]
+        idx++
+      }
+    })
     return map
   }, [nodes])
+
+  // Walk up the parent chain to find the L1 ancestor of any node.
+  // Also handles orphan L1 nodes that have no parent edge to root.
+  const getL1Id = useCallback((nodeId) => {
+    let current = nodeId
+    while (parentMap[current] && parentMap[current] !== rootId) {
+      current = parentMap[current]
+    }
+    if (parentMap[current] === rootId) return current
+    if (nodeById[current]?.data?.level === 1) return current
+    return null
+  }, [parentMap, rootId, nodeById])
 
   // Compute nested layout: every non-root parent node expands to visually contain its children
   const nodesWithColor = useMemo(() => {

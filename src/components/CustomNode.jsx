@@ -64,6 +64,8 @@ const CustomNode = memo(({ id, data, selected }) => {
   const borderColor = l1Color ?? '#94a3b8'
   const TEXT_SIZES  = { s: 14, m: 22, l: 36 }
   const isParent    = !!groupSize
+  // Depth tint only for parent nodes; each level adds 0.04, min 0.05
+  const bgAlpha     = isParent ? 0.05 + Math.max(0, level - 1) * 0.04 : 0
   const width       = ['image', 'note'].includes(nodeType) ? '100%' : nodeType === 'text' ? 'auto' : (groupSize?.width ?? cfg.width)
   const height      = ['image', 'note'].includes(nodeType) ? '100%' : (nodeType === 'pointer' || nodeType === 'text' ? null : (groupSize?.height ?? cfg.height))
   const hasPointerContent = nodeType === 'pointer' && content && content.trim() !== ''
@@ -238,15 +240,13 @@ const CustomNode = memo(({ id, data, selected }) => {
           ? '#3a3a3a'
           : nodeType === 'image' || nodeType === 'text'
             ? 'transparent'
-          : isParent
-            ? blendWithWhite(borderColor, 0.07)
-          : isSubmap
-            ? blendWithWhite(borderColor, 0.08)
           : nodeType === 'note'
             ? '#fef9c3'
           : nodeType === 'pointer'
             ? blendWithWhite(borderColor, 0.05)
-          : '#ffffff',
+          : isSubmap || !isParent
+            ? '#ffffff'
+          : blendWithWhite(borderColor, bgAlpha),
         border: level === 0
           ? 'none'
           : nodeType === 'text'
