@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { useMindMapStore } from '../store/useMindMapStore'
 import MarkdownEditor from './MarkdownEditor'
 import SubmapChoiceModal from './SubmapChoiceModal'
+import { STANDARD_THEME_COLORS } from '../lib/themePalette'
 
 const TYPE_LABELS = { node: 'Node', pointer: 'Pointer', submap: 'Submap' }
 const CREATE_TYPE_OPTIONS = ['node', 'pointer', 'submap']
@@ -19,10 +20,10 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
   const currentMapId     = useMindMapStore((s) => s.currentMapId)
 
   const { id } = node
-  const { title, level, content, longTitle = '', isSubmap, submapId, nodeType = 'node', hasChildren, isTodo = false, showContents = false } = node.data
+  const { title, level, content, longTitle = '', isSubmap, submapId, nodeType = 'node', hasChildren, isTodo = false, showContents = false, themeColor = '' } = node.data
 
   const [isEditing, setIsEditing]         = useState(isEditMode)
-  const [draft, setDraft]                 = useState(isEditMode ? { title: title || '', longTitle: longTitle || title || '', content: content || '', isTodo: !!isTodo, nodeType, showContents: !!showContents } : null)
+  const [draft, setDraft]                 = useState(isEditMode ? { title: title || '', longTitle: longTitle || title || '', content: content || '', isTodo: !!isTodo, nodeType, showContents: !!showContents, themeColor: themeColor || '' } : null)
   const [showConvertMenu, setShowConvertMenu] = useState(false)
   const [converting, setConverting]       = useState(false)
   const [showSubmapChoice, setShowSubmapChoice] = useState(false)
@@ -51,7 +52,7 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
   }, [isEditMode])
 
   const startEdit = () => {
-    setDraft({ title: title || '', longTitle: longTitle || title || '', content: content || '', isTodo: !!isTodo, nodeType, showContents: !!showContents })
+    setDraft({ title: title || '', longTitle: longTitle || title || '', content: content || '', isTodo: !!isTodo, nodeType, showContents: !!showContents, themeColor: themeColor || '' })
     setIsEditing(true)
   }
 
@@ -65,7 +66,7 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
       setShowSubmapChoice(true)
       return
     }
-    if (draft) updateNodeData(id, { title: draft.title.trim(), longTitle: draft.longTitle?.trim() || '', content: draft.content, isTodo: !!draft.isTodo, nodeType: nextType, showContents: !!draft.showContents })
+    if (draft) updateNodeData(id, { title: draft.title.trim(), longTitle: draft.longTitle?.trim() || '', content: draft.content, isTodo: !!draft.isTodo, nodeType: nextType, showContents: !!draft.showContents, ...(level === 1 ? { themeColor: draft.themeColor || '' } : {}) })
     if (nextType === 'pointer') setEdgeType(id, 'pointer-edge')
     else if (nodeType === 'pointer') setEdgeType(id, 'straight-center')
     onClose()
@@ -116,10 +117,10 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
       alert('Title is required.')
       return
     }
-    if (draft) updateNodeData(id, { title: draft.title.trim(), longTitle: draft.longTitle?.trim() || '', content: draft.content, isTodo: !!draft.isTodo })
+    if (draft) updateNodeData(id, { title: draft.title.trim(), longTitle: draft.longTitle?.trim() || '', content: draft.content, isTodo: !!draft.isTodo, ...(level === 1 ? { themeColor: draft.themeColor || '' } : {}) })
     await handleConvertToSubmap()
     setShowSubmapChoice(false)
-  }, [canSave, draft, handleConvertToSubmap, id, updateNodeData])
+  }, [canSave, draft, handleConvertToSubmap, id, level, updateNodeData])
 
   const handleSelectExistingSubmap = useCallback((map) => {
     if (hasChildren) {
@@ -130,12 +131,14 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
     const nextLongTitle = draft?.longTitle?.trim() ?? longTitle
     const nextContent = draft?.content ?? content
     const nextTodo = draft?.isTodo ?? isTodo
+    const nextThemeColor = draft?.themeColor ?? themeColor
     if (nodeType === 'pointer') setEdgeType(id, 'straight-center')
     updateNodeData(id, {
       title: nextTitle,
       longTitle: nextLongTitle || '',
       content: nextContent,
       isTodo: !!nextTodo,
+      ...(level === 1 ? { themeColor: nextThemeColor || '' } : {}),
       isSubmap: true,
       submapId: map.id,
       nodeType: 'submap',
@@ -143,7 +146,7 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
     setShowSubmapChoice(false)
     setShowConvertMenu(false)
     onClose()
-  }, [content, draft, hasChildren, id, isTodo, nodeType, onClose, setEdgeType, title, updateNodeData])
+  }, [content, draft, hasChildren, id, isTodo, level, nodeType, onClose, setEdgeType, themeColor, title, updateNodeData])
 
   return createPortal(
     <div
@@ -190,6 +193,38 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
                   placeholder="Node title…"
                 />
               </div>
+
+              {level === 1 && (
+                <div className="field">
+                  <label className="field-label">Theme Color</label>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                    <button
+                      type="button"
+                      className={`btn btn--sm${!draft.themeColor ? ' btn--primary' : ' btn--secondary'}`}
+                      onClick={() => setDraft((d) => ({ ...d, themeColor: '' }))}
+                    >
+                      Auto
+                    </button>
+                    {STANDARD_THEME_COLORS.map((color) => (
+                      <button
+                        key={color}
+                        type="button"
+                        aria-label={`Theme ${color}`}
+                        title={color}
+                        onClick={() => setDraft((d) => ({ ...d, themeColor: color }))}
+                        style={{
+                          width: 22,
+                          height: 22,
+                          borderRadius: 999,
+                          border: draft.themeColor === color ? '2px solid #1f2937' : '1px solid #e5e7eb',
+                          background: color,
+                          cursor: 'pointer',
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {isNew && (
                 <div className="field">

@@ -18,23 +18,13 @@ import StraightCenterEdge from './StraightCenterEdge'
 import PointerEdge from './PointerEdge'
 import { GRID, NEST_PAD_BOTTOM, NEST_PAD_LEFT, NEST_PAD_RIGHT, NEST_PAD_TOP } from '../lib/grid'
 import { computeNodeLayouts } from '../lib/layout/computeNodeLayouts'
+import { STANDARD_THEME_COLORS } from '../lib/themePalette'
 
 const nodeTypes = { mindmap: CustomNode }
 const edgeTypes = { 'straight-center': StraightCenterEdge, 'pointer-edge': PointerEdge }
 
 // Palette optimised for light backgrounds, one color per L1 branch
-const L1_PALETTE = [
-  '#2563eb', // blue
-  '#059669', // emerald
-  '#ea580c', // orange
-  '#7c3aed', // violet
-  '#e11d48', // rose
-  '#0891b2', // cyan
-  '#b45309', // amber-brown
-  '#0f766e', // teal
-  '#4f46e5', // indigo
-  '#c026d3', // fuchsia
-]
+const L1_PALETTE = STANDARD_THEME_COLORS
 
 const ROOT_BORDER = '#78716c' // warm slate — neutral for the central topic
 const DEFAULT_NODE_SIZE = {
@@ -267,7 +257,7 @@ const MindMapCanvas = () => {
     let idx = 0
     nodes.forEach(n => {
       if (n.data?.level === 1) {
-        map[n.id] = L1_PALETTE[idx % L1_PALETTE.length]
+        map[n.id] = n.data?.themeColor || L1_PALETTE[idx % L1_PALETTE.length]
         idx++
       }
     })
