@@ -30,8 +30,18 @@ const TextIcon = () => (
   </svg>
 )
 
+const CardIcon = () => (
+  <svg width="24" height="22" viewBox="0 0 24 22" fill="none">
+    <rect x="1" y="1" width="22" height="20" rx="3" stroke="currentColor" strokeWidth="1.5" />
+    <line x1="1" y1="7" x2="23" y2="7" stroke="currentColor" strokeWidth="1.2" />
+    <line x1="5" y1="11" x2="19" y2="11" stroke="currentColor" strokeWidth="1" strokeLinecap="round" opacity="0.6" />
+    <line x1="5" y1="15" x2="15" y2="15" stroke="currentColor" strokeWidth="1" strokeLinecap="round" opacity="0.6" />
+  </svg>
+)
+
 const ITEMS = [
   { type: 'node',  label: 'Node',  Icon: NodeIcon },
+  { type: 'card',  label: 'Card',  Icon: CardIcon },
   { type: 'image', label: 'Image', Icon: ImageIcon },
   { type: 'note',  label: 'Note',  Icon: NoteIcon },
   { type: 'text',  label: 'Text',  Icon: TextIcon },

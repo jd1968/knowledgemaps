@@ -2,23 +2,23 @@ import { useMindMapStore } from '../store/useMindMapStore'
 import NodeModal from './NodeModal'
 
 export default function NodePopup() {
-  const nodes            = useMindMapStore((s) => s.nodes)
-  const selectedNodeId   = useMindMapStore((s) => s.selectedNodeId)
+  const nodes          = useMindMapStore((s) => s.nodes)
+  const modalNodeId    = useMindMapStore((s) => s.modalNodeId)
   const pendingNewNodeId = useMindMapStore((s) => s.pendingNewNodeId)
-  const deselectNode     = useMindMapStore((s) => s.deselectNode)
-  const deleteNode       = useMindMapStore((s) => s.deleteNode)
+  const closeNodeModal = useMindMapStore((s) => s.closeNodeModal)
+  const deleteNode     = useMindMapStore((s) => s.deleteNode)
 
-  const selectedNode = nodes.find((n) => n.id === selectedNodeId)
-  if (!selectedNode) return null
+  const modalNode = nodes.find((n) => n.id === modalNodeId)
+  if (!modalNode) return null
 
-  const isNew = selectedNode.id === pendingNewNodeId
+  const isNew = modalNode.id === pendingNewNodeId
 
   return (
     <NodeModal
-      node={selectedNode}
+      node={modalNode}
       isNew={isNew}
-      onDelete={isNew ? () => deleteNode(selectedNode.id) : undefined}
-      onClose={() => deselectNode()}
+      onDelete={isNew ? () => deleteNode(modalNode.id) : undefined}
+      onClose={closeNodeModal}
     />
   )
 }

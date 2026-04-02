@@ -28,6 +28,7 @@ export const useMindMapStore = create((set, get) => ({
   edges: [],
   selectedNodeId: null,
   pendingNewNodeId: null,
+  modalNodeId: null,
 
   // ── Map metadata ─────────────────────────────────────────────
   currentMapId: null,
@@ -77,18 +78,50 @@ export const useMindMapStore = create((set, get) => ({
   // ── React Flow handlers ───────────────────────────────────────
 
   onNodesChange: (changes) => {
-    const { isEditMode } = get()
+    const { isEditMode, edges } = get()
     const effectiveChanges = isEditMode
       ? changes
       : changes.filter((c) => c.type === 'select' || c.type === 'dimensions')
     if (effectiveChanges.length === 0) return
 
-    const hasNonSelectChange = effectiveChanges.some((c) => c.type !== 'select' && c.type !== 'dimensions')
+    // During resize, React Flow can emit a companion position change.
+    // Ignore that position update so resizing a node doesn't move bounds-driven parent containers.
+    const parentIds = new Set(edges.map((e) => e.source))
+    const resizingNodeIds = new Set(
+      effectiveChanges
+        .filter((c) => c.type === 'dimensions' && c.resizing !== false)
+        .map((c) => c.id)
+    )
+    const normalizedChanges = effectiveChanges.filter(
+      (c) => !(c.type === 'position' && resizingNodeIds.has(c.id) && !parentIds.has(c.id))
+    )
+    if (normalizedChanges.length === 0) return
+
+    const hasNonSelectChange = normalizedChanges.some((c) => c.type !== 'select' && c.type !== 'dimensions')
+
+    const resizedById = new Map(
+      normalizedChanges
+        .filter((c) => c.type === 'dimensions' && c.dimensions)
+        .map((c) => [c.id, c.dimensions])
+    )
 
     // Don't push position changes to history during drag (too noisy)
     // History is pushed in onNodeDragStart instead
     set((state) => ({
-      nodes: applyNodeChanges(effectiveChanges, state.nodes),
+      nodes: applyNodeChanges(normalizedChanges, state.nodes).map((node) => {
+        const dims = resizedById.get(node.id)
+        if (!dims || !parentIds.has(node.id)) return node
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            manualGroupSize: {
+              width: Math.max(60, dims.width ?? 60),
+              height: Math.max(30, dims.height ?? 30),
+            },
+          },
+        }
+      }),
       isDirty: hasNonSelectChange ? true : state.isDirty,
     }))
     // Debounce autosave (skip for selection-only changes)
@@ -139,7 +172,11 @@ export const useMindMapStore = create((set, get) => ({
       id,
       type: 'mindmap',
       position,
-      ...(['image', 'note'].includes(nodeType) ? { style: { width: 200, height: 200 } } : {}),
+      ...(nodeType === 'text' ? {} : {
+        style: nodeType === 'image' || nodeType === 'note' ? { width: 200, height: 200 }
+          : nodeType === 'card' ? { width: 220, height: 160 }
+          : { width: [220, 190, 150, 130][Math.min(Math.max(level, 0), 3)] },
+      }),
       data: {
         title,
         key: id,
@@ -212,6 +249,9 @@ export const useMindMapStore = create((set, get) => ({
   deselectNode: () => {
     set({ selectedNodeId: null, pendingNewNodeId: null })
   },
+
+  openNodeModal: (nodeId) => set({ modalNodeId: nodeId }),
+  closeNodeModal: () => set({ modalNodeId: null, pendingNewNodeId: null }),
 
   // ── History ───────────────────────────────────────────────────
 

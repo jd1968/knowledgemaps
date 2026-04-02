@@ -19,10 +19,10 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
   const currentMapId     = useMindMapStore((s) => s.currentMapId)
 
   const { id } = node
-  const { title, level, content, longTitle = '', isSubmap, submapId, nodeType = 'node', hasChildren, isTodo = false } = node.data
+  const { title, level, content, longTitle = '', isSubmap, submapId, nodeType = 'node', hasChildren, isTodo = false, showContents = false } = node.data
 
   const [isEditing, setIsEditing]         = useState(isEditMode)
-  const [draft, setDraft]                 = useState(isEditMode ? { title: title || '', longTitle: longTitle || title || '', content: content || '', isTodo: !!isTodo, nodeType } : null)
+  const [draft, setDraft]                 = useState(isEditMode ? { title: title || '', longTitle: longTitle || title || '', content: content || '', isTodo: !!isTodo, nodeType, showContents: !!showContents } : null)
   const [showConvertMenu, setShowConvertMenu] = useState(false)
   const [converting, setConverting]       = useState(false)
   const [showSubmapChoice, setShowSubmapChoice] = useState(false)
@@ -51,7 +51,7 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
   }, [isEditMode])
 
   const startEdit = () => {
-    setDraft({ title: title || '', longTitle: longTitle || title || '', content: content || '', isTodo: !!isTodo, nodeType })
+    setDraft({ title: title || '', longTitle: longTitle || title || '', content: content || '', isTodo: !!isTodo, nodeType, showContents: !!showContents })
     setIsEditing(true)
   }
 
@@ -65,7 +65,7 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
       setShowSubmapChoice(true)
       return
     }
-    if (draft) updateNodeData(id, { title: draft.title.trim(), longTitle: draft.longTitle?.trim() || '', content: draft.content, isTodo: !!draft.isTodo, nodeType: nextType })
+    if (draft) updateNodeData(id, { title: draft.title.trim(), longTitle: draft.longTitle?.trim() || '', content: draft.content, isTodo: !!draft.isTodo, nodeType: nextType, showContents: !!draft.showContents })
     if (nextType === 'pointer') setEdgeType(id, 'pointer-edge')
     else if (nodeType === 'pointer') setEdgeType(id, 'straight-center')
     if (isNew) { onClose(); return }
@@ -210,6 +210,17 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
                   </div>
                 </div>
               )}
+
+              <div className="field">
+                <label className="node-modal-toggle-row">
+                  <input
+                    type="checkbox"
+                    checked={!!draft.showContents}
+                    onChange={(e) => setDraft((d) => ({ ...d, showContents: e.target.checked }))}
+                  />
+                  <span className="field-label" style={{ margin: 0 }}>Show Contents</span>
+                </label>
+              </div>
 
               <div className="field field--grow">
                 <label className="field-label">Notes</label>

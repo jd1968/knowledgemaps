@@ -6,6 +6,7 @@ import SubmapChoiceModal from './SubmapChoiceModal'
 import { NodeIconDisplay, NodeIconUpload } from './NodeIcon'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { markdownComponents, urlTransform } from './MarkdownEditor'
 
 const LEVEL_CONFIG = {
   0: { width: 220, height: null, fontSize: '22px', fontWeight: '700' },
@@ -36,6 +37,7 @@ const CustomNode = memo(({ id, data, selected }) => {
   const convertToSubmap       = useMindMapStore((state) => state.convertToSubmap)
   const pushHistory           = useMindMapStore((state) => state.pushHistory)
   const selectNode            = useMindMapStore((state) => state.selectNode)
+  const openNodeModal         = useMindMapStore((state) => state.openNodeModal)
   const isEditMode            = useMindMapStore((state) => state.isEditMode)
   const reparentNode          = useMindMapStore((state) => state.reparentNode)
   const reparentSourceNodeId  = useMindMapStore((state) => state.reparentSourceNodeId)
@@ -59,15 +61,15 @@ const CustomNode = memo(({ id, data, selected }) => {
   const selectTimerRef = useRef(null)
   const nodeRef        = useRef(null)
 
-  const { title, level, l1Color, hasChildren, isSubmap, submapId, hasNotes, nodeType, groupSize, content, isTodo = false, iconUrl = '', imageUrl = '', imageBorder = false, textSize = 'm' } = data
+  const { title, level, l1Color, hasChildren, isSubmap, submapId, hasNotes, nodeType, groupSize, content, isTodo = false, iconUrl = '', imageUrl = '', imageBorder = false, textSize = 'm', showContents = false } = data
   const cfg         = getConfig(level)
   const borderColor = l1Color ?? '#94a3b8'
   const TEXT_SIZES  = { s: 14, m: 22, l: 36 }
   const isParent    = !!groupSize
   // Depth tint only for parent nodes; each level adds 0.04, min 0.05
   const bgAlpha     = isParent ? 0.05 + Math.max(0, level - 1) * 0.04 : 0
-  const width       = ['image', 'note'].includes(nodeType) ? '100%' : nodeType === 'text' ? 'auto' : (groupSize?.width ?? cfg.width)
-  const height      = ['image', 'note'].includes(nodeType) ? '100%' : (nodeType === 'pointer' || nodeType === 'text' ? null : (groupSize?.height ?? cfg.height))
+  const width       = nodeType === 'text' ? 'auto' : (groupSize?.width ?? '100%')
+  const height      = (nodeType === 'pointer' || nodeType === 'text') ? null : (groupSize?.height ?? '100%')
   const hasPointerContent = nodeType === 'pointer' && content && content.trim() !== ''
   const isReparentSource = reparentSourceNodeId === id
 
@@ -209,7 +211,10 @@ const CustomNode = memo(({ id, data, selected }) => {
           const dy = e2.clientY - startY
           if (dx * dx + dy * dy < 25) {
             clearTimeout(selectTimerRef.current)
-            selectTimerRef.current = setTimeout(() => selectNode(id), 300)
+            selectTimerRef.current = setTimeout(() => {
+              if (isEditMode) selectNode(id)
+              else openNodeModal(id)
+            }, 300)
           }
         }, { once: true })
       }}
@@ -226,7 +231,7 @@ const CustomNode = memo(({ id, data, selected }) => {
       }}
       onDoubleClick={(e) => {
         if (!isEditMode) return
-        if (nodeType === 'note') return
+        if (nodeType === 'note' || nodeType === 'card') return
         e.stopPropagation()
         clearTimeout(selectTimerRef.current) // cancel pending modal open
         startEditing()
@@ -272,7 +277,7 @@ const CustomNode = memo(({ id, data, selected }) => {
             ? `0 0 0 3px ${borderColor}40, 2px 4px 14px rgba(0,0,0,0.18)`
             : hovered
               ? `0 0 0 2px ${borderColor}70, 2px 4px 10px rgba(0,0,0,0.12)`
-              : nodeType === 'note'
+              : (nodeType === 'note')
                 ? '3px 4px 10px rgba(0,0,0,0.18), 1px 1px 0 rgba(0,0,0,0.06)'
                 : '0 2px 8px rgba(0,0,0,0.08)',
         transition: 'box-shadow 0.15s ease',
@@ -284,6 +289,15 @@ const CustomNode = memo(({ id, data, selected }) => {
     >
       <Handle type="target" position={Position.Left} style={centerHandle} />
 
+      {nodeType !== 'text' && (
+        <NodeResizer
+          isVisible={isEditMode && (selected || hovered)}
+          minWidth={60}
+          minHeight={30}
+          onResizeEnd={() => scheduleAutosave()}
+        />
+      )}
+
       {!editing && isTodo && (
         <span className="node-todo-indicator" title="Marked as To Do">
           To Do
@@ -293,12 +307,6 @@ const CustomNode = memo(({ id, data, selected }) => {
       {/* Image node body */}
       {nodeType === 'image' && (
         <div className="image-node-body">
-          <NodeResizer
-            isVisible={isEditMode && (selected || hovered)}
-            minWidth={80}
-            minHeight={80}
-            onResizeEnd={() => scheduleAutosave()}
-          />
           {imageUrl ? (
             <>
               <NodeIconDisplay iconUrl={imageUrl} className="image-node-img" />
@@ -342,21 +350,31 @@ const CustomNode = memo(({ id, data, selected }) => {
       {/* Sticky note body */}
       {nodeType === 'note' && (
         <div className="sticky-note-body">
-          <NodeResizer
-            isVisible={isEditMode && (selected || hovered)}
-            minWidth={100}
-            minHeight={80}
-            onResizeEnd={() => scheduleAutosave()}
-          />
           {title?.trim() && (
             <div className="sticky-note-title">{title}</div>
           )}
           {content?.trim() ? (
             <div className="sticky-note-text sticky-note-markdown">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents} urlTransform={urlTransform}>{content}</ReactMarkdown>
             </div>
           ) : !title?.trim() && (
             <p className="sticky-note-text"><span className="sticky-note-placeholder">Click to edit…</span></p>
+          )}
+        </div>
+      )}
+
+      {/* Card node body */}
+      {nodeType === 'card' && (
+        <div className="card-node-body">
+          {title?.trim() && (
+            <div className="card-node-title">{title}</div>
+          )}
+          {showContents && content?.trim() ? (
+            <div className="card-node-content card-node-markdown">
+              <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents} urlTransform={urlTransform}>{content}</ReactMarkdown>
+            </div>
+          ) : !title?.trim() && (
+            <p className="card-node-content"><span className="card-node-placeholder">Click to edit…</span></p>
           )}
         </div>
       )}
@@ -447,15 +465,15 @@ const CustomNode = memo(({ id, data, selected }) => {
             </>
           )}
         </div>
-      ) : nodeType !== 'image' && nodeType !== 'note' && nodeType !== 'text' && (!isParent || !!title?.trim()) && (
+      ) : nodeType !== 'image' && nodeType !== 'note' && nodeType !== 'card' && nodeType !== 'text' && (!isParent || !!title?.trim()) && (
         <div style={{
-          flex: isParent ? '0 0 auto' : 1,
+          flex: (isParent || showContents) ? '0 0 auto' : 1,
           display: 'flex',
           flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: isParent || iconUrl ? 'flex-start' : 'center',
-          padding: isParent ? '10px 14px' : (iconUrl && !editing ? '10px 14px 10px 8px' : '10px 14px'),
-          textAlign: isParent || iconUrl ? 'left' : 'center',
+          alignItems: (showContents || isParent || hasChildren || iconUrl) ? 'flex-start' : 'center',
+          justifyContent: (isParent || hasChildren || iconUrl || showContents) ? 'flex-start' : 'center',
+          padding: isParent ? '10px 14px' : showContents ? (iconUrl && !editing ? '10px 14px 4px 8px' : '10px 14px 4px') : (iconUrl && !editing ? '10px 14px 10px 8px' : '10px 14px'),
+          textAlign: (isParent || hasChildren || iconUrl || showContents) ? 'left' : 'center',
           wordBreak: 'break-word',
           lineHeight: '1.35',
           position: 'relative',
@@ -493,7 +511,7 @@ const CustomNode = memo(({ id, data, selected }) => {
           ) : (
             <span>{title || 'Untitled'}</span>
           )}
-          {!editing && hasNotes && (
+          {!editing && hasNotes && !showContents && (
             <span style={{
               position: 'absolute',
               top: '4px',
@@ -505,6 +523,12 @@ const CustomNode = memo(({ id, data, selected }) => {
               pointerEvents: 'none',
             }}>≡</span>
           )}
+        </div>
+      )}
+
+      {showContents && content?.trim() && nodeType !== 'image' && nodeType !== 'note' && nodeType !== 'card' && nodeType !== 'text' && nodeType !== 'pointer' && !isParent && !editing && (
+        <div className="node-contents-body node-contents-markdown">
+          <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents} urlTransform={urlTransform}>{content}</ReactMarkdown>
         </div>
       )}
 
@@ -527,7 +551,7 @@ const CustomNode = memo(({ id, data, selected }) => {
         </button>
       )}
 
-      {!editing && !isSubmap && nodeType !== 'note' && nodeType !== 'pointer' && nodeType !== 'image' && nodeType !== 'text' && isEditMode && (
+      {!editing && !isSubmap && nodeType !== 'note' && nodeType !== 'card' && nodeType !== 'pointer' && nodeType !== 'image' && nodeType !== 'text' && isEditMode && (
         <button
           className="add-child-btn"
           title="Add child node"
@@ -536,7 +560,7 @@ const CustomNode = memo(({ id, data, selected }) => {
           onClick={(e) => {
             e.stopPropagation()
             const newId = addChildNode(id, 'node')
-            if (newId) selectNode(newId)
+            if (newId) { selectNode(newId); openNodeModal(newId) }
           }}
         >
           +
@@ -546,7 +570,7 @@ const CustomNode = memo(({ id, data, selected }) => {
 
       {/* Icon upload — always rendered in edit mode so the portal input stays
           mounted during file-picker use; visibility toggled via CSS */}
-      {isEditMode && level > 0 && !editing && nodeType !== 'image' && nodeType !== 'note' && nodeType !== 'text' && (
+      {isEditMode && level > 0 && !editing && nodeType !== 'image' && nodeType !== 'note' && nodeType !== 'card' && nodeType !== 'text' && (
         <NodeIconUpload
           iconUrl={iconUrl}
           onUpload={(url) => updateNodeData(id, { iconUrl: url })}
@@ -590,6 +614,18 @@ const CustomNode = memo(({ id, data, selected }) => {
           onClick={(e) => { e.stopPropagation(); handleToggleReparentMode() }}
         >
           ⇢
+        </button>
+      )}
+
+      {/* Edit glyph — opens node modal */}
+      {hovered && isEditMode && !editing && (
+        <button
+          className="node-edit-btn nodrag nopan"
+          title="Edit node"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); openNodeModal(id) }}
+        >
+          ✎
         </button>
       )}
 

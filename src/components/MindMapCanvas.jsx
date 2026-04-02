@@ -47,6 +47,7 @@ const NEST_PAD_TOP = 58
 const NEST_PAD_BOTTOM = 24
 
 const getStableNodeSize = (node) => {
+  if (node?.data?.manualGroupSize) return node.data.manualGroupSize
   if (node?.data?.groupSize) return node.data.groupSize
   const level = Math.min(Math.max(node?.data?.level ?? 1, 0), 3)
   return DEFAULT_NODE_SIZE[level]
@@ -343,8 +344,10 @@ const MindMapCanvas = () => {
             maxX = Math.max(maxX, l.x + l.width); maxY = Math.max(maxY, l.y + l.height)
           } else {
             const sz = getStableNodeSize(child)
+            // Parent bounds should remain stable when a child is manually resized.
+            // Use the canonical node size here instead of measured runtime dimensions.
             const w = sz.width
-            const h = child.measured?.height ?? child.height ?? sz.height
+            const h = sz.height
             minX = Math.min(minX, child.position.x); minY = Math.min(minY, child.position.y)
             maxX = Math.max(maxX, child.position.x + w); maxY = Math.max(maxY, child.position.y + h)
           }
@@ -371,6 +374,7 @@ const MindMapCanvas = () => {
       const hasChildren = !!(childrenMap[node.id]?.length)
       const hasNotes = !!(node.data.content && node.data.content !== '<p></p>' && node.data.content !== '')
       const layout = layouts[node.id]
+      const manualGroupSize = node.data?.manualGroupSize
       return {
         ...node,
         ...(layout ? { position: { x: layout.x, y: layout.y } } : {}),
@@ -382,7 +386,9 @@ const MindMapCanvas = () => {
           l1Color,
           hasChildren,
           hasNotes,
-          groupSize: layout ? { width: layout.width, height: layout.height } : undefined,
+          groupSize: hasChildren
+            ? (manualGroupSize ?? (layout ? { width: layout.width, height: layout.height } : undefined))
+            : undefined,
         },
       }
     }).sort((a, b) => {
