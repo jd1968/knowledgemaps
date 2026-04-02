@@ -553,7 +553,7 @@ const CustomNode = memo(({ id, data, selected }) => {
         </div>
       )}
 
-      {showContents && content?.trim() && nodeType !== 'image' && nodeType !== 'note' && nodeType !== 'card' && nodeType !== 'text' && nodeType !== 'pointer' && !isParent && !editing && (
+      {showContents && content?.trim() && nodeType !== 'image' && nodeType !== 'note' && nodeType !== 'card' && nodeType !== 'text' && nodeType !== 'pointer' && !editing && (
         <div className="node-contents-body node-contents-markdown">
           <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents} urlTransform={urlTransform}>{content}</ReactMarkdown>
         </div>

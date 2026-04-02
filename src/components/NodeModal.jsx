@@ -68,9 +68,7 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
     if (draft) updateNodeData(id, { title: draft.title.trim(), longTitle: draft.longTitle?.trim() || '', content: draft.content, isTodo: !!draft.isTodo, nodeType: nextType, showContents: !!draft.showContents })
     if (nextType === 'pointer') setEdgeType(id, 'pointer-edge')
     else if (nodeType === 'pointer') setEdgeType(id, 'straight-center')
-    if (isNew) { onClose(); return }
-    setIsEditing(false)
-    setDraft(null)
+    onClose()
   }
 
   const cancelEdit = () => {
