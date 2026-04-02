@@ -490,13 +490,15 @@ const MindMapCanvas = () => {
         }}
         deleteKeyCode={isEditMode ? ['Backspace', 'Delete'] : null}
       >
-        <Background
-          variant={BackgroundVariant.Lines}
-          gap={GRID}
-          offset={[0, 0]}
-          size={0.8}
-          color="#d8cfc2"
-        />
+        {isEditMode && (
+          <Background
+            variant={BackgroundVariant.Lines}
+            gap={GRID}
+            offset={[0, 0]}
+            size={0.8}
+            color="#d8cfc2"
+          />
+        )}
         {!isTouch && <Controls showInteractive={false}>
           <ZoomDisplay />
           <ControlButton
