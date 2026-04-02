@@ -2,8 +2,65 @@ import { create } from 'zustand'
 import { applyNodeChanges, applyEdgeChanges, addEdge } from '@xyflow/react'
 import { v4 as uuidv4 } from 'uuid'
 import { supabase } from '../lib/supabase'
+import { GRID_SIZE, NEST_PAD_LEFT, NEST_PAD_TOP, NEST_V_SPACING, snapPoint, snapSize } from '../lib/grid'
 
 const HISTORY_LIMIT = 50
+const DEFAULT_NODE_SIZE_BY_LEVEL = {
+  0: { width: 200, height: 200 },
+  1: { width: 190, height: 50 },
+  2: { width: 150, height: 88 },
+  3: { width: 130, height: 76 },
+}
+
+const normalizeLevel = (level = 1) => Math.min(Math.max(level, 0), 3)
+
+const getDefaultSizeForNode = (node) => {
+  if (node?.data?.nodeType === 'image' || node?.data?.nodeType === 'note') return { width: 200, height: 200 }
+  if (node?.data?.nodeType === 'card') return { width: 220, height: 160 }
+  return DEFAULT_NODE_SIZE_BY_LEVEL[normalizeLevel(node?.data?.level ?? 1)]
+}
+
+const applySelectionChanges = (changes, nodes) => applyNodeChanges(
+  changes.filter((c) => c.type === 'select'),
+  nodes
+)
+
+const applyPositionChanges = (changes, nodes) => applyNodeChanges(
+  changes.filter((c) => c.type === 'position' || c.type === 'remove' || c.type === 'add' || c.type === 'replace'),
+  nodes
+)
+
+const applyResizeChanges = (changes, nodes, edges) => {
+  const dimensionChanges = changes
+    .filter((c) => c.type === 'dimensions' && c.dimensions)
+    .map((c) => (c.resizing ? c : { ...c, dimensions: snapSize(c.dimensions, { gridSize: GRID_SIZE }) }))
+
+  if (dimensionChanges.length === 0) return nodes
+
+  const parentIds = new Set(edges.map((e) => e.source))
+  const resizedById = new Map(dimensionChanges.map((c) => [c.id, c.dimensions]))
+  const nodesAfterDimensions = applyNodeChanges(dimensionChanges, nodes)
+
+  return nodesAfterDimensions.map((node) => {
+    const dims = resizedById.get(node.id)
+    if (!dims) return node
+    const snapped = snapSize(dims, { gridSize: GRID_SIZE })
+    return {
+      ...node,
+      style: {
+        ...(node.style || {}),
+        width: snapped.width,
+        height: snapped.height,
+      },
+      data: {
+        ...node.data,
+        // Single persisted size authority for all resizable nodes.
+        size: snapped,
+        ...(parentIds.has(node.id) ? { sizeMode: 'manual' } : {}),
+      },
+    }
+  })
+}
 
 const ROOT_ID = 'root-' + uuidv4().slice(0, 8)
 
@@ -83,47 +140,19 @@ export const useMindMapStore = create((set, get) => ({
       ? changes
       : changes.filter((c) => c.type === 'select' || c.type === 'dimensions')
     if (effectiveChanges.length === 0) return
-
-    // During resize, React Flow can emit a companion position change.
-    // Ignore that position update so resizing a node doesn't move bounds-driven parent containers.
-    const parentIds = new Set(edges.map((e) => e.source))
-    const resizingNodeIds = new Set(
-      effectiveChanges
-        .filter((c) => c.type === 'dimensions' && c.resizing !== false)
-        .map((c) => c.id)
-    )
-    const normalizedChanges = effectiveChanges.filter(
-      (c) => !(c.type === 'position' && resizingNodeIds.has(c.id) && !parentIds.has(c.id))
-    )
-    if (normalizedChanges.length === 0) return
-
-    const hasNonSelectChange = normalizedChanges.some((c) => c.type !== 'select' && c.type !== 'dimensions')
-
-    const resizedById = new Map(
-      normalizedChanges
-        .filter((c) => c.type === 'dimensions' && c.dimensions)
-        .map((c) => [c.id, c.dimensions])
-    )
+    const hasNonSelectChange = effectiveChanges.some((c) => c.type !== 'select' && c.type !== 'dimensions')
 
     // Don't push position changes to history during drag (too noisy)
     // History is pushed in onNodeDragStart instead
-    set((state) => ({
-      nodes: applyNodeChanges(normalizedChanges, state.nodes).map((node) => {
-        const dims = resizedById.get(node.id)
-        if (!dims || !parentIds.has(node.id)) return node
-        return {
-          ...node,
-          data: {
-            ...node.data,
-            manualGroupSize: {
-              width: Math.max(60, dims.width ?? 60),
-              height: Math.max(30, dims.height ?? 30),
-            },
-          },
-        }
-      }),
-      isDirty: hasNonSelectChange ? true : state.isDirty,
-    }))
+    set((state) => {
+      const selectedApplied = applySelectionChanges(effectiveChanges, state.nodes)
+      const positionedApplied = applyPositionChanges(effectiveChanges, selectedApplied)
+      const resizedApplied = applyResizeChanges(effectiveChanges, positionedApplied, edges)
+      return {
+        nodes: resizedApplied,
+        isDirty: hasNonSelectChange ? true : state.isDirty,
+      }
+    })
     // Debounce autosave (skip for selection-only changes)
     if (hasNonSelectChange) get().scheduleAutosave()
   },
@@ -168,20 +197,21 @@ export const useMindMapStore = create((set, get) => ({
     if (!get().isEditMode) return null
     get().pushHistory()
     const id = uuidv4()
+    const snappedPosition = snapPoint(position)
+    const baseSize = getDefaultSizeForNode({ data: { level, nodeType } })
     const newNode = {
       id,
       type: 'mindmap',
-      position,
+      position: snappedPosition,
       ...(nodeType === 'text' ? {} : {
-        style: nodeType === 'image' || nodeType === 'note' ? { width: 200, height: 200 }
-          : nodeType === 'card' ? { width: 220, height: 160 }
-          : { width: [220, 190, 150, 130][Math.min(Math.max(level, 0), 3)] },
+        style: { width: baseSize.width, height: baseSize.height },
       }),
       data: {
         title,
         key: id,
         level,
         nodeType,
+        ...(nodeType === 'text' ? {} : { size: baseSize }),
         content: '',
       },
     }
@@ -618,26 +648,25 @@ export const useMindMapStore = create((set, get) => ({
     const childNodes = nodes.filter((n) => childIds.has(n.id))
 
     // Place child inside the parent node
-    const NEST_PAD_LEFT = 16
-    const NEST_PAD_TOP = 58  // approx header height
-    const V_SPACING = 8
-
     let x = parent.position.x + NEST_PAD_LEFT
     let y = parent.position.y + NEST_PAD_TOP
 
     if (childNodes.length > 0) {
       const sorted = [...childNodes].sort((a, b) => a.position.y - b.position.y)
       const last = sorted[sorted.length - 1]
-      const lastHeight = last.data?.level >= 3 ? 76 : last.data?.level >= 2 ? 88 : 48
-      y = last.position.y + lastHeight + V_SPACING
+      const lastHeight = last.data?.size?.height ?? getDefaultSizeForNode(last).height
+      y = last.position.y + lastHeight + NEST_V_SPACING
     }
+    const snappedPosition = snapPoint({ x, y })
 
     const id = uuidv4()
+    const size = getDefaultSizeForNode({ data: { level: childLevel, nodeType } })
     const newNode = {
       id,
       type: 'mindmap',
-      position: { x, y },
-      data: { title: '', key: id, level: childLevel, nodeType, content: '' },
+      position: snappedPosition,
+      style: nodeType === 'text' ? undefined : { width: size.width, height: size.height },
+      data: { title: '', key: id, level: childLevel, nodeType, size, content: '' },
     }
 
     const newEdge = {
@@ -714,18 +743,16 @@ export const useMindMapStore = create((set, get) => ({
     assignLevels(nodeId, newParentLevel + 1)
 
     // Position the moved node inside the new parent
-    const NEST_PAD_LEFT = 16
-    const NEST_PAD_TOP = 58
-    const V_SPACING = 8
     const existingSiblingCount = newEdges.filter(e => e.source === newParentId && e.target !== nodeId).length
     const newX = newParentNode.position.x + NEST_PAD_LEFT
-    const newY = newParentNode.position.y + NEST_PAD_TOP + existingSiblingCount * (88 + V_SPACING)
+    const newY = newParentNode.position.y + NEST_PAD_TOP + existingSiblingCount * (88 + NEST_V_SPACING)
+    const snappedPosition = snapPoint({ x: newX, y: newY })
 
     set(state => ({
       nodes: state.nodes.map(n => {
         const nextLevel = levelMap[n.id]
         if (n.id === nodeId) {
-          return { ...n, position: { x: newX, y: newY }, data: { ...n.data, level: levelMap[n.id] ?? n.data.level } }
+          return { ...n, position: snappedPosition, data: { ...n.data, level: levelMap[n.id] ?? n.data.level } }
         }
         if (nextLevel !== undefined) {
           return { ...n, data: { ...n.data, level: nextLevel } }
@@ -770,6 +797,30 @@ export const useMindMapStore = create((set, get) => ({
       isDirty: true,
     }))
     if (shouldScheduleAutosave) get().scheduleAutosave()
+  },
+
+  snapSubtreeToGrid: (rootId, includeRoot = true) => {
+    const { nodes, edges } = get()
+    const ids = new Set(includeRoot ? [rootId] : [])
+    const stack = [rootId]
+    while (stack.length) {
+      const current = stack.pop()
+      edges.forEach((e) => {
+        if (e.source === current && !ids.has(e.target)) {
+          ids.add(e.target)
+          stack.push(e.target)
+        }
+      })
+    }
+    set((state) => ({
+      nodes: state.nodes.map((n) => (
+        ids.has(n.id)
+          ? { ...n, position: snapPoint(n.position) }
+          : n
+      )),
+      isDirty: true,
+    }))
+    get().scheduleAutosave()
   },
 
   // ── Modal ─────────────────────────────────────────────────────

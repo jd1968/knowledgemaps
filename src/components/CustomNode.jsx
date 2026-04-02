@@ -57,9 +57,11 @@ const CustomNode = memo(({ id, data, selected }) => {
   const [showConvertMenu, setShowConvertMenu] = useState(false)
   const [converting, setConverting]       = useState(false)
   const [showSubmapChoice, setShowSubmapChoice] = useState(false)
+  const [menuHovered, setMenuHovered]     = useState(false)
   const inputRef       = useRef(null)
   const selectTimerRef = useRef(null)
   const nodeRef        = useRef(null)
+  const menuHideTimerRef = useRef(null)
 
   const { title, level, l1Color, hasChildren, isSubmap, submapId, hasNotes, nodeType, groupSize, content, isTodo = false, iconUrl = '', imageUrl = '', imageBorder = false, textSize = 'm', showContents = false } = data
   const cfg         = getConfig(level)
@@ -72,6 +74,31 @@ const CustomNode = memo(({ id, data, selected }) => {
   const height      = (nodeType === 'pointer' || nodeType === 'text') ? null : (groupSize?.height ?? '100%')
   const hasPointerContent = nodeType === 'pointer' && content && content.trim() !== ''
   const isReparentSource = reparentSourceNodeId === id
+  const showFloatingActions = isEditMode && !editing
+  const isActionMenuVisible = hovered || menuHovered || showConvertMenu || isReparentSource
+
+  const showActionMenu = useCallback(() => {
+    if (menuHideTimerRef.current) {
+      clearTimeout(menuHideTimerRef.current)
+      menuHideTimerRef.current = null
+    }
+    setHovered(true)
+  }, [])
+
+  const hideActionMenuWithDelay = useCallback(() => {
+    if (menuHideTimerRef.current) clearTimeout(menuHideTimerRef.current)
+    menuHideTimerRef.current = setTimeout(() => {
+      setHovered(false)
+      setMenuHovered(false)
+      menuHideTimerRef.current = null
+    }, 180)
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (menuHideTimerRef.current) clearTimeout(menuHideTimerRef.current)
+    }
+  }, [])
 
   const startEditing = useCallback(() => {
     setDraft(title || '')
@@ -200,8 +227,8 @@ const CustomNode = memo(({ id, data, selected }) => {
   return (
     <div
       ref={nodeRef}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      onMouseEnter={showActionMenu}
+      onMouseLeave={hideActionMenuWithDelay}
       onPointerDown={(e) => {
         if (reparentSourceNodeId) return
         const startX = e.clientX
@@ -534,111 +561,110 @@ const CustomNode = memo(({ id, data, selected }) => {
 
       <Handle type="source" position={Position.Right} style={centerHandle} />
 
-      {isSubmap && submapId && (
-        <button
-          className="submap-open-btn nodrag nopan"
-          title="Open submap"
-          style={{ background: borderColor }}
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={async (e) => {
-            e.stopPropagation()
-            if (isDirty && currentMapId) await saveMap()
-            const newCrumbs = [...breadcrumbs, { mapId: currentMapId, mapName: currentMapName }]
-            navigate(`/map/${submapId}`, { state: { breadcrumbs: newCrumbs } })
+      {showFloatingActions && (
+        <div
+          className={`node-floating-menu nodrag nopan${isActionMenuVisible ? '' : ' node-floating-menu--hidden'}`}
+          onMouseEnter={() => {
+            if (menuHideTimerRef.current) {
+              clearTimeout(menuHideTimerRef.current)
+              menuHideTimerRef.current = null
+            }
+            setMenuHovered(true)
+            setHovered(true)
           }}
-        >
-          ↗
-        </button>
-      )}
-
-      {!editing && !isSubmap && nodeType !== 'note' && nodeType !== 'card' && nodeType !== 'pointer' && nodeType !== 'image' && nodeType !== 'text' && isEditMode && (
-        <button
-          className="add-child-btn"
-          title="Add child node"
-          style={{ background: borderColor }}
+          onMouseLeave={hideActionMenuWithDelay}
           onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => {
-            e.stopPropagation()
-            const newId = addChildNode(id, 'node')
-            if (newId) { selectNode(newId); openNodeModal(newId) }
-          }}
         >
-          +
-        </button>
-      )}
+          {isSubmap && submapId && (
+            <button
+              className="submap-open-btn node-floating-btn nodrag nopan"
+              title="Open submap"
+              style={{ background: borderColor }}
+              onClick={async (e) => {
+                e.stopPropagation()
+                if (isDirty && currentMapId) await saveMap()
+                const newCrumbs = [...breadcrumbs, { mapId: currentMapId, mapName: currentMapName }]
+                navigate(`/map/${submapId}`, { state: { breadcrumbs: newCrumbs } })
+              }}
+            >
+              ↗
+            </button>
+          )}
 
+          {!isSubmap && nodeType !== 'note' && nodeType !== 'card' && nodeType !== 'pointer' && nodeType !== 'image' && nodeType !== 'text' && (
+            <button
+              className="add-child-btn node-floating-btn nodrag nopan"
+              title="Add child node"
+              style={{ background: borderColor }}
+              onClick={(e) => {
+                e.stopPropagation()
+                const newId = addChildNode(id, 'node')
+                if (newId) { selectNode(newId); openNodeModal(newId) }
+              }}
+            >
+              +
+            </button>
+          )}
 
-      {/* Icon upload — always rendered in edit mode so the portal input stays
-          mounted during file-picker use; visibility toggled via CSS */}
-      {isEditMode && level > 0 && !editing && nodeType !== 'image' && nodeType !== 'note' && nodeType !== 'card' && nodeType !== 'text' && (
-        <NodeIconUpload
-          iconUrl={iconUrl}
-          onUpload={(url) => updateNodeData(id, { iconUrl: url })}
-          className={`node-icon-upload-btn nodrag nopan${hovered ? '' : ' node-icon-upload-btn--hidden'}`}
-        >
-          ⊕
-        </NodeIconUpload>
-      )}
+          {level > 0 && nodeType !== 'image' && nodeType !== 'note' && nodeType !== 'card' && nodeType !== 'text' && (
+            <NodeIconUpload
+              iconUrl={iconUrl}
+              onUpload={(url) => updateNodeData(id, { iconUrl: url })}
+              className="node-icon-upload-btn node-floating-btn nodrag nopan"
+            >
+              ⊕
+            </NodeIconUpload>
+          )}
 
-      {/* Convert-type glyph — top-left, shown on hover for non-root, non-submap nodes */}
-      {(hovered || showConvertMenu) && isEditMode && level > 0 && !isSubmap && !editing && (
-        <button
-          className="node-convert-btn nodrag nopan"
-          title="Convert type"
-          style={{ background: borderColor }}
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => { e.stopPropagation(); const next = !showConvertMenu; setShowConvertMenu(next); setOpenMenuNodeId(next ? id : null) }}
-        >
-          ⇄
-        </button>
-      )}
+          {level > 0 && !isSubmap && (
+            <button
+              className="node-convert-btn node-floating-btn nodrag nopan"
+              title="Convert type"
+              style={{ background: borderColor }}
+              onClick={(e) => { e.stopPropagation(); const next = !showConvertMenu; setShowConvertMenu(next); setOpenMenuNodeId(next ? id : null) }}
+            >
+              ⇄
+            </button>
+          )}
 
-      {/* To-do glyph — quick toggle */}
-      {hovered && isEditMode && level > 0 && !editing && (
-        <button
-          className={`node-todo-btn nodrag nopan${isTodo ? ' node-todo-btn--active' : ''}`}
-          title={isTodo ? 'Unmark To Do' : 'Mark as To Do'}
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => { e.stopPropagation(); handleToggleTodo() }}
-        >
-          ✓
-        </button>
-      )}
+          {level > 0 && (
+            <button
+              className={`node-todo-btn node-floating-btn nodrag nopan${isTodo ? ' node-todo-btn--active' : ''}`}
+              title={isTodo ? 'Unmark To Do' : 'Mark as To Do'}
+              onClick={(e) => { e.stopPropagation(); handleToggleTodo() }}
+            >
+              ✓
+            </button>
+          )}
 
-      {/* Reparent glyph — quick select-source mode */}
-      {(hovered || isReparentSource) && isEditMode && level > 0 && !editing && (
-        <button
-          className={`node-reparent-btn nodrag nopan${isReparentSource ? ' node-reparent-btn--active' : ''}`}
-          title={isReparentSource ? 'Cancel reparent' : 'Reparent node'}
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => { e.stopPropagation(); handleToggleReparentMode() }}
-        >
-          ⇢
-        </button>
-      )}
+          {level > 0 && (
+            <button
+              className={`node-reparent-btn node-floating-btn nodrag nopan${isReparentSource ? ' node-reparent-btn--active' : ''}`}
+              title={isReparentSource ? 'Cancel reparent' : 'Reparent node'}
+              onClick={(e) => { e.stopPropagation(); handleToggleReparentMode() }}
+            >
+              ⇢
+            </button>
+          )}
 
-      {/* Edit glyph — opens node modal */}
-      {hovered && isEditMode && !editing && (
-        <button
-          className="node-edit-btn nodrag nopan"
-          title="Edit node"
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => { e.stopPropagation(); openNodeModal(id) }}
-        >
-          ✎
-        </button>
-      )}
+          <button
+            className="node-edit-btn node-floating-btn nodrag nopan"
+            title="Edit node"
+            onClick={(e) => { e.stopPropagation(); openNodeModal(id) }}
+          >
+            ✎
+          </button>
 
-      {/* Delete glyph — top-right, shown on hover for non-root nodes */}
-      {hovered && isEditMode && level > 0 && !editing && (
-        <button
-          className="node-delete-btn nodrag nopan"
-          title="Delete node"
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => { e.stopPropagation(); handleDelete() }}
-        >
-          ✕
-        </button>
+          {level > 0 && (
+            <button
+              className="node-delete-btn node-floating-btn nodrag nopan"
+              title="Delete node"
+              onClick={(e) => { e.stopPropagation(); handleDelete() }}
+            >
+              ✕
+            </button>
+          )}
+        </div>
       )}
 
       {/* Convert menu panel */}

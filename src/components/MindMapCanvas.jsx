@@ -16,6 +16,8 @@ import { useMindMapStore } from '../store/useMindMapStore'
 import CustomNode from './CustomNode'
 import StraightCenterEdge from './StraightCenterEdge'
 import PointerEdge from './PointerEdge'
+import { GRID, NEST_PAD_BOTTOM, NEST_PAD_LEFT, NEST_PAD_RIGHT, NEST_PAD_TOP } from '../lib/grid'
+import { computeNodeLayouts } from '../lib/layout/computeNodeLayouts'
 
 const nodeTypes = { mindmap: CustomNode }
 const edgeTypes = { 'straight-center': StraightCenterEdge, 'pointer-edge': PointerEdge }
@@ -37,16 +39,13 @@ const L1_PALETTE = [
 const ROOT_BORDER = '#78716c' // warm slate — neutral for the central topic
 const DEFAULT_NODE_SIZE = {
   0: { width: 200, height: 200 },
-  1: { width: 170, height: 48 },
+  1: { width: 190, height: 50 },
   2: { width: 150, height: 88 },
   3: { width: 130, height: 76 },
 }
-const NEST_PAD_LEFT = 16
-const NEST_PAD_RIGHT = 16
-const NEST_PAD_TOP = 58
-const NEST_PAD_BOTTOM = 24
 
 const getStableNodeSize = (node) => {
+  if (node?.data?.size) return node.data.size
   if (node?.data?.manualGroupSize) return node.data.manualGroupSize
   if (node?.data?.groupSize) return node.data.groupSize
   const level = Math.min(Math.max(node?.data?.level ?? 1, 0), 3)
@@ -215,6 +214,7 @@ const MindMapCanvas = () => {
     clearPendingToolboxType,
     isFullscreen,
     setIsFullscreen,
+    snapSubtreeToGrid,
   } = useMindMapStore()
 
   const toggleFullscreen = () => {
@@ -286,86 +286,21 @@ const MindMapCanvas = () => {
     return null
   }, [parentMap, rootId, nodeById])
 
-  // Compute nested layout: every non-root parent node expands to visually contain its children
+  // Compute nested layout in a pure helper and keep projection logic separate.
+  const { layouts } = useMemo(() => computeNodeLayouts({
+    nodes,
+    edges,
+    rootId,
+    getNodeSize: getStableNodeSize,
+    padding: {
+      left: NEST_PAD_LEFT,
+      right: NEST_PAD_RIGHT,
+      top: NEST_PAD_TOP,
+      bottom: NEST_PAD_BOTTOM,
+    },
+  }), [nodes, edges, rootId])
+
   const nodesWithColor = useMemo(() => {
-    // All nodes that have children (excluding root — it's hidden and L1 nodes float freely)
-    const parentChildrenMap = {}
-    edges.forEach(e => {
-      if (!parentChildrenMap[e.source]) parentChildrenMap[e.source] = []
-      parentChildrenMap[e.source].push(e.target)
-    })
-    const parentIdSet = new Set(
-      Object.keys(parentChildrenMap).filter(id => id !== rootId && parentChildrenMap[id].length > 0)
-    )
-
-    // Process innermost parents first so outer parents can use sub-parent computed bounds
-    const nestDepth = {}
-    const computeDepth = (id) => {
-      if (id in nestDepth) return nestDepth[id]
-      let max = 0
-      ;(parentChildrenMap[id] || []).forEach(cid => {
-        if (parentIdSet.has(cid)) max = Math.max(max, computeDepth(cid) + 1)
-      })
-      nestDepth[id] = max
-      return max
-    }
-    parentIdSet.forEach(id => computeDepth(id))
-
-    const layouts = {}
-    Array.from(parentIdSet)
-      .sort((a, b) => (nestDepth[a] ?? 0) - (nestDepth[b] ?? 0))
-      .forEach(parentId => {
-        const parentNode = nodeById[parentId]
-        const childIds = parentChildrenMap[parentId] || []
-
-        // Collect all descendants, using sub-parent layout bounds for already-computed sub-parents
-        const allDescIds = []
-        const collectDesc = (ids) => {
-          ids.forEach(cid => {
-            allDescIds.push(cid)
-            if (parentIdSet.has(cid) && layouts[cid]) return
-            const grandkids = parentChildrenMap[cid]
-            if (grandkids?.length) collectDesc(grandkids)
-          })
-        }
-        collectDesc(childIds)
-
-        const children = allDescIds.map(id => nodeById[id]).filter(Boolean)
-        if (children.length === 0) {
-          layouts[parentId] = { x: parentNode?.position?.x ?? 0, y: parentNode?.position?.y ?? 0, width: 200, height: 80 }
-          return
-        }
-
-        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
-        children.forEach(child => {
-          if (parentIdSet.has(child.id) && layouts[child.id]) {
-            const l = layouts[child.id]
-            minX = Math.min(minX, l.x); minY = Math.min(minY, l.y)
-            maxX = Math.max(maxX, l.x + l.width); maxY = Math.max(maxY, l.y + l.height)
-          } else {
-            const sz = getStableNodeSize(child)
-            // Parent bounds should remain stable when a child is manually resized.
-            // Use the canonical node size here instead of measured runtime dimensions.
-            const w = sz.width
-            const h = sz.height
-            minX = Math.min(minX, child.position.x); minY = Math.min(minY, child.position.y)
-            maxX = Math.max(maxX, child.position.x + w); maxY = Math.max(maxY, child.position.y + h)
-          }
-        })
-
-        const anchorX = parentNode?.position?.x ?? (minX - NEST_PAD_LEFT)
-        const anchorY = parentNode?.position?.y ?? (minY - NEST_PAD_TOP)
-        const x = Math.min(anchorX, minX - NEST_PAD_LEFT)
-        const y = Math.min(anchorY, minY - NEST_PAD_TOP)
-
-        layouts[parentId] = {
-          x,
-          y,
-          width: Math.max(220, (maxX - x) + NEST_PAD_RIGHT),
-          height: Math.max(80, (maxY - y) + NEST_PAD_BOTTOM),
-        }
-      })
-
     return nodes.map(node => {
       const level = node.data?.level ?? 0
       const l1Color = level === 0
@@ -374,10 +309,16 @@ const MindMapCanvas = () => {
       const hasChildren = !!(childrenMap[node.id]?.length)
       const hasNotes = !!(node.data.content && node.data.content !== '<p></p>' && node.data.content !== '')
       const layout = layouts[node.id]
-      const manualGroupSize = node.data?.manualGroupSize
+      const persistedSize = node.data?.size
+      const fixedGroupSize = hasChildren
+        ? (persistedSize ?? {
+            width: node.style?.width ?? DEFAULT_NODE_SIZE[Math.min(Math.max(level, 0), 3)].width,
+            height: node.style?.height ?? DEFAULT_NODE_SIZE[Math.min(Math.max(level, 0), 3)].height,
+          })
+        : undefined
       return {
         ...node,
-        ...(layout ? { position: { x: layout.x, y: layout.y } } : {}),
+        ...(!hasChildren && layout ? { position: { x: layout.x, y: layout.y } } : {}),
         zIndex: node.id === openMenuNodeId ? 9999 : level * 10,
         className: 'km-content-node',
         hidden: level === 0,
@@ -386,9 +327,7 @@ const MindMapCanvas = () => {
           l1Color,
           hasChildren,
           hasNotes,
-          groupSize: hasChildren
-            ? (manualGroupSize ?? (layout ? { width: layout.width, height: layout.height } : undefined))
-            : undefined,
+          groupSize: fixedGroupSize,
         },
       }
     }).sort((a, b) => {
@@ -396,7 +335,7 @@ const MindMapCanvas = () => {
       if (b.id === openMenuNodeId) return -1
       return (a.data?.level ?? 0) - (b.data?.level ?? 0)
     })
-  }, [nodes, edges, l1ColorMap, getL1Id, childrenMap, nodeById, openMenuNodeId, rootId])
+  }, [nodes, l1ColorMap, getL1Id, childrenMap, openMenuNodeId, layouts])
 
   const allDropTargets = useMemo(
     () =>
@@ -483,9 +422,10 @@ const MindMapCanvas = () => {
       .sort((a, b) => (a.width * a.height) - (b.width * b.height))[0]
 
     if (target) reparentNode(draggedNode.id, target.id)
+    else snapSubtreeToGrid(draggedNode.id, true)
 
     delete dragStartRef.current[draggedNode.id]
-  }, [allDropTargets, isEditMode, reparentNode, parentMap])
+  }, [allDropTargets, isEditMode, reparentNode, parentMap, snapSubtreeToGrid])
 
   const { screenToFlowPosition } = useReactFlow()
 
@@ -499,7 +439,10 @@ const MindMapCanvas = () => {
 
   const onCanvasPointerUp = useCallback((e) => {
     if (!pendingToolboxType || !isEditMode) return
-    const position = screenToFlowPosition({ x: e.clientX, y: e.clientY })
+    const position = screenToFlowPosition(
+      { x: e.clientX, y: e.clientY },
+      { snapToGrid: true, snapGrid: GRID }
+    )
     addNode({ position, level: 1, nodeType: pendingToolboxType })
     clearPendingToolboxType()
   }, [pendingToolboxType, isEditMode, screenToFlowPosition, addNode, clearPendingToolboxType])
@@ -537,6 +480,8 @@ const MindMapCanvas = () => {
         selectionMode={SelectionMode.Partial}
         zoomOnScroll={false}
         zoomOnPinch={false}
+        snapToGrid={isEditMode}
+        snapGrid={GRID}
         minZoom={0.2}
         maxZoom={2}
         defaultEdgeOptions={{
@@ -546,10 +491,11 @@ const MindMapCanvas = () => {
         deleteKeyCode={isEditMode ? ['Backspace', 'Delete'] : null}
       >
         <Background
-          variant={BackgroundVariant.Dots}
-          gap={22}
-          size={1.2}
-          color="#d4cabb"
+          variant={BackgroundVariant.Lines}
+          gap={GRID}
+          offset={[0, 0]}
+          size={0.8}
+          color="#d8cfc2"
         />
         {!isTouch && <Controls showInteractive={false}>
           <ZoomDisplay />

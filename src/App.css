@@ -688,30 +688,48 @@
 
 /* ── Node action buttons ─────────────────────────────────────────── */
 
+.node-floating-menu {
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  z-index: 20;
+  pointer-events: auto;
+}
+.node-floating-menu--hidden { opacity: 0; pointer-events: none; }
+
+.node-floating-btn {
+  position: static !important;
+  transform: none !important;
+  margin: 0;
+}
+.node-floating-btn:hover { transform: scale(1.12) !important; }
+
 .add-child-btn {
-  position: absolute; right: -14px; top: 50%; transform: translateY(-50%);
   width: 24px; height: 24px; border-radius: 50%; border: 2px solid #fff;
   color: #fff; font-size: 16px; line-height: 1; cursor: pointer;
   display: flex; align-items: center; justify-content: center; padding: 0;
   z-index: 10; box-shadow: 0 2px 6px rgba(0,0,0,0.25);
   transition: transform 0.12s;
 }
-.add-child-btn:hover { transform: translateY(-50%) scale(1.15); }
+.add-child-btn:hover { transform: scale(1.15); }
 
 
 .submap-open-btn {
-  position: absolute; right: -15px; top: 50%; transform: translateY(-50%);
   width: 26px; height: 26px; border-radius: 50%; border: 2px solid #fff;
   color: #fff; font-size: 12px; cursor: pointer;
   display: flex; align-items: center; justify-content: center; padding: 0;
   z-index: 10; box-shadow: 0 2px 8px rgba(0,0,0,0.3); transition: transform 0.12s;
 }
-.submap-open-btn:hover { transform: translateY(-50%) scale(1.15); }
+.submap-open-btn:hover { transform: scale(1.15); }
 
 .node-add-menu { position: absolute; left: calc(100% + 22px); top: 50%; transform: translateY(-50%); background: var(--bg-surface); border: 1px solid var(--border-strong); border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.13); padding: 5px; display: flex; flex-direction: column; gap: 2px; z-index: 1000; min-width: 120px; }
 
 .node-convert-btn {
-  position: absolute; top: -11px; left: -11px; width: 20px; height: 20px;
+  width: 20px; height: 20px;
   border-radius: 50%; border: 2px solid #fff; color: #fff; font-size: 10px;
   cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0;
   z-index: 10; box-shadow: 0 2px 6px rgba(0,0,0,0.25); transition: transform 0.12s;
@@ -719,7 +737,7 @@
 .node-convert-btn:hover { transform: scale(1.15); }
 
 .node-todo-btn {
-  position: absolute; top: -11px; left: 13px; width: 20px; height: 20px;
+  width: 20px; height: 20px;
   border-radius: 50%; border: 2px solid #fff; background: #f59e0b; color: #fff;
   font-size: 10px; font-weight: 700; cursor: pointer;
   display: flex; align-items: center; justify-content: center; padding: 0;
@@ -730,7 +748,7 @@
 .node-todo-btn--active:hover { background: #b91c1c; }
 
 .node-reparent-btn {
-  position: absolute; top: -11px; right: 13px; width: 20px; height: 20px;
+  width: 20px; height: 20px;
   border-radius: 50%; border: 2px solid #fff; background: #0ea5e9; color: #fff;
   font-size: 10px; font-weight: 700; cursor: pointer;
   display: flex; align-items: center; justify-content: center; padding: 0;
@@ -741,7 +759,7 @@
 .node-reparent-btn--active:hover { background: #075985; }
 
 .node-delete-btn {
-  position: absolute; top: -11px; right: -11px; width: 20px; height: 20px;
+  width: 20px; height: 20px;
   border-radius: 50%; border: 2px solid #fff; background: #ef4444; color: #fff;
   font-size: 9px; cursor: pointer;
   display: flex; align-items: center; justify-content: center; padding: 0;
@@ -750,7 +768,7 @@
 .node-delete-btn:hover { background: #dc2626; transform: scale(1.15); }
 
 .node-edit-btn {
-  position: absolute; bottom: -11px; right: -11px; width: 20px; height: 20px;
+  width: 20px; height: 20px;
   border-radius: 50%; border: 2px solid #fff; background: #6366f1; color: #fff;
   font-size: 11px; cursor: pointer;
   display: flex; align-items: center; justify-content: center; padding: 0;
@@ -759,7 +777,7 @@
 .node-edit-btn:hover { background: #4f46e5; transform: scale(1.15); }
 
 .node-icon { width: 32px; height: 32px; border-radius: 6px; object-fit: cover; flex-shrink: 0; margin-right: 8px; }
-.node-icon-upload-btn { position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%); width: 20px; height: 20px; border-radius: 4px; border: none; background: rgba(0,0,0,0.35); color: #fff; font-size: 11px; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; transition: background 0.12s; }
+.node-icon-upload-btn { width: 20px; height: 20px; border-radius: 4px; border: none; background: rgba(0,0,0,0.35); color: #fff; font-size: 11px; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; transition: background 0.12s, transform 0.12s; }
 .node-icon-upload-btn:hover { background: rgba(0,0,0,0.6); }
 .node-icon-upload-btn--hidden { opacity: 0; pointer-events: none; }
 
