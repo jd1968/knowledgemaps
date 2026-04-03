@@ -53,29 +53,31 @@ const applyPositionChanges = (changes, nodes) => applyNodeChanges(
 const applyResizeChanges = (changes, nodes, edges) => {
   const dimensionChanges = changes
     .filter((c) => c.type === 'dimensions' && c.dimensions)
-    .map((c) => (c.resizing ? c : { ...c, dimensions: snapSize(c.dimensions, { gridSize: GRID_SIZE }) }))
 
   if (dimensionChanges.length === 0) return nodes
 
   const parentIds = new Set(edges.map((e) => e.source))
-  const resizedById = new Map(dimensionChanges.map((c) => [c.id, c.dimensions]))
+  const changeById = new Map(dimensionChanges.map((c) => [c.id, c]))
   const nodesAfterDimensions = applyNodeChanges(dimensionChanges, nodes)
 
   return nodesAfterDimensions.map((node) => {
-    const dims = resizedById.get(node.id)
-    if (!dims) return node
-    const snapped = snapSize(dims, { gridSize: GRID_SIZE })
+    const change = changeById.get(node.id)
+    if (!change) return node
+    // During active drag keep raw dimensions for smooth tracking; snap only on release
+    const dims = change.resizing
+      ? change.dimensions
+      : snapSize(change.dimensions, { gridSize: GRID_SIZE })
     return {
       ...node,
       style: {
         ...(node.style || {}),
-        width: snapped.width,
-        height: snapped.height,
+        width: dims.width,
+        height: dims.height,
       },
       data: {
         ...node.data,
         // Single persisted size authority for all resizable nodes.
-        size: snapped,
+        size: dims,
         ...(parentIds.has(node.id) ? { sizeMode: 'manual' } : {}),
       },
     }
