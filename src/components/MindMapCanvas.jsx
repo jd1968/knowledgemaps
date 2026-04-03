@@ -27,6 +27,7 @@ const edgeTypes = { 'straight-center': StraightCenterEdge, 'pointer-edge': Point
 const L1_PALETTE = STANDARD_THEME_COLORS
 
 const ROOT_BORDER = '#78716c' // warm slate — neutral for the central topic
+const LEAF_NODE_SIZE = { width: 160, height: 70 }
 const DEFAULT_NODE_SIZE = {
   0: { width: 200, height: 200 },
   1: { width: 190, height: 50 },
@@ -193,19 +194,28 @@ const MindMapCanvas = () => {
     onConnect,
     pushHistory,
     deselectNode,
-    reparentNode,
     moveSubtreeBy,
     addNode,
     isEditMode,
+    openNodeModal,
+    setSelectedNodeIds,
     openMenuNodeId,
+    glyphMenuNodeId,
     reparentSourceNodeId,
     clearReparentMode,
+    copySizeSourceNodeId,
+    clearCopySizeMode,
     pendingToolboxType,
     clearPendingToolboxType,
     isFullscreen,
     setIsFullscreen,
     snapSubtreeToGrid,
+    copySubtreeToClipboard,
+    pasteSubtreeFromClipboard,
   } = useMindMapStore()
+
+  const [nodeContextMenu, setNodeContextMenu] = useState(null)
+  const [paneContextMenu, setPaneContextMenu] = useState(null)
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -281,7 +291,11 @@ const MindMapCanvas = () => {
     nodes,
     edges,
     rootId,
-    getNodeSize: getStableNodeSize,
+    getNodeSize: (node) => {
+      const hasChildren = !!(childrenMap[node.id]?.length)
+      const hasExpandedContents = node.data?.showContents === true || node.data?.nodeType === 'note' || node.data?.nodeType === 'image'
+      return (!hasChildren && !hasExpandedContents) ? LEAF_NODE_SIZE : getStableNodeSize(node)
+    },
     padding: {
       left: NEST_PAD_LEFT,
       right: NEST_PAD_RIGHT,
@@ -297,6 +311,8 @@ const MindMapCanvas = () => {
         ? ROOT_BORDER
         : (l1ColorMap[getL1Id(node.id)] ?? L1_PALETTE[0])
       const hasChildren = !!(childrenMap[node.id]?.length)
+      const hasExpandedContents = node.data?.showContents === true || node.data?.nodeType === 'note' || node.data?.nodeType === 'image'
+      const useFixedLeafSize = !hasChildren && !hasExpandedContents
       const hasNotes = !!(node.data.content && node.data.content !== '<p></p>' && node.data.content !== '')
       const layout = layouts[node.id]
       const persistedSize = node.data?.size
@@ -309,7 +325,8 @@ const MindMapCanvas = () => {
       return {
         ...node,
         ...(!hasChildren && layout ? { position: { x: layout.x, y: layout.y } } : {}),
-        zIndex: node.id === openMenuNodeId ? 9999 : level * 10,
+        ...(useFixedLeafSize ? { style: { ...node.style, width: LEAF_NODE_SIZE.width, height: LEAF_NODE_SIZE.height } } : {}),
+        zIndex: node.id === openMenuNodeId || node.id === glyphMenuNodeId ? 9999 : level * 10,
         className: 'km-content-node',
         hidden: level === 0,
         data: {
@@ -323,23 +340,11 @@ const MindMapCanvas = () => {
     }).sort((a, b) => {
       if (a.id === openMenuNodeId) return 1
       if (b.id === openMenuNodeId) return -1
+      if (a.id === glyphMenuNodeId) return 1
+      if (b.id === glyphMenuNodeId) return -1
       return (a.data?.level ?? 0) - (b.data?.level ?? 0)
     })
-  }, [nodes, l1ColorMap, getL1Id, childrenMap, openMenuNodeId, layouts])
-
-  const allDropTargets = useMemo(
-    () =>
-      nodesWithColor
-        .filter((n) => !n.hidden)
-        .map((n) => ({
-          id: n.id,
-          x: n.position.x,
-          y: n.position.y,
-          width: n.measured?.width ?? getStableNodeSize(n).width,
-          height: n.measured?.height ?? getStableNodeSize(n).height,
-        })),
-    [nodesWithColor]
-  )
+  }, [nodes, l1ColorMap, getL1Id, childrenMap, openMenuNodeId, glyphMenuNodeId, layouts])
 
   // No edge connectors — hierarchy is shown through visual nesting
   const displayEdges = useMemo(() =>
@@ -355,12 +360,12 @@ const MindMapCanvas = () => {
   const dragStartRef = useRef({})
 
   useEffect(() => {
-    if (!reparentSourceNodeId) return
+    if (!reparentSourceNodeId && !copySizeSourceNodeId) return
     document.body.style.cursor = 'copy'
     return () => {
       document.body.style.cursor = ''
     }
-  }, [reparentSourceNodeId])
+  }, [reparentSourceNodeId, copySizeSourceNodeId])
 
   const onNodeDragStart = useCallback((_, node) => {
     if (!isEditMode) return
@@ -384,40 +389,71 @@ const MindMapCanvas = () => {
     dragStartRef.current[draggedNode.id] = { x: draggedNode.position.x, y: draggedNode.position.y }
   }, [isEditMode, moveSubtreeBy])
 
-  // When a node is dropped, check if its centre landed inside another node.
-  // If so, reparent it to that node.
+  // Dragging onto another node does not change hierarchy; reparent uses the reparent glyph only.
   const onNodeDragStop = useCallback((_, draggedNode) => {
     if (!isEditMode) return
-    if (draggedNode.data?.level === 0) return // root is not reparentable
-    const dW = draggedNode.measured?.width ?? 0
-    const dH = draggedNode.measured?.height ?? 0
-    const cx = draggedNode.position.x + dW / 2
-    const cy = draggedNode.position.y + dH / 2
-
-    // Build ancestor set so a node can never be reparented to one of its own ancestors
-    const ancestorIds = new Set()
-    let cur = parentMap[draggedNode.id]
-    while (cur) {
-      ancestorIds.add(cur)
-      cur = parentMap[cur]
-    }
-
-    // Pick the smallest overlapping target (most specific hit when nodes overlap)
-    const target = allDropTargets
-      .filter((t) => {
-        if (t.id === draggedNode.id) return false
-        if (ancestorIds.has(t.id)) return false
-        return cx > t.x && cx < t.x + t.width && cy > t.y && cy < t.y + t.height
-      })
-      .sort((a, b) => (a.width * a.height) - (b.width * b.height))[0]
-
-    if (target) reparentNode(draggedNode.id, target.id)
-    else snapSubtreeToGrid(draggedNode.id, true)
-
+    if (draggedNode.data?.level === 0) return
+    snapSubtreeToGrid(draggedNode.id, true)
     delete dragStartRef.current[draggedNode.id]
-  }, [allDropTargets, isEditMode, reparentNode, parentMap, snapSubtreeToGrid])
+  }, [isEditMode, snapSubtreeToGrid])
 
   const { screenToFlowPosition } = useReactFlow()
+
+  const closeContextMenus = useCallback(() => {
+    setNodeContextMenu(null)
+    setPaneContextMenu(null)
+  }, [])
+
+  const onNodeContextMenu = useCallback(
+    (event, node) => {
+      event.preventDefault()
+      if (!isEditMode) return
+      setPaneContextMenu(null)
+      setNodeContextMenu({ x: event.clientX, y: event.clientY, nodeId: node.id })
+    },
+    [isEditMode]
+  )
+
+  const onPaneContextMenu = useCallback(
+    (event) => {
+      event.preventDefault()
+      if (!isEditMode) return
+      setNodeContextMenu(null)
+      setPaneContextMenu({ x: event.clientX, y: event.clientY })
+    },
+    [isEditMode]
+  )
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'Escape') closeContextMenus()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [closeContextMenus])
+
+  useEffect(() => {
+    if (!isEditMode) return
+    const onPasteKey = async (e) => {
+      if (!(e.metaKey || e.ctrlKey) || e.key !== 'v') return
+      const t = e.target
+      if (t?.closest?.('input, textarea, [contenteditable="true"]')) return
+      e.preventDefault()
+      const rect = containerRef.current?.getBoundingClientRect()
+      if (!rect) return
+      const pos = screenToFlowPosition(
+        { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },
+        { snapToGrid: true, snapGrid: GRID }
+      )
+      const result = await pasteSubtreeFromClipboard(pos)
+      if (!result?.success && result?.error === 'invalid') {
+        // Clipboard wasn't a subtree payload — let user know only when they used the shortcut
+        console.debug('Clipboard does not contain a Knowledge Maps subtree.')
+      }
+    }
+    window.addEventListener('keydown', onPasteKey)
+    return () => window.removeEventListener('keydown', onPasteKey)
+  }, [isEditMode, screenToFlowPosition, pasteSubtreeFromClipboard])
 
   // Cancel toolbox placement on Escape
   useEffect(() => {
@@ -426,6 +462,19 @@ const MindMapCanvas = () => {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [pendingToolboxType, clearPendingToolboxType])
+
+  // Cancel reparent / copy-size pick modes on Escape (edit mode only)
+  useEffect(() => {
+    if (!isEditMode) return
+    if (!reparentSourceNodeId && !copySizeSourceNodeId) return
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return
+      if (reparentSourceNodeId) clearReparentMode()
+      else if (copySizeSourceNodeId) clearCopySizeMode()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [isEditMode, reparentSourceNodeId, copySizeSourceNodeId, clearReparentMode, clearCopySizeMode])
 
   const onCanvasPointerUp = useCallback((e) => {
     if (!pendingToolboxType || !isEditMode) return
@@ -437,12 +486,75 @@ const MindMapCanvas = () => {
     clearPendingToolboxType()
   }, [pendingToolboxType, isEditMode, screenToFlowPosition, addNode, clearPendingToolboxType])
 
+  // Plain click: only this node selected (sidebar + rings). Shift/Cmd/Ctrl = additive (multi-select).
+  const onNodeClick = useCallback(
+    (event, node) => {
+      if (!isEditMode) {
+        openNodeModal(node.id)
+        setSelectedNodeIds([node.id])
+        return
+      }
+      if (event.shiftKey || event.metaKey || event.ctrlKey) return
+      setSelectedNodeIds([node.id])
+    },
+    [isEditMode, openNodeModal, setSelectedNodeIds]
+  )
+
   return (
     <div
       ref={containerRef}
       style={{ width: '100%', height: '100%', cursor: pendingToolboxType ? 'crosshair' : undefined }}
       onPointerUp={onCanvasPointerUp}
     >
+      {isEditMode && nodeContextMenu && (
+        <div
+          className="map-context-menu"
+          style={{ left: nodeContextMenu.x, top: nodeContextMenu.y }}
+          role="menu"
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          <button
+            type="button"
+            className="map-context-menu__item"
+            onClick={async () => {
+              const id = nodeContextMenu.nodeId
+              closeContextMenus()
+              const r = await copySubtreeToClipboard(id)
+              if (!r?.success) alert('Could not copy to clipboard.')
+            }}
+          >
+            Copy subtree…
+          </button>
+          <p className="map-context-menu__hint">Includes this node and all descendants. Paste from another map via right‑click on the canvas or Ctrl/⌘+V.</p>
+        </div>
+      )}
+      {isEditMode && paneContextMenu && (
+        <div
+          className="map-context-menu"
+          style={{ left: paneContextMenu.x, top: paneContextMenu.y }}
+          role="menu"
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          <button
+            type="button"
+            className="map-context-menu__item"
+            onClick={async () => {
+              const pos = screenToFlowPosition(
+                { x: paneContextMenu.x, y: paneContextMenu.y },
+                { snapToGrid: true, snapGrid: GRID }
+              )
+              closeContextMenus()
+              const r = await pasteSubtreeFromClipboard(pos)
+              if (!r?.success) {
+                if (r?.error === 'invalid') alert('Clipboard does not contain a copied subtree. Copy a node first (right‑click → Copy subtree).')
+                else if (r?.error === 'clipboard') alert('Could not read the clipboard. Check browser permissions.')
+              }
+            }}
+          >
+            Paste subtree
+          </button>
+        </div>
+      )}
       <ReactFlow
         nodes={nodesWithColor}
         edges={displayEdges}
@@ -453,11 +565,25 @@ const MindMapCanvas = () => {
         onNodeDrag={onNodeDrag}
         onNodeDragStop={onNodeDragStop}
         onPaneClick={() => {
+          closeContextMenus()
           if (reparentSourceNodeId) {
             clearReparentMode()
             return
           }
+          if (copySizeSourceNodeId) {
+            clearCopySizeMode()
+            return
+          }
           deselectNode()
+        }}
+        onNodeContextMenu={onNodeContextMenu}
+        onPaneContextMenu={onPaneContextMenu}
+        onNodeClick={onNodeClick}
+        onBeforeDelete={async ({ nodes: toRemove, edges: edgesToRemove }) => {
+          const nodes = toRemove.filter((n) => (n.data?.level ?? 0) > 0)
+          if (nodes.length === toRemove.length) return true
+          if (nodes.length === 0) return false
+          return { nodes, edges: edgesToRemove }
         }}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
@@ -468,6 +594,7 @@ const MindMapCanvas = () => {
         panOnDrag={isTouch ? true : [1, 2]}
         selectionOnDrag={!isTouch}
         selectionMode={SelectionMode.Partial}
+        multiSelectionKeyCode={['Shift', 'Meta', 'Control']}
         zoomOnScroll={false}
         zoomOnPinch={false}
         snapToGrid={isEditMode}
@@ -513,8 +640,10 @@ const MindMapCanvas = () => {
                 ? pendingToolboxType
                   ? `Click to place ${pendingToolboxType} · Press Escape to cancel`
                   : reparentSourceNodeId
-                    ? 'Click a new parent node to reparent · Click source node or canvas to cancel'
-                    : 'Hover a node and click + to add a child · Drag to lasso-select · Trackpad to pan & zoom'
+                    ? 'Click a new parent node to reparent · Escape, source node, or canvas to cancel'
+                    : copySizeSourceNodeId
+                      ? 'Click a shape to copy size from the source · Escape, source node, or canvas to cancel'
+                      : 'Hover a node and click + to add a child · Drag to lasso-select · Trackpad to pan & zoom'
                 : 'Edit Mode is off · Drag to lasso-select · Trackpad to pan & zoom'}
           </div>
         </Panel>

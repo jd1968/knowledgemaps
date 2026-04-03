@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
-import { Handle, Position, NodeResizer } from '@xyflow/react'
+import { Handle, Position, NodeResizer, useViewport } from '@xyflow/react'
 import { useNavigate } from 'react-router-dom'
 import { useMindMapStore } from '../store/useMindMapStore'
 import SubmapChoiceModal from './SubmapChoiceModal'
@@ -26,30 +26,41 @@ const blendWithWhite = (hex, alpha) => {
 }
 
 const CONVERT_LABELS = { node: 'Node', pointer: 'Pointer', submap: '↗ Submap' }
+const LEAF_NODE_SIZE = { width: 160, height: 70 }
 
 const CustomNode = memo(({ id, data, selected }) => {
+  const openMenuNodeId        = useMindMapStore((state) => state.openMenuNodeId)
   const setOpenMenuNodeId     = useMindMapStore((state) => state.setOpenMenuNodeId)
   const addChildNode          = useMindMapStore((state) => state.addChildNode)
   const updateNodeData        = useMindMapStore((state) => state.updateNodeData)
   const deleteNode            = useMindMapStore((state) => state.deleteNode)
-  const deselectNode          = useMindMapStore((state) => state.deselectNode)
   const setEdgeType           = useMindMapStore((state) => state.setEdgeType)
   const convertToSubmap       = useMindMapStore((state) => state.convertToSubmap)
   const pushHistory           = useMindMapStore((state) => state.pushHistory)
-  const selectNode            = useMindMapStore((state) => state.selectNode)
   const openNodeModal         = useMindMapStore((state) => state.openNodeModal)
   const isEditMode            = useMindMapStore((state) => state.isEditMode)
   const reparentNode          = useMindMapStore((state) => state.reparentNode)
   const reparentSourceNodeId  = useMindMapStore((state) => state.reparentSourceNodeId)
   const setReparentSourceNodeId = useMindMapStore((state) => state.setReparentSourceNodeId)
   const clearReparentMode     = useMindMapStore((state) => state.clearReparentMode)
+  const copySizeSourceNodeId  = useMindMapStore((state) => state.copySizeSourceNodeId)
+  const setCopySizeSourceNodeId = useMindMapStore((state) => state.setCopySizeSourceNodeId)
+  const clearCopySizeMode     = useMindMapStore((state) => state.clearCopySizeMode)
+  const applySizeFromSourceToTarget = useMindMapStore((state) => state.applySizeFromSourceToTarget)
   const currentMapId          = useMindMapStore((state) => state.currentMapId)
   const currentMapName        = useMindMapStore((state) => state.currentMapName)
   const breadcrumbs           = useMindMapStore((state) => state.breadcrumbs)
   const isDirty               = useMindMapStore((state) => state.isDirty)
   const saveMap               = useMindMapStore((state) => state.saveMap)
   const scheduleAutosave      = useMindMapStore((state) => state.scheduleAutosave)
+  const setGlyphMenuNodeId    = useMindMapStore((state) => state.setGlyphMenuNodeId)
+  const clearGlyphMenuNodeIdIf = useMindMapStore((state) => state.clearGlyphMenuNodeIdIf)
+  const floatingUiEpoch       = useMindMapStore((state) => state.floatingUiEpoch)
+  const floatingUiAnchorId    = useMindMapStore((state) => state.floatingUiAnchorId)
   const navigate              = useNavigate()
+
+  const { zoom: viewportZoom } = useViewport()
+  const zoom = Math.max(viewportZoom, 0.05)
 
   const [hovered, setHovered]             = useState(false)
   const [editing, setEditing]             = useState(false)
@@ -59,7 +70,6 @@ const CustomNode = memo(({ id, data, selected }) => {
   const [showSubmapChoice, setShowSubmapChoice] = useState(false)
   const [menuHovered, setMenuHovered]     = useState(false)
   const inputRef       = useRef(null)
-  const selectTimerRef = useRef(null)
   const nodeRef        = useRef(null)
   const menuHideTimerRef = useRef(null)
 
@@ -68,14 +78,16 @@ const CustomNode = memo(({ id, data, selected }) => {
   const borderColor = l1Color ?? '#94a3b8'
   const TEXT_SIZES  = { s: 14, m: 22, l: 36 }
   const isParent    = !!groupSize
+  const isFixedLeaf = !hasChildren && !showContents && nodeType !== 'text' && nodeType !== 'note' && nodeType !== 'image'
   // Depth tint only for parent nodes; each level adds 0.04, min 0.05
   const bgAlpha     = isParent ? 0.05 + Math.max(0, level - 1) * 0.04 : 0
-  const width       = nodeType === 'text' ? 'auto' : (groupSize?.width ?? '100%')
-  const height      = (nodeType === 'pointer' || nodeType === 'text') ? null : (groupSize?.height ?? '100%')
+  const width       = nodeType === 'text' ? 'auto' : (isFixedLeaf ? LEAF_NODE_SIZE.width : (groupSize?.width ?? '100%'))
+  const height      = nodeType === 'text' ? null : (isFixedLeaf ? LEAF_NODE_SIZE.height : (groupSize?.height ?? '100%'))
   const hasPointerContent = nodeType === 'pointer' && content && content.trim() !== ''
   const isReparentSource = reparentSourceNodeId === id
+  const isCopySizeSource = copySizeSourceNodeId === id
   const showFloatingActions = isEditMode && !editing
-  const isActionMenuVisible = hovered || menuHovered || showConvertMenu || isReparentSource
+  const isActionMenuVisible = hovered || menuHovered || showConvertMenu || isReparentSource || isCopySizeSource
 
   const showActionMenu = useCallback(() => {
     if (menuHideTimerRef.current) {
@@ -99,6 +111,33 @@ const CustomNode = memo(({ id, data, selected }) => {
       if (menuHideTimerRef.current) clearTimeout(menuHideTimerRef.current)
     }
   }, [])
+
+  // When selection changes globally, clear hover/convert UI on every node except the single
+  // selected anchor (fixes stuck glyph menus when mouseleave does not fire — e.g. overlapping nodes).
+  useEffect(() => {
+    if (id === floatingUiAnchorId) return
+    if (menuHideTimerRef.current) {
+      clearTimeout(menuHideTimerRef.current)
+      menuHideTimerRef.current = null
+    }
+    setHovered(false)
+    setMenuHovered(false)
+    if (showConvertMenu) {
+      setShowConvertMenu(false)
+      if (openMenuNodeId === id) setOpenMenuNodeId(null)
+    }
+  }, [floatingUiEpoch, floatingUiAnchorId, id, showConvertMenu, openMenuNodeId, setOpenMenuNodeId])
+
+  // Bring this node above overlaps while the glyph strip is shown (leaf nodes only). Raising a
+  // parent would paint it above its child nodes in React Flow and hide the subtree.
+  useEffect(() => {
+    if (isActionMenuVisible && !hasChildren) {
+      setGlyphMenuNodeId(id)
+    } else {
+      clearGlyphMenuNodeIdIf(id)
+    }
+    return () => clearGlyphMenuNodeIdIf(id)
+  }, [isActionMenuVisible, hasChildren, id, setGlyphMenuNodeId, clearGlyphMenuNodeIdIf])
 
   const startEditing = useCallback(() => {
     setDraft(title || '')
@@ -141,8 +180,7 @@ const CustomNode = memo(({ id, data, selected }) => {
   const handleDelete = useCallback(() => {
     if (!confirm(`Delete "${title || 'Untitled'}"?`)) return
     deleteNode(id)
-    deselectNode()
-  }, [title, id, deleteNode, deselectNode])
+  }, [title, id, deleteNode])
 
   const handleConvert = useCallback(async (newType) => {
     if (newType === nodeType) { setShowConvertMenu(false); return }
@@ -208,8 +246,19 @@ const CustomNode = memo(({ id, data, selected }) => {
     }
     setShowConvertMenu(false)
     setOpenMenuNodeId(null)
+    clearCopySizeMode()
     setReparentSourceNodeId(id)
-  }, [clearReparentMode, id, isReparentSource, setOpenMenuNodeId, setReparentSourceNodeId])
+  }, [clearCopySizeMode, clearReparentMode, id, isReparentSource, setOpenMenuNodeId, setReparentSourceNodeId])
+
+  const handleToggleCopySizeMode = useCallback(() => {
+    if (isCopySizeSource) {
+      clearCopySizeMode()
+      return
+    }
+    setShowConvertMenu(false)
+    setOpenMenuNodeId(null)
+    setCopySizeSourceNodeId(id)
+  }, [clearCopySizeMode, id, isCopySizeSource, setCopySizeSourceNodeId, setOpenMenuNodeId])
 
   // Invisible handles centred on the node — edges connect to the node centre
   const centerHandle = {
@@ -229,38 +278,35 @@ const CustomNode = memo(({ id, data, selected }) => {
       ref={nodeRef}
       onMouseEnter={showActionMenu}
       onMouseLeave={hideActionMenuWithDelay}
-      onPointerDown={(e) => {
-        if (reparentSourceNodeId) return
-        const startX = e.clientX
-        const startY = e.clientY
-        document.addEventListener('pointerup', (e2) => {
-          const dx = e2.clientX - startX
-          const dy = e2.clientY - startY
-          if (dx * dx + dy * dy < 25) {
-            clearTimeout(selectTimerRef.current)
-            selectTimerRef.current = setTimeout(() => {
-              if (isEditMode) selectNode(id)
-              else openNodeModal(id)
-            }, 300)
-          }
-        }, { once: true })
-      }}
       onClick={(e) => {
-        e.stopPropagation()
-        if (!reparentSourceNodeId) return
-        if (id === reparentSourceNodeId) {
-          clearReparentMode()
+        if (copySizeSourceNodeId) {
+          e.stopPropagation()
+          if (id === copySizeSourceNodeId) {
+            clearCopySizeMode()
+            return
+          }
+          pushHistory()
+          applySizeFromSourceToTarget(copySizeSourceNodeId, id)
+          clearCopySizeMode()
           return
         }
-        pushHistory()
-        reparentNode(reparentSourceNodeId, id)
-        clearReparentMode()
+        if (reparentSourceNodeId) {
+          e.stopPropagation()
+          if (id === reparentSourceNodeId) {
+            clearReparentMode()
+            return
+          }
+          pushHistory()
+          reparentNode(reparentSourceNodeId, id)
+          clearReparentMode()
+        }
+        // Otherwise let the event propagate so React Flow can update selection (edit mode) or
+        // MindMapCanvas onNodeClick opens the modal (view mode).
       }}
       onDoubleClick={(e) => {
         if (!isEditMode) return
-        if (nodeType === 'note' || nodeType === 'card') return
+        if (nodeType === 'note') return
         e.stopPropagation()
-        clearTimeout(selectTimerRef.current) // cancel pending modal open
         startEditing()
       }}
       style={{
@@ -297,7 +343,7 @@ const CustomNode = memo(({ id, data, selected }) => {
         fontSize: cfg.fontSize,
         fontWeight: cfg.fontWeight,
         color: level === 0 ? '#ffffff' : '#1c1917',
-        cursor: reparentSourceNodeId ? 'copy' : (editing ? 'text' : 'pointer'),
+        cursor: (reparentSourceNodeId || copySizeSourceNodeId) ? 'copy' : (editing ? 'text' : 'pointer'),
         boxShadow: nodeType === 'image' || nodeType === 'text'
           ? (selected ? `0 0 0 2px ${borderColor}60` : hovered ? `0 0 0 1.5px ${borderColor}40` : 'none')
           : selected
@@ -312,13 +358,14 @@ const CustomNode = memo(({ id, data, selected }) => {
         position: 'relative',
         boxSizing: 'border-box',
         ...(isReparentSource ? { boxShadow: `0 0 0 3px #b4530980, 2px 4px 14px rgba(0,0,0,0.18)` } : {}),
+        ...(isCopySizeSource ? { boxShadow: `0 0 0 3px #7c3aed80, 2px 4px 14px rgba(0,0,0,0.18)` } : {}),
       }}
     >
       <Handle type="target" position={Position.Left} style={centerHandle} />
 
       {nodeType !== 'text' && (
         <NodeResizer
-          isVisible={isEditMode && (selected || hovered)}
+          isVisible={isEditMode && (hasChildren || nodeType === 'note' || nodeType === 'image') && (selected || hovered)}
           minWidth={60}
           minHeight={30}
           onResizeEnd={() => scheduleAutosave()}
@@ -386,22 +433,6 @@ const CustomNode = memo(({ id, data, selected }) => {
             </div>
           ) : !title?.trim() && (
             <p className="sticky-note-text"><span className="sticky-note-placeholder">Click to edit…</span></p>
-          )}
-        </div>
-      )}
-
-      {/* Card node body */}
-      {nodeType === 'card' && (
-        <div className="card-node-body">
-          {title?.trim() && (
-            <div className="card-node-title">{title}</div>
-          )}
-          {showContents && content?.trim() ? (
-            <div className="card-node-content card-node-markdown">
-              <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents} urlTransform={urlTransform}>{content}</ReactMarkdown>
-            </div>
-          ) : !title?.trim() && (
-            <p className="card-node-content"><span className="card-node-placeholder">Click to edit…</span></p>
           )}
         </div>
       )}
@@ -492,68 +523,77 @@ const CustomNode = memo(({ id, data, selected }) => {
             </>
           )}
         </div>
-      ) : nodeType !== 'image' && nodeType !== 'note' && nodeType !== 'card' && nodeType !== 'text' && (!isParent || !!title?.trim()) && (
-        <div style={{
-          flex: (isParent || showContents) ? '0 0 auto' : 1,
-          display: 'flex',
-          flexDirection: 'row',
-          alignItems: (showContents || isParent || hasChildren || iconUrl) ? 'flex-start' : 'center',
-          justifyContent: (isParent || hasChildren || iconUrl || showContents) ? 'flex-start' : 'center',
-          padding: isParent ? '10px 14px' : showContents ? (iconUrl && !editing ? '10px 14px 4px 8px' : '10px 14px 4px') : (iconUrl && !editing ? '10px 14px 10px 8px' : '10px 14px'),
-          textAlign: (isParent || hasChildren || iconUrl || showContents) ? 'left' : 'center',
-          wordBreak: 'break-word',
-          lineHeight: '1.35',
-          position: 'relative',
-          pointerEvents: isParent ? 'none' : 'auto',
-        }}>
-          {!editing && iconUrl && (
-            <NodeIconDisplay iconUrl={iconUrl} className="node-icon" />
-          )}
-          {editing ? (
-            <input
-              ref={inputRef}
-              className="nodrag nopan"
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onBlur={commitEdit}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') { e.preventDefault(); commitEdit() }
-                if (e.key === 'Escape') { e.preventDefault(); cancelEdit() }
-                e.stopPropagation()
-              }}
-              style={{
-                width: '100%',
-                border: 'none',
-                outline: 'none',
-                background: 'transparent',
-                fontSize: 'inherit',
-                fontWeight: 'inherit',
-                color: 'inherit',
-                textAlign: isParent ? 'left' : 'center',
-                fontFamily: 'inherit',
-                lineHeight: 'inherit',
-                padding: 0,
-              }}
-            />
-          ) : (
-            <span>{title || 'Untitled'}</span>
-          )}
-          {!editing && hasNotes && !showContents && (
-            <span style={{
-              position: 'absolute',
-              top: '4px',
-              right: '5px',
-              fontSize: '12px',
-              fontWeight: 700,
-              color: `${borderColor}80`,
-              lineHeight: 1,
-              pointerEvents: 'none',
-            }}>≡</span>
-          )}
+      ) : nodeType !== 'image' && nodeType !== 'note' && nodeType !== 'text' && (!isParent || !!title?.trim()) && (
+        <div
+          style={{
+            flex: (isParent || showContents) ? '0 0 auto' : 1,
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: (hasChildren || showContents) ? 'flex-start' : 'center',
+            minHeight: 0,
+            pointerEvents: isParent ? 'none' : 'auto',
+          }}
+        >
+          <div style={{
+            display: 'flex',
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: (isParent || hasChildren || iconUrl || showContents) ? 'flex-start' : 'center',
+            padding: isParent ? '10px 14px' : showContents ? (iconUrl && !editing ? '10px 14px 4px 8px' : '10px 14px 4px') : (iconUrl && !editing ? '10px 14px 10px 8px' : '10px 14px'),
+            textAlign: (isParent || hasChildren || iconUrl || showContents) ? 'left' : 'center',
+            wordBreak: 'break-word',
+            lineHeight: '1.35',
+            position: 'relative',
+          }}>
+            {!editing && iconUrl && (
+              <NodeIconDisplay iconUrl={iconUrl} className="node-icon" />
+            )}
+            {editing ? (
+              <input
+                ref={inputRef}
+                className="nodrag nopan"
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onBlur={commitEdit}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') { e.preventDefault(); commitEdit() }
+                  if (e.key === 'Escape') { e.preventDefault(); cancelEdit() }
+                  e.stopPropagation()
+                }}
+                style={{
+                  width: '100%',
+                  border: 'none',
+                  outline: 'none',
+                  background: 'transparent',
+                  fontSize: 'inherit',
+                  fontWeight: 'inherit',
+                  color: 'inherit',
+                  textAlign: isParent ? 'left' : 'center',
+                  fontFamily: 'inherit',
+                  lineHeight: 'inherit',
+                  padding: 0,
+                }}
+              />
+            ) : (
+              <span>{title || 'Untitled'}</span>
+            )}
+            {!editing && hasNotes && !showContents && (
+              <span style={{
+                position: 'absolute',
+                top: '4px',
+                right: '5px',
+                fontSize: '12px',
+                fontWeight: 700,
+                color: `${borderColor}80`,
+                lineHeight: 1,
+                pointerEvents: 'none',
+              }}>≡</span>
+            )}
+          </div>
         </div>
       )}
 
-      {showContents && content?.trim() && nodeType !== 'image' && nodeType !== 'note' && nodeType !== 'card' && nodeType !== 'text' && nodeType !== 'pointer' && !editing && (
+      {showContents && content?.trim() && nodeType !== 'image' && nodeType !== 'note' && nodeType !== 'text' && nodeType !== 'pointer' && !editing && (
         <div className="node-contents-body node-contents-markdown">
           <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents} urlTransform={urlTransform}>{content}</ReactMarkdown>
         </div>
@@ -564,6 +604,12 @@ const CustomNode = memo(({ id, data, selected }) => {
       {showFloatingActions && (
         <div
           className={`node-floating-menu nodrag nopan${isActionMenuVisible ? '' : ' node-floating-menu--hidden'}`}
+          style={{
+            // ~10px screen gap from the node edge; inverse scale keeps glyph size constant vs zoom.
+            left: `calc(100% + ${10 / zoom}px)`,
+            transform: `translateY(-50%) scale(${1 / zoom})`,
+            transformOrigin: 'left center',
+          }}
           onMouseEnter={() => {
             if (menuHideTimerRef.current) {
               clearTimeout(menuHideTimerRef.current)
@@ -591,7 +637,7 @@ const CustomNode = memo(({ id, data, selected }) => {
             </button>
           )}
 
-          {!isSubmap && nodeType !== 'note' && nodeType !== 'card' && nodeType !== 'pointer' && nodeType !== 'image' && nodeType !== 'text' && (
+          {!isSubmap && nodeType !== 'note' && nodeType !== 'pointer' && nodeType !== 'image' && nodeType !== 'text' && (
             <button
               className="add-child-btn node-floating-btn nodrag nopan"
               title="Add child node"
@@ -599,14 +645,14 @@ const CustomNode = memo(({ id, data, selected }) => {
               onClick={(e) => {
                 e.stopPropagation()
                 const newId = addChildNode(id, 'node')
-                if (newId) { selectNode(newId); openNodeModal(newId) }
+                if (newId) openNodeModal(newId)
               }}
             >
               +
             </button>
           )}
 
-          {level > 0 && nodeType !== 'image' && nodeType !== 'note' && nodeType !== 'card' && nodeType !== 'text' && (
+          {level > 0 && nodeType !== 'image' && nodeType !== 'note' && nodeType !== 'text' && (
             <NodeIconUpload
               iconUrl={iconUrl}
               onUpload={(url) => updateNodeData(id, { iconUrl: url })}
@@ -634,6 +680,16 @@ const CustomNode = memo(({ id, data, selected }) => {
               onClick={(e) => { e.stopPropagation(); handleToggleTodo() }}
             >
               ✓
+            </button>
+          )}
+
+          {level > 0 && nodeType !== 'text' && (
+            <button
+              className={`node-copy-size-btn node-floating-btn nodrag nopan${isCopySizeSource ? ' node-copy-size-btn--active' : ''}`}
+              title={isCopySizeSource ? 'Cancel copy size' : 'Copy size — click another shape to match'}
+              onClick={(e) => { e.stopPropagation(); handleToggleCopySizeMode() }}
+            >
+              ⧉
             </button>
           )}
 

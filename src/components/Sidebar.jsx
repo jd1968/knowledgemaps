@@ -1,60 +1,110 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useMindMapStore } from '../store/useMindMapStore'
 import RichTextEditor from './RichTextEditor'
 
 const LEVEL_LABELS = { 0: 'Root', 1: 'Main Topic', 2: 'Subtopic', 3: 'Detail' }
 
 const Sidebar = () => {
-  const { nodes, selectedNodeId, updateNodeData, deselectNode, deleteNode, convertToSubmap, navigateToSubmap } =
-    useMindMapStore()
+  const {
+    nodes,
+    updateNodeData,
+    deselectNode,
+    deleteNode,
+    deleteNodes,
+    convertToSubmap,
+    navigateToSubmap,
+  } = useMindMapStore()
   const [converting, setConverting] = useState(false)
 
-  const selectedNode = nodes.find((n) => n.id === selectedNodeId)
+  const selectedNodes = useMemo(() => nodes.filter((n) => n.selected), [nodes])
+  const selectedCount = selectedNodes.length
+  /** First selected in document order — used for title/notes when multiple are selected */
+  const primaryNode = selectedNodes[0] ?? null
+  const primaryId = primaryNode?.id
 
   const handleTitleChange = useCallback(
     (e) => {
-      if (!selectedNodeId) return
-      updateNodeData(selectedNodeId, { title: e.target.value })
+      if (!primaryId || selectedCount !== 1) return
+      updateNodeData(primaryId, { title: e.target.value })
     },
-    [selectedNodeId, updateNodeData]
+    [primaryId, selectedCount, updateNodeData]
   )
 
   const handleContentChange = useCallback(
     (html) => {
-      if (!selectedNodeId) return
-      updateNodeData(selectedNodeId, { content: html })
+      if (!primaryId || selectedCount !== 1) return
+      updateNodeData(primaryId, { content: html })
     },
-    [selectedNodeId, updateNodeData]
+    [primaryId, selectedCount, updateNodeData]
   )
 
   const handleDelete = useCallback(() => {
-    if (!selectedNode) return
-    if (selectedNode.data.level === 0) {
+    if (selectedCount === 0) return
+    const ids = selectedNodes.map((n) => n.id)
+    const deletable = selectedNodes.filter((n) => (n.data?.level ?? 0) > 0)
+    if (deletable.length === 0) {
       alert('The root node cannot be deleted.')
       return
     }
-    if (confirm(`Delete "${selectedNode.data.title}"?`)) {
-      deleteNode(selectedNodeId)
+    if (deletable.length < selectedCount) {
+      alert('The root node cannot be deleted. Deselect it or delete other nodes first.')
+      return
     }
-  }, [selectedNode, selectedNodeId, deleteNode])
+    const titles = deletable.map((n) => n.data?.title || 'Untitled').join(', ')
+    const label = deletable.length === 1 ? `"${titles}"` : `${deletable.length} nodes (${titles.slice(0, 80)}${titles.length > 80 ? '…' : ''})`
+    if (!confirm(`Delete ${label}?`)) return
+    deleteNodes(deletable.map((n) => n.id))
+  }, [selectedCount, selectedNodes, deleteNodes])
 
   const handleConvertToSubmap = useCallback(async () => {
-    if (!selectedNode) return
-    if (!confirm(`Convert "${selectedNode.data.title}" to a submap?\n\nIts children will be moved into the new map.`)) return
+    if (!primaryNode || selectedCount !== 1) return
+    if (!confirm(`Convert "${primaryNode.data.title}" to a submap?\n\nIts children will be moved into the new map.`)) return
     setConverting(true)
-    const result = await convertToSubmap(selectedNodeId)
+    const result = await convertToSubmap(primaryId)
     setConverting(false)
     if (!result.success) alert('Failed to convert to submap. Please try again.')
-  }, [selectedNode, selectedNodeId, convertToSubmap])
+  }, [primaryNode, primaryId, selectedCount, convertToSubmap])
 
-  if (!selectedNode) {
+  if (selectedCount === 0) {
     return (
       <div className="sidebar sidebar--empty">
         <p>Click a node to view and edit its details</p>
+        <p className="sidebar-hint">Tip: Shift-click, Cmd-click (Mac), or Ctrl-click (Windows) to multi-select; drag on the canvas to marquee-select.</p>
       </div>
     )
   }
 
+  if (selectedCount > 1) {
+    return (
+      <div className="sidebar">
+        <div className="sidebar-header">
+          <div className="sidebar-header-left">
+            <span className="level-badge">{selectedCount} nodes selected</span>
+          </div>
+          <button
+            className="icon-btn"
+            onClick={deselectNode}
+            title="Clear selection"
+            aria-label="Clear selection"
+          >
+            ✕
+          </button>
+        </div>
+        <div className="sidebar-body">
+          <p className="sidebar-multi-hint">
+            Select a single node in the sidebar to edit title and notes. You can delete all selected nodes below.
+          </p>
+        </div>
+        <div className="sidebar-footer">
+          <button className="btn btn--danger btn--sm" onClick={handleDelete}>
+            Delete selected
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  const selectedNode = primaryNode
   const { title, key, level, content, isSubmap, submapId } = selectedNode.data
 
   return (
@@ -97,7 +147,7 @@ const Sidebar = () => {
           <div className="field field--grow">
             <label className="field-label">Notes</label>
             <RichTextEditor
-              key={selectedNodeId}
+              key={primaryId}
               content={content}
               onChange={handleContentChange}
             />

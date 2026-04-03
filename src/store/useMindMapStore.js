@@ -3,6 +3,7 @@ import { applyNodeChanges, applyEdgeChanges, addEdge } from '@xyflow/react'
 import { v4 as uuidv4 } from 'uuid'
 import { supabase } from '../lib/supabase'
 import { GRID_SIZE, NEST_PAD_LEFT, NEST_PAD_TOP, NEST_V_SPACING, snapPoint, snapSize } from '../lib/grid'
+import { buildSubtreePayload, parseSubtreePayload, remapSubtreeForPaste } from '../lib/subtreeClipboard'
 
 const HISTORY_LIMIT = 50
 const DEFAULT_NODE_SIZE_BY_LEVEL = {
@@ -16,8 +17,27 @@ const normalizeLevel = (level = 1) => Math.min(Math.max(level, 0), 3)
 
 const getDefaultSizeForNode = (node) => {
   if (node?.data?.nodeType === 'image' || node?.data?.nodeType === 'note') return { width: 200, height: 200 }
-  if (node?.data?.nodeType === 'card') return { width: 220, height: 160 }
   return DEFAULT_NODE_SIZE_BY_LEVEL[normalizeLevel(node?.data?.level ?? 1)]
+}
+
+const styleDim = (v) => {
+  if (typeof v === 'number' && !Number.isNaN(v)) return v
+  if (typeof v === 'string') {
+    const n = parseFloat(v)
+    return Number.isNaN(n) ? null : n
+  }
+  return null
+}
+
+const resolveNodePixelSize = (node) => {
+  const fromData = node?.data?.size
+  if (fromData?.width != null && fromData?.height != null) {
+    return snapSize({ width: fromData.width, height: fromData.height }, { gridSize: GRID_SIZE })
+  }
+  const w = styleDim(node?.style?.width)
+  const h = styleDim(node?.style?.height)
+  if (w != null && h != null) return snapSize({ width: w, height: h }, { gridSize: GRID_SIZE })
+  return snapSize(getDefaultSizeForNode(node), { gridSize: GRID_SIZE })
 }
 
 const applySelectionChanges = (changes, nodes) => applyNodeChanges(
@@ -64,11 +84,18 @@ const applyResizeChanges = (changes, nodes, edges) => {
 
 const ROOT_ID = 'root-' + uuidv4().slice(0, 8)
 
+/** Single selected node id, or null if 0 or 2+ nodes selected — drives floating glyph / convert cleanup */
+const selectionAnchorFromNodes = (nodes) => {
+  const sel = nodes.filter((n) => n.selected).map((n) => n.id)
+  return sel.length === 1 ? sel[0] : null
+}
+
 const initialNodes = [
   {
     id: ROOT_ID,
     type: 'mindmap',
     position: { x: 350, y: 250 },
+    selected: false,
     data: {
       title: 'Central Topic',
       key: ROOT_ID,
@@ -83,7 +110,6 @@ export const useMindMapStore = create((set, get) => ({
   // ── Map data ─────────────────────────────────────────────────
   nodes: initialNodes,
   edges: [],
-  selectedNodeId: null,
   pendingNewNodeId: null,
   modalNodeId: null,
 
@@ -105,7 +131,14 @@ export const useMindMapStore = create((set, get) => ({
   isFullscreen: false,
   viewMode: 'map',
   openMenuNodeId: null,
+  /** Bumped whenever selection changes so nodes can clear stale hover / convert UI (see CustomNode). */
+  floatingUiEpoch: 0,
+  /** When exactly one node is selected, its id; otherwise null. Nodes with id !== anchor dismiss floating UI on epoch bump. */
+  floatingUiAnchorId: null,
+  /** While a node's floating glyph strip is shown, bring that node above overlaps (see MindMapCanvas zIndex). */
+  glyphMenuNodeId: null,
   reparentSourceNodeId: null,
+  copySizeSourceNodeId: null,
   pendingToolboxType: null,
 
   // ── Node focus (map navigation) ───────────────────────────────
@@ -114,15 +147,26 @@ export const useMindMapStore = create((set, get) => ({
   setIsFullscreen: (val) => set({ isFullscreen: val }),
   setViewMode: (mode) => set({ viewMode: mode }),
   setOpenMenuNodeId: (id) => set({ openMenuNodeId: id }),
-  setReparentSourceNodeId: (id) => set({ reparentSourceNodeId: id }),
+  setGlyphMenuNodeId: (id) => set({ glyphMenuNodeId: id }),
+  clearGlyphMenuNodeIdIf: (id) => set((s) => (s.glyphMenuNodeId === id ? { glyphMenuNodeId: null } : {})),
+  setReparentSourceNodeId: (id) => set({ reparentSourceNodeId: id, copySizeSourceNodeId: null }),
   clearReparentMode: () => set({ reparentSourceNodeId: null }),
+  setCopySizeSourceNodeId: (id) => set({ copySizeSourceNodeId: id, reparentSourceNodeId: null }),
+  clearCopySizeMode: () => set({ copySizeSourceNodeId: null }),
   setPendingToolboxType: (type) => set({ pendingToolboxType: type }),
   clearPendingToolboxType: () => set({ pendingToolboxType: null }),
 
-  setEditMode: (isEditMode) => set({ isEditMode, reparentSourceNodeId: isEditMode ? get().reparentSourceNodeId : null }),
+  setEditMode: (isEditMode) => set({
+    isEditMode,
+    reparentSourceNodeId: isEditMode ? get().reparentSourceNodeId : null,
+    copySizeSourceNodeId: isEditMode ? get().copySizeSourceNodeId : null,
+    glyphMenuNodeId: isEditMode ? get().glyphMenuNodeId : null,
+  }),
   toggleEditMode: () => set((state) => ({
     isEditMode: !state.isEditMode,
     reparentSourceNodeId: state.isEditMode ? null : state.reparentSourceNodeId,
+    copySizeSourceNodeId: state.isEditMode ? null : state.copySizeSourceNodeId,
+    glyphMenuNodeId: state.isEditMode ? null : state.glyphMenuNodeId,
   })),
 
   focusNode: (nodeId) => set({ focusNodeId: nodeId }),
@@ -141,6 +185,7 @@ export const useMindMapStore = create((set, get) => ({
       : changes.filter((c) => c.type === 'select' || c.type === 'dimensions')
     if (effectiveChanges.length === 0) return
     const hasNonSelectChange = effectiveChanges.some((c) => c.type !== 'select' && c.type !== 'dimensions')
+    const hasSelectChange = effectiveChanges.some((c) => c.type === 'select')
 
     // Don't push position changes to history during drag (too noisy)
     // History is pushed in onNodeDragStart instead
@@ -148,9 +193,16 @@ export const useMindMapStore = create((set, get) => ({
       const selectedApplied = applySelectionChanges(effectiveChanges, state.nodes)
       const positionedApplied = applyPositionChanges(effectiveChanges, selectedApplied)
       const resizedApplied = applyResizeChanges(effectiveChanges, positionedApplied, edges)
+      const anchor = selectionAnchorFromNodes(resizedApplied)
       return {
         nodes: resizedApplied,
         isDirty: hasNonSelectChange ? true : state.isDirty,
+        ...(hasSelectChange
+          ? {
+              floatingUiEpoch: state.floatingUiEpoch + 1,
+              floatingUiAnchorId: anchor,
+            }
+          : {}),
       }
     })
     // Debounce autosave (skip for selection-only changes)
@@ -203,6 +255,7 @@ export const useMindMapStore = create((set, get) => ({
       id,
       type: 'mindmap',
       position: snappedPosition,
+      selected: true,
       ...(nodeType === 'text' ? {} : {
         style: { width: baseSize.width, height: baseSize.height },
       }),
@@ -216,8 +269,10 @@ export const useMindMapStore = create((set, get) => ({
       },
     }
     set((state) => ({
-      nodes: [...state.nodes, newNode],
+      nodes: [...state.nodes.map((n) => ({ ...n, selected: false })), newNode],
       isDirty: true,
+      floatingUiEpoch: state.floatingUiEpoch + 1,
+      floatingUiAnchorId: id,
     }))
     get().scheduleAutosave()
     return newNode
@@ -251,15 +306,18 @@ export const useMindMapStore = create((set, get) => ({
   deleteNode: (nodeId) => {
     if (!get().isEditMode) return
     get().pushHistory()
-    set((state) => ({
-      nodes: state.nodes.filter((n) => n.id !== nodeId),
-      edges: state.edges.filter(
-        (e) => e.source !== nodeId && e.target !== nodeId
-      ),
-      selectedNodeId:
-        state.selectedNodeId === nodeId ? null : state.selectedNodeId,
-      isDirty: true,
-    }))
+    set((state) => {
+      const nodes = state.nodes.filter((n) => n.id !== nodeId)
+      return {
+        nodes,
+        edges: state.edges.filter(
+          (e) => e.source !== nodeId && e.target !== nodeId
+        ),
+        isDirty: true,
+        floatingUiEpoch: state.floatingUiEpoch + 1,
+        floatingUiAnchorId: selectionAnchorFromNodes(nodes),
+      }
+    })
     // Remove content row immediately so it doesn't linger in the nodes table
     const { currentMapId } = get()
     if (currentMapId) {
@@ -270,14 +328,118 @@ export const useMindMapStore = create((set, get) => ({
     get().scheduleAutosave()
   },
 
-  // ── Selection ─────────────────────────────────────────────────
+  /** Delete several nodes in one history step (e.g. multi-select). Skips level-0 root. */
+  deleteNodes: (nodeIds) => {
+    if (!get().isEditMode) return
+    const { nodes } = get()
+    const toRemove = nodeIds.filter((id) => {
+      const n = nodes.find((x) => x.id === id)
+      return n && (n.data?.level ?? 0) > 0
+    })
+    if (toRemove.length === 0) return
+    get().pushHistory()
+    const removeSet = new Set(toRemove)
+    set((state) => {
+      const nodes = state.nodes.filter((n) => !removeSet.has(n.id))
+      return {
+        nodes,
+        edges: state.edges.filter(
+          (e) => !removeSet.has(e.source) && !removeSet.has(e.target)
+        ),
+        isDirty: true,
+        floatingUiEpoch: state.floatingUiEpoch + 1,
+        floatingUiAnchorId: selectionAnchorFromNodes(nodes),
+      }
+    })
+    const { currentMapId } = get()
+    if (currentMapId) {
+      toRemove.forEach((nodeId) => {
+        supabase.from('nodes').delete().eq('id', nodeId).then(({ error }) => {
+          if (error) console.error('Failed to delete node row:', error)
+        })
+      })
+    }
+    get().scheduleAutosave()
+  },
+
+  /** Copy a node and all descendants as JSON on the system clipboard (for pasting on this or another map). */
+  copySubtreeToClipboard: async (nodeId) => {
+    if (!get().isEditMode) return { success: false, error: 'edit' }
+    const { nodes, edges } = get()
+    const payload = buildSubtreePayload(nodes, edges, nodeId)
+    if (!payload) return { success: false, error: 'empty' }
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(payload))
+      return { success: true }
+    } catch {
+      return { success: false, error: 'clipboard' }
+    }
+  },
+
+  /** Paste subtree from clipboard at the given flow position (new ids, levels adjusted so root is L1). */
+  pasteSubtreeFromClipboard: async (flowPosition) => {
+    if (!get().isEditMode) return { success: false, error: 'edit' }
+    let text
+    try {
+      text = await navigator.clipboard.readText()
+    } catch {
+      return { success: false, error: 'clipboard' }
+    }
+    const payload = parseSubtreePayload(text)
+    if (!payload) return { success: false, error: 'invalid' }
+
+    const { nodes, edges } = get()
+    const mapRoot = nodes.find((n) => (n.data?.level ?? 0) === 0)
+    const mapRootId = mapRoot?.id ?? null
+
+    const { nodes: pastedNodes, edges: pastedEdges, newRootId } = remapSubtreeForPaste(
+      payload,
+      flowPosition,
+      mapRootId
+    )
+
+    const mergedNodes = pastedNodes.map((n) => ({
+      ...n,
+      selected: n.id === newRootId,
+    }))
+
+    get().pushHistory()
+    set((state) => ({
+      nodes: [...state.nodes.map((n) => ({ ...n, selected: false })), ...mergedNodes],
+      edges: [...state.edges, ...pastedEdges],
+      isDirty: true,
+      floatingUiEpoch: state.floatingUiEpoch + 1,
+      floatingUiAnchorId: newRootId,
+    }))
+    get().scheduleAutosave()
+    return { success: true, pastedRootId: newRootId }
+  },
+
+  // ── Selection (React Flow `nodes[].selected` is source of truth) ──
+
+  setSelectedNodeIds: (ids) => {
+    const idSet = new Set(ids)
+    set((state) => {
+      const nodes = state.nodes.map((n) => ({ ...n, selected: idSet.has(n.id) }))
+      return {
+        nodes,
+        floatingUiEpoch: state.floatingUiEpoch + 1,
+        floatingUiAnchorId: ids.length === 1 ? ids[0] : null,
+      }
+    })
+  },
 
   selectNode: (nodeId) => {
-    set({ selectedNodeId: nodeId })
+    get().setSelectedNodeIds([nodeId])
   },
 
   deselectNode: () => {
-    set({ selectedNodeId: null, pendingNewNodeId: null })
+    set((state) => ({
+      nodes: state.nodes.map((n) => ({ ...n, selected: false })),
+      pendingNewNodeId: null,
+      floatingUiEpoch: state.floatingUiEpoch + 1,
+      floatingUiAnchorId: null,
+    }))
   },
 
   openNodeModal: (nodeId) => set({ modalNodeId: nodeId }),
@@ -418,6 +580,7 @@ export const useMindMapStore = create((set, get) => ({
 
       const nodes = (mapResult.data.data.nodes || []).map((n) => ({
         ...n,
+        selected: false,
         data: {
           ...n.data,
           nodeType: n.data.nodeType ?? (n.data.isSubmap ? 'submap' : 'node'),
@@ -433,10 +596,13 @@ export const useMindMapStore = create((set, get) => ({
         isDirty: false,
         past: [],
         future: [],
-        selectedNodeId: null,
         saveStatus: 'idle',
         fitViewTrigger: state.fitViewTrigger + 1,
         breadcrumbs,
+        openMenuNodeId: null,
+        glyphMenuNodeId: null,
+        floatingUiEpoch: state.floatingUiEpoch + 1,
+        floatingUiAnchorId: null,
       }))
 
       // Touch last_visited_at — fire-and-forget, not critical
@@ -604,12 +770,13 @@ export const useMindMapStore = create((set, get) => ({
 
   newMap: (name = 'Untitled Map') => {
     const rootId = 'root-' + uuidv4().slice(0, 8)
-    set({
+    set((state) => ({
       nodes: [
         {
           id: rootId,
           type: 'mindmap',
           position: { x: 350, y: 250 },
+          selected: false,
           data: { title: name, key: rootId, level: 0, content: '' },
         },
       ],
@@ -619,9 +786,12 @@ export const useMindMapStore = create((set, get) => ({
       isDirty: false,
       past: [],
       future: [],
-      selectedNodeId: null,
       saveStatus: 'idle',
-    })
+      openMenuNodeId: null,
+      glyphMenuNodeId: null,
+      floatingUiEpoch: state.floatingUiEpoch + 1,
+      floatingUiAnchorId: null,
+    }))
   },
 
   setMapName: (name) => {
@@ -665,6 +835,7 @@ export const useMindMapStore = create((set, get) => ({
       id,
       type: 'mindmap',
       position: snappedPosition,
+      selected: true,
       style: nodeType === 'text' ? undefined : { width: size.width, height: size.height },
       data: { title: '', key: id, level: childLevel, nodeType, size, content: '' },
     }
@@ -686,6 +857,8 @@ export const useMindMapStore = create((set, get) => ({
       edges: [...state.edges, newEdge],
       pendingNewNodeId: id,
       isDirty: true,
+      floatingUiEpoch: state.floatingUiEpoch + 1,
+      floatingUiAnchorId: id,
     }))
 
     get().scheduleAutosave()
@@ -763,6 +936,40 @@ export const useMindMapStore = create((set, get) => ({
       isDirty: true,
     }))
 
+    get().scheduleAutosave()
+  },
+
+  // ── Copy size from one node to another (glyph workflow) ─────────
+
+  applySizeFromSourceToTarget: (sourceId, targetId) => {
+    if (!get().isEditMode) return
+    if (sourceId === targetId) return
+    const { nodes, edges } = get()
+    const source = nodes.find((n) => n.id === sourceId)
+    const target = nodes.find((n) => n.id === targetId)
+    if (!source || !target) return
+    if ((target.data?.level ?? 0) === 0) return
+    if (target.data?.nodeType === 'text' || source.data?.nodeType === 'text') return
+
+    get().pushHistory()
+    const size = resolveNodePixelSize(source)
+    const parentIds = new Set(edges.map((e) => e.source))
+
+    set((state) => ({
+      nodes: state.nodes.map((n) => {
+        if (n.id !== targetId) return n
+        return {
+          ...n,
+          style: { ...(n.style || {}), width: size.width, height: size.height },
+          data: {
+            ...n.data,
+            size,
+            ...(parentIds.has(targetId) ? { sizeMode: 'manual' } : {}),
+          },
+        }
+      }),
+      isDirty: true,
+    }))
     get().scheduleAutosave()
   },
 

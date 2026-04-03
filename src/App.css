@@ -28,6 +28,45 @@
   background: var(--ink);
 }
 
+/* Map canvas context menu (copy / paste subtree) */
+.map-context-menu {
+  position: fixed;
+  z-index: 10050;
+  min-width: 200px;
+  max-width: 280px;
+  padding: 8px 0;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  font-family: var(--font-ui);
+  font-size: 13px;
+}
+
+.map-context-menu__item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 14px;
+  border: none;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.map-context-menu__item:hover {
+  background: var(--bg-muted);
+}
+
+.map-context-menu__hint {
+  margin: 0;
+  padding: 0 14px 4px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--text-muted);
+}
+
 /* ── Toolbar ─────────────────────────────────────────────────────── */
 
 .toolbar {
@@ -597,6 +636,8 @@
 
 .sidebar { width: 310px; flex-shrink: 0; background: var(--bg-surface); border-left: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
 .sidebar--empty { align-items: center; justify-content: center; padding: 24px; text-align: center; color: var(--text-3); font-size: 13px; }
+.sidebar-hint { font-size: 12px; color: var(--text-3); margin-top: 12px; line-height: 1.45; max-width: 280px; }
+.sidebar-multi-hint { font-size: 13px; color: var(--text-2); line-height: 1.45; margin: 0; }
 
 .sidebar-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
 .sidebar-header-left { display: flex; align-items: center; gap: 8px; }
@@ -690,13 +731,12 @@
 
 .node-floating-menu {
   position: absolute;
-  left: calc(100% + 10px);
   top: 50%;
-  transform: translateY(-50%);
+  /* left + transform set inline in CustomNode (zoom-compensated) */
   display: flex;
   flex-direction: column;
   gap: 6px;
-  z-index: 20;
+  z-index: 50;
   pointer-events: auto;
 }
 .node-floating-menu--hidden { opacity: 0; pointer-events: none; }
@@ -757,6 +797,17 @@
 .node-reparent-btn:hover { background: #0284c7; transform: scale(1.15); }
 .node-reparent-btn--active { background: #0369a1; }
 .node-reparent-btn--active:hover { background: #075985; }
+
+.node-copy-size-btn {
+  width: 20px; height: 20px;
+  border-radius: 50%; border: 2px solid #fff; background: #7c3aed; color: #fff;
+  font-size: 11px; font-weight: 700; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; padding: 0;
+  z-index: 10; box-shadow: 0 2px 6px rgba(0,0,0,0.25); transition: background 0.12s, transform 0.12s;
+}
+.node-copy-size-btn:hover { background: #6d28d9; transform: scale(1.15); }
+.node-copy-size-btn--active { background: #5b21b6; }
+.node-copy-size-btn--active:hover { background: #4c1d95; }
 
 .node-delete-btn {
   width: 20px; height: 20px;

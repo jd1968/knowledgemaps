@@ -1,7 +1,7 @@
 import { useMindMapStore } from '../store/useMindMapStore'
 
 export default function ContentsView() {
-  const { nodes, edges, selectNode, focusNode, setViewMode } = useMindMapStore()
+  const { nodes, edges, setSelectedNodeIds, focusNode, setViewMode } = useMindMapStore()
 
   // Build lookup maps
   const nodeById = {}
@@ -50,7 +50,7 @@ export default function ContentsView() {
             key={node.id}
             className={`contents-view__item contents-view__item--depth-${Math.min(depth, 4)}`}
             style={{ paddingLeft: `${20 + depth * 18}px` }}
-            onClick={() => selectNode(node.id)}
+            onClick={() => setSelectedNodeIds([node.id])}
           >
             <span className="contents-view__item-title">
               {node.data?.longTitle || node.data?.title || 'Untitled'}
