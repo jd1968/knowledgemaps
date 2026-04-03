@@ -367,6 +367,10 @@ const CustomNode = memo(({ id, data, selected }) => {
           isVisible={isEditMode && (selected || hovered)}
           minWidth={60}
           minHeight={30}
+          handleClassName="nopan"
+          lineClassName="nopan"
+          handleStyle={{ touchAction: 'none' }}
+          lineStyle={{ touchAction: 'none' }}
           onResizeEnd={() => scheduleAutosave()}
         />
       )}
