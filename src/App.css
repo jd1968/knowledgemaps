@@ -1277,3 +1277,27 @@ select.node-props__input { cursor: pointer; }
 .feed-edit-bar__btn--confirm:hover { background: #16a34a; }
 .feed-edit-bar__btn--cancel { background: #f1f5f9; color: #64748b; }
 .feed-edit-bar__btn--cancel:hover { background: #e2e8f0; }
+
+/* ── Resize handles — larger touch targets ──────────────────────── */
+
+.react-flow__resize-control {
+  touch-action: none;
+}
+.react-flow__resize-control.handle {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  border: 2px solid #fff;
+  background: #6366f1;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+  z-index: 20;
+}
+/* Larger invisible hit area for touch */
+.react-flow__resize-control.handle::before {
+  content: '';
+  position: absolute;
+  inset: -10px;
+}
+.react-flow__resize-control.line {
+  touch-action: none;
+}

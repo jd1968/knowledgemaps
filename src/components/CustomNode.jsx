@@ -277,6 +277,9 @@ const CustomNode = memo(({ id, data, selected }) => {
       ref={nodeRef}
       onMouseEnter={showActionMenu}
       onMouseLeave={hideActionMenuWithDelay}
+      onPointerDownCapture={(e) => {
+        if (e.target.closest('.react-flow__resize-control')) e.stopPropagation()
+      }}
       onClick={(e) => {
         if (copySizeSourceNodeId) {
           e.stopPropagation()
