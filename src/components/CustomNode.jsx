@@ -26,7 +26,7 @@ const blendWithWhite = (hex, alpha) => {
 }
 
 const CONVERT_LABELS = { node: 'Node', pointer: 'Pointer', submap: '↗ Submap' }
-const LEAF_NODE_SIZE = { width: 160, height: 70 }
+
 
 const CustomNode = memo(({ id, data, selected }) => {
   const openMenuNodeId        = useMindMapStore((state) => state.openMenuNodeId)
@@ -78,11 +78,10 @@ const CustomNode = memo(({ id, data, selected }) => {
   const borderColor = l1Color ?? '#94a3b8'
   const TEXT_SIZES  = { s: 14, m: 22, l: 36 }
   const isParent    = !!groupSize
-  const isFixedLeaf = !hasChildren && !showContents && nodeType !== 'text' && nodeType !== 'note' && nodeType !== 'image'
   // Depth tint only for parent nodes; each level adds 0.04, min 0.05
   const bgAlpha     = isParent ? 0.05 + Math.max(0, level - 1) * 0.04 : 0
-  const width       = nodeType === 'text' ? 'auto' : (isFixedLeaf ? LEAF_NODE_SIZE.width : (groupSize?.width ?? '100%'))
-  const height      = nodeType === 'text' ? null : (isFixedLeaf ? LEAF_NODE_SIZE.height : (groupSize?.height ?? '100%'))
+  const width       = nodeType === 'text' ? 'auto' : (groupSize?.width ?? '100%')
+  const height      = nodeType === 'text' ? null : (groupSize?.height ?? '100%')
   const hasPointerContent = nodeType === 'pointer' && content && content.trim() !== ''
   const isReparentSource = reparentSourceNodeId === id
   const isCopySizeSource = copySizeSourceNodeId === id
@@ -339,7 +338,7 @@ const CustomNode = memo(({ id, data, selected }) => {
             ? `1px solid ${borderColor}40`
             : `2px ${isSubmap ? 'dashed' : 'solid'} ${borderColor}`,
         ...(nodeType === 'pointer' ? { borderLeft: `3px solid ${borderColor}` } : {}),
-        borderRadius: level === 0 ? '50px' : nodeType === 'note' ? '1px 1px 1px 4px' : isParent ? '12px' : nodeType === 'pointer' ? '8px' : '10px',
+        borderRadius: level === 0 ? '50px' : nodeType === 'note' ? '10px' :isParent ? '12px' : nodeType === 'pointer' ? '8px' : '10px',
         fontSize: cfg.fontSize,
         fontWeight: cfg.fontWeight,
         color: level === 0 ? '#ffffff' : '#1c1917',
@@ -365,7 +364,7 @@ const CustomNode = memo(({ id, data, selected }) => {
 
       {nodeType !== 'text' && (
         <NodeResizer
-          isVisible={isEditMode && (hasChildren || nodeType === 'note' || nodeType === 'image') && (selected || hovered)}
+          isVisible={isEditMode && (selected || hovered)}
           minWidth={60}
           minHeight={30}
           onResizeEnd={() => scheduleAutosave()}
