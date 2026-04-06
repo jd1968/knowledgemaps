@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { applyNodeChanges, applyEdgeChanges, addEdge } from '@xyflow/react'
 import { v4 as uuidv4 } from 'uuid'
 import { supabase } from '../lib/supabase'
-import { GRID_SIZE, NEST_PAD_LEFT, NEST_PAD_TOP, NEST_V_SPACING, snapPoint, snapSize } from '../lib/grid'
+import { GRID_SIZE, NEST_PAD_LEFT, NEST_PAD_TOP, NEST_V_SPACING, snapPoint, snapSize, snapValue } from '../lib/grid'
 import { buildSubtreePayload, parseSubtreePayload, remapSubtreeForPaste } from '../lib/subtreeClipboard'
 
 const HISTORY_LIMIT = 50
@@ -278,6 +278,27 @@ export const useMindMapStore = create((set, get) => ({
     }))
     get().scheduleAutosave()
     return newNode
+  },
+
+  resizeNode: (nodeId, { width, height, x, y }, isResizing = false) => {
+    const size = isResizing
+      ? { width, height }
+      : snapSize({ width, height }, { gridSize: GRID_SIZE })
+    set((state) => ({
+      nodes: state.nodes.map((node) => {
+        if (node.id !== nodeId) return node
+        return {
+          ...node,
+          position: (x != null && y != null)
+            ? { x: isResizing ? x : snapValue(x, GRID_SIZE), y: isResizing ? y : snapValue(y, GRID_SIZE) }
+            : node.position,
+          style: { ...(node.style || {}), width: size.width, height: size.height },
+          data: { ...node.data, size },
+        }
+      }),
+      isDirty: !isResizing,
+    }))
+    if (!isResizing) get().scheduleAutosave()
   },
 
   updateNodeData: (nodeId, updates) => {

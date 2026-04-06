@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
-import { Handle, Position, NodeResizer, useViewport } from '@xyflow/react'
+import { Handle, Position, useViewport, useReactFlow } from '@xyflow/react'
 import { useNavigate } from 'react-router-dom'
 import { useMindMapStore } from '../store/useMindMapStore'
 import SubmapChoiceModal from './SubmapChoiceModal'
@@ -27,6 +27,112 @@ const blendWithWhite = (hex, alpha) => {
 
 const CONVERT_LABELS = { node: 'Node', pointer: 'Pointer', submap: '↗ Submap' }
 
+// Eight resize handle positions: corners + edge midpoints
+const HANDLES = [
+  { dir: 'nw', cursor: 'nwse-resize', style: { top: 0,    left: 0,    transform: 'translate(-50%,-50%)' } },
+  { dir: 'n',  cursor: 'ns-resize',   style: { top: 0,    left: '50%',transform: 'translate(-50%,-50%)' } },
+  { dir: 'ne', cursor: 'nesw-resize', style: { top: 0,    right: 0,   transform: 'translate(50%,-50%)' } },
+  { dir: 'e',  cursor: 'ew-resize',   style: { top: '50%',right: 0,   transform: 'translate(50%,-50%)' } },
+  { dir: 'se', cursor: 'nwse-resize', style: { bottom: 0, right: 0,   transform: 'translate(50%,50%)' } },
+  { dir: 's',  cursor: 'ns-resize',   style: { bottom: 0, left: '50%',transform: 'translate(-50%,50%)' } },
+  { dir: 'sw', cursor: 'nesw-resize', style: { bottom: 0, left: 0,    transform: 'translate(-50%,50%)' } },
+  { dir: 'w',  cursor: 'ew-resize',   style: { top: '50%',left: 0,    transform: 'translate(-50%,-50%)' } },
+]
+
+const MIN_W = 60
+const MIN_H = 30
+
+function ResizeHandles({ nodeId, visible }) {
+  const { getNode, setNodes } = useReactFlow()
+  const { zoom } = useViewport()
+  const dragRef = useRef(null)
+
+  const onPointerDown = useCallback((e, dir) => {
+    if (!visible) return
+    e.stopPropagation()
+    e.preventDefault()
+    e.currentTarget.setPointerCapture(e.pointerId)
+
+    const node = getNode(nodeId)
+    if (!node) return
+
+    const startX = e.clientX
+    const startY = e.clientY
+    const startW = node.measured?.width  ?? node.style?.width  ?? 160
+    const startH = node.measured?.height ?? node.style?.height ?? 80
+    const startPX = node.position.x
+    const startPY = node.position.y
+
+    dragRef.current = { dir, startX, startY, startW, startH, startPX, startPY }
+  }, [visible, nodeId, getNode])
+
+  const onPointerMove = useCallback((e) => {
+    const drag = dragRef.current
+    if (!drag) return
+    e.stopPropagation()
+
+    const scale = zoom || 1
+    const dx = (e.clientX - drag.startX) / scale
+    const dy = (e.clientY - drag.startY) / scale
+    const { dir, startW, startH, startPX, startPY } = drag
+
+    let w = startW, h = startH, x = startPX, y = startPY
+
+    if (dir.includes('e')) w = Math.max(MIN_W, startW + dx)
+    if (dir.includes('s')) h = Math.max(MIN_H, startH + dy)
+    if (dir.includes('w')) { w = Math.max(MIN_W, startW - dx); x = startPX + (startW - w) }
+    if (dir.includes('n')) { h = Math.max(MIN_H, startH - dy); y = startPY + (startH - h) }
+
+    setNodes((nodes) => nodes.map((n) => n.id !== nodeId ? n : {
+      ...n,
+      position: { x, y },
+      style: { ...(n.style || {}), width: w, height: h },
+      data: { ...n.data, size: { width: w, height: h } },
+    }))
+  }, [nodeId, zoom, setNodes])
+
+  const onPointerUp = useCallback((e) => {
+    if (!dragRef.current) return
+    e.stopPropagation()
+    dragRef.current = null
+
+    // Snap on release
+    setNodes((nodes) => nodes.map((n) => {
+      if (n.id !== nodeId) return n
+      const w = Math.max(MIN_W, Math.round((n.style?.width  ?? 160) / 10) * 10)
+      const h = Math.max(MIN_H, Math.round((n.style?.height ?? 80)  / 10) * 10)
+      const x = Math.round(n.position.x / 10) * 10
+      const y = Math.round(n.position.y / 10) * 10
+      return {
+        ...n,
+        position: { x, y },
+        style: { ...(n.style || {}), width: w, height: h },
+        data: { ...n.data, size: { width: w, height: h } },
+      }
+    }))
+    // Mark dirty and trigger autosave via store without subscribing to it
+    const store = useMindMapStore.getState()
+    store.scheduleAutosave?.()
+  }, [nodeId, setNodes])
+
+  if (!visible) return null
+
+  return (
+    <>
+      {HANDLES.map(({ dir, cursor, style }) => (
+        <div
+          key={dir}
+          className="km-resize-handle nopan nodrag"
+          style={{ ...style, cursor, position: 'absolute', zIndex: 20 }}
+          onPointerDown={(e) => onPointerDown(e, dir)}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
+        />
+      ))}
+    </>
+  )
+}
 
 const CustomNode = memo(({ id, data, selected }) => {
   const openMenuNodeId        = useMindMapStore((state) => state.openMenuNodeId)
@@ -52,7 +158,7 @@ const CustomNode = memo(({ id, data, selected }) => {
   const breadcrumbs           = useMindMapStore((state) => state.breadcrumbs)
   const isDirty               = useMindMapStore((state) => state.isDirty)
   const saveMap               = useMindMapStore((state) => state.saveMap)
-  const scheduleAutosave      = useMindMapStore((state) => state.scheduleAutosave)
+
   const setGlyphMenuNodeId    = useMindMapStore((state) => state.setGlyphMenuNodeId)
   const clearGlyphMenuNodeIdIf = useMindMapStore((state) => state.clearGlyphMenuNodeIdIf)
   const floatingUiEpoch       = useMindMapStore((state) => state.floatingUiEpoch)
@@ -277,9 +383,7 @@ const CustomNode = memo(({ id, data, selected }) => {
       ref={nodeRef}
       onMouseEnter={showActionMenu}
       onMouseLeave={hideActionMenuWithDelay}
-      onPointerDownCapture={(e) => {
-        if (e.target.closest('.react-flow__resize-control')) e.stopPropagation()
-      }}
+
       onClick={(e) => {
         if (copySizeSourceNodeId) {
           e.stopPropagation()
@@ -366,16 +470,7 @@ const CustomNode = memo(({ id, data, selected }) => {
       <Handle type="target" position={Position.Left} style={centerHandle} />
 
       {nodeType !== 'text' && (
-        <NodeResizer
-          isVisible={isEditMode && (selected || hovered)}
-          minWidth={60}
-          minHeight={30}
-          handleClassName="nopan"
-          lineClassName="nopan"
-          handleStyle={{ touchAction: 'none' }}
-          lineStyle={{ touchAction: 'none' }}
-          onResizeEnd={() => scheduleAutosave()}
-        />
+        <ResizeHandles nodeId={id} visible={isEditMode && (selected || hovered)} />
       )}
 
       {!editing && isTodo && (
