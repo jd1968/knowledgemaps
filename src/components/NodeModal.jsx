@@ -5,8 +5,8 @@ import MarkdownEditor from './MarkdownEditor'
 import SubmapChoiceModal from './SubmapChoiceModal'
 import { STANDARD_THEME_COLORS } from '../lib/themePalette'
 
-const TYPE_LABELS = { card: 'Card', object: 'Object', relationship: 'Relationship', pointer: 'Pointer', diagram: 'Diagram', submap: 'Submap' }
-const CREATE_TYPE_OPTIONS = ['card', 'object', 'relationship', 'pointer', 'diagram', 'submap']
+const TYPE_LABELS = { card: 'Card', object: 'Object', relationship: 'Relationship', diagram: 'Diagram', submap: 'Submap' }
+const CREATE_TYPE_OPTIONS = ['card', 'object', 'relationship', 'diagram', 'submap']
 
 const isTouch = typeof window !== 'undefined' && window.matchMedia('(hover: none) and (pointer: coarse)').matches
 
@@ -14,7 +14,6 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
   const updateNodeData   = useMindMapStore((s) => s.updateNodeData)
   const navigateToSubmap = useMindMapStore((s) => s.navigateToSubmap)
   const deleteNode       = useMindMapStore((s) => s.deleteNode)
-  const setEdgeType      = useMindMapStore((s) => s.setEdgeType)
   const convertToSubmap  = useMindMapStore((s) => s.convertToSubmap)
   const isEditMode       = useMindMapStore((s) => s.isEditMode)
   const currentMapId     = useMindMapStore((s) => s.currentMapId)
@@ -116,8 +115,6 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
         backgroundMode: draft.backgroundMode || 'theme',
       } : {}),
     })
-    if (nextType === 'pointer') setEdgeType(id, 'pointer-edge')
-    else if (nodeType === 'pointer') setEdgeType(id, 'straight-center')
     onClose()
   }
 
@@ -146,20 +143,14 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
       return
     }
 
-    if ((newType === 'note' || newType === 'pointer' || newType === 'diagram' || newType === 'relationship') && hasChildren) {
+    if ((newType === 'note' || newType === 'diagram' || newType === 'relationship') && hasChildren) {
       if (!confirm(`"${title}" has children. Converting to ${TYPE_LABELS[newType]} will prevent adding more children, but existing ones will remain.\n\nContinue?`)) return
     }
 
-    if (newType === 'pointer') {
-      updateNodeData(id, { nodeType: 'pointer' })
-      setEdgeType(id, 'pointer-edge')
-    } else {
-      if (nodeType === 'pointer') setEdgeType(id, 'straight-center')
-      updateNodeData(id, { nodeType: newType })
-    }
+    updateNodeData(id, { nodeType: newType })
     setShowConvertMenu(false)
     onClose()
-  }, [nodeType, title, id, hasChildren, updateNodeData, setEdgeType, onClose])
+  }, [title, id, hasChildren, updateNodeData, onClose])
 
   const handleCreateNewSubmap = useCallback(async () => {
     if (!canSave) {
@@ -180,7 +171,6 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
     const nextContent = draft?.content ?? content
     const nextTodo = draft?.isTodo ?? isTodo
     const nextThemeColor = draft?.themeColor ?? themeColor
-    if (nodeType === 'pointer') setEdgeType(id, 'straight-center')
     updateNodeData(id, {
       title: nextTitle,
       content: nextContent,
@@ -193,7 +183,7 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
     setShowSubmapChoice(false)
     setShowConvertMenu(false)
     onClose()
-  }, [content, draft, hasChildren, id, isTodo, level, nodeType, onClose, setEdgeType, themeColor, title, updateNodeData])
+  }, [content, draft, hasChildren, id, isTodo, level, onClose, themeColor, title, updateNodeData])
 
   return createPortal(
     <div
@@ -448,7 +438,7 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
             showConvertMenu ? (
               <>
                 <span className="node-modal-convert-label">Convert to:</span>
-                {['card', 'object', 'relationship', 'pointer', 'diagram', 'submap'].map((t) => (
+                {['card', 'object', 'relationship', 'diagram', 'submap'].map((t) => (
                   <button
                     key={t}
                     className={`btn btn--sm${nodeType === t ? ' btn--disabled' : ' btn--secondary'}`}

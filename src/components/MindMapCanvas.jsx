@@ -16,13 +16,12 @@ import { useNavigate } from 'react-router-dom'
 import { useMindMapStore } from '../store/useMindMapStore'
 import CustomNode from './CustomNode'
 import StraightCenterEdge from './StraightCenterEdge'
-import PointerEdge from './PointerEdge'
 import { GRID, NEST_PAD_BOTTOM, NEST_PAD_LEFT, NEST_PAD_RIGHT, NEST_PAD_TOP } from '../lib/grid'
 import { computeNodeLayouts } from '../lib/layout/computeNodeLayouts'
 import { STANDARD_THEME_COLORS } from '../lib/themePalette'
 
 const nodeTypes = { mindmap: CustomNode }
-const edgeTypes = { 'straight-center': StraightCenterEdge, 'pointer-edge': PointerEdge }
+const edgeTypes = { 'straight-center': StraightCenterEdge }
 
 // Palette optimised for light backgrounds, one color per L1 branch
 const L1_PALETTE = STANDARD_THEME_COLORS
@@ -220,7 +219,6 @@ const MindMapCanvas = () => {
     copySubtreeToClipboard,
     pasteSubtreeFromClipboard,
     updateNodeData,
-    setEdgeType,
     deleteNode,
     convertToSubmap,
     setReparentSourceNodeId,
@@ -231,7 +229,7 @@ const MindMapCanvas = () => {
   const navigate = useNavigate()
   const [nodeContextMenu, setNodeContextMenu] = useState(null)
   const [paneContextMenu, setPaneContextMenu] = useState(null)
-  const CONVERT_LABELS = { card: 'Card', object: 'Object', relationship: 'Relationship', pointer: 'Pointer', diagram: 'Diagram', submap: 'Submap' }
+  const CONVERT_LABELS = { card: 'Card', object: 'Object', relationship: 'Relationship', diagram: 'Diagram', submap: 'Submap' }
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -430,7 +428,7 @@ const MindMapCanvas = () => {
     const nodeType = node.data?.nodeType
     const title = node.data?.title ?? ''
     const hasChildren = edges.some((e) => e.source === node.id)
-    if ((newType === 'note' || newType === 'pointer' || newType === 'diagram' || newType === 'relationship') && hasChildren) {
+    if ((newType === 'note' || newType === 'diagram' || newType === 'relationship') && hasChildren) {
       if (!confirm(`"${title}" has children. Converting to ${CONVERT_LABELS[newType]} will prevent adding more children, but existing ones will remain.\n\nContinue?`)) return
     }
     if (newType === 'submap') {
@@ -438,14 +436,8 @@ const MindMapCanvas = () => {
       if (!r?.success) alert('Failed to convert to submap. Please try again.')
       return
     }
-    if (newType === 'pointer') {
-      updateNodeData(node.id, { nodeType: 'pointer' })
-      setEdgeType(node.id, 'pointer-edge')
-      return
-    }
-    if (nodeType === 'pointer') setEdgeType(node.id, 'straight-center')
     updateNodeData(node.id, { nodeType: newType })
-  }, [edges, convertToSubmap, updateNodeData, setEdgeType, CONVERT_LABELS])
+  }, [edges, convertToSubmap, updateNodeData, CONVERT_LABELS])
 
   const onNodeContextMenu = useCallback(
     (event, node) => {
@@ -588,7 +580,7 @@ const MindMapCanvas = () => {
               Open submap
             </button>
           )}
-          {contextNode && contextNode.data?.isSubmap !== true && !['note', 'pointer', 'relationship', 'image', 'diagram', 'text'].includes(contextNode.data?.nodeType) && (
+          {contextNode && contextNode.data?.isSubmap !== true && !['note', 'relationship', 'image', 'diagram', 'text'].includes(contextNode.data?.nodeType) && (
             <button
               type="button"
               className="map-context-menu__item"
@@ -653,7 +645,7 @@ const MindMapCanvas = () => {
           )}
           {contextNode && contextNode.data?.level > 0 && contextNode.data?.isSubmap !== true && (
             <>
-              {['card', 'object', 'relationship', 'pointer', 'diagram', 'submap'].map((type) => (
+              {['card', 'object', 'relationship', 'diagram', 'submap'].map((type) => (
                 <button
                   key={type}
                   type="button"

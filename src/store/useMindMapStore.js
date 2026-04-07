@@ -8,9 +8,10 @@ import { buildSubtreePayload, parseSubtreePayload, remapSubtreeForPaste } from '
 const HISTORY_LIMIT = 50
 const normalizeNodeType = (nodeType, isSubmap = false) => {
   if (isSubmap) return 'submap'
-  if (!nodeType) return 'card'
+  if (!nodeType || nodeType === 'pointer') return 'card'
   return nodeType
 }
+const normalizeEdgeType = (edgeType) => (edgeType === 'pointer-edge' ? 'straight-center' : edgeType)
 const DEFAULT_NODE_SIZE_BY_LEVEL = {
   0: { width: 200, height: 200 },
   1: { width: 190, height: 50 },
@@ -327,9 +328,10 @@ export const useMindMapStore = create((set, get) => ({
   },
 
   setEdgeType: (targetNodeId, edgeType) => {
+    const normalizedType = normalizeEdgeType(edgeType)
     set((state) => ({
       edges: state.edges.map((e) =>
-        e.target === targetNodeId ? { ...e, type: edgeType } : e
+        e.target === targetNodeId ? { ...e, type: normalizedType } : e
       ),
       isDirty: true,
     }))
@@ -433,13 +435,18 @@ export const useMindMapStore = create((set, get) => ({
 
     const mergedNodes = pastedNodes.map((n) => ({
       ...n,
+      data: {
+        ...n.data,
+        nodeType: normalizeNodeType(n.data?.nodeType, !!n.data?.isSubmap),
+      },
       selected: n.id === newRootId,
     }))
+    const normalizedPastedEdges = pastedEdges.map((e) => ({ ...e, type: normalizeEdgeType(e.type) }))
 
     get().pushHistory()
     set((state) => ({
       nodes: [...state.nodes.map((n) => ({ ...n, selected: false })), ...mergedNodes],
-      edges: [...state.edges, ...pastedEdges],
+      edges: [...state.edges, ...normalizedPastedEdges],
       isDirty: true,
       floatingUiEpoch: state.floatingUiEpoch + 1,
       floatingUiAnchorId: newRootId,
@@ -549,9 +556,9 @@ export const useMindMapStore = create((set, get) => ({
     const mapData = {
       nodes: nodes.map(({ data: { content: _c, ...rest }, selected: _s, dragging: _d, measured: _m, ...node }) => ({
         ...node,
-        data: rest,
+        data: { ...rest, nodeType: normalizeNodeType(rest.nodeType, !!rest.isSubmap) },
       })),
-      edges,
+      edges: edges.map((e) => ({ ...e, type: normalizeEdgeType(e.type) })),
     }
 
     set({ saveStatus: 'saving' })
@@ -623,7 +630,7 @@ export const useMindMapStore = create((set, get) => ({
 
       set((state) => ({
         nodes,
-        edges: mapResult.data.data.edges || [],
+        edges: (mapResult.data.data.edges || []).map((e) => ({ ...e, type: normalizeEdgeType(e.type) })),
         currentMapId: mapResult.data.id,
         currentMapName: mapResult.data.name,
         isDirty: false,

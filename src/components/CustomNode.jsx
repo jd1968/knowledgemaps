@@ -17,7 +17,6 @@ const blendWithWhite = (hex, alpha) => {
   return `rgb(${Math.round(255 * (1 - alpha) + r * alpha)}, ${Math.round(255 * (1 - alpha) + g * alpha)}, ${Math.round(255 * (1 - alpha) + b * alpha)})`
 }
 
-const CONVERT_LABELS = { card: 'Card', object: 'Object', relationship: 'Relationship', pointer: 'Pointer', diagram: 'Diagram', submap: '↗ Submap' }
 const OBJECT_TYPE_FILLS = {
   Standard: '#f1f3f7',
   Packaged: '#e9fbff',
@@ -136,7 +135,6 @@ const CustomNode = memo(({ id, data, selected }) => {
   const addChildNode          = useMindMapStore((state) => state.addChildNode)
   const updateNodeData        = useMindMapStore((state) => state.updateNodeData)
   const deleteNode            = useMindMapStore((state) => state.deleteNode)
-  const setEdgeType           = useMindMapStore((state) => state.setEdgeType)
   const convertToSubmap       = useMindMapStore((state) => state.convertToSubmap)
   const pushHistory           = useMindMapStore((state) => state.pushHistory)
   const openNodeModal         = useMindMapStore((state) => state.openNodeModal)
@@ -169,7 +167,7 @@ const CustomNode = memo(({ id, data, selected }) => {
   const nodeRef        = useRef(null)
 
   const { title, level, l1Color, hasChildren, hasNotes, isSubmap, submapId, nodeType, groupSize, content, objectType = 'Standard', backgroundMode = 'theme', isTodo = false, iconUrl = '', imageUrl = '', imageBorder = false, textSize = 'm', diagramSnapshot = '' } = data
-  const shouldShowContents = !!content?.trim() && nodeType !== 'image' && nodeType !== 'note' && nodeType !== 'diagram' && nodeType !== 'text' && nodeType !== 'pointer' && nodeType !== 'relationship'
+  const shouldShowContents = !!content?.trim() && nodeType !== 'image' && nodeType !== 'note' && nodeType !== 'diagram' && nodeType !== 'text' && nodeType !== 'relationship'
 
   const borderColor = l1Color ?? '#94a3b8'
   const TEXT_SIZES  = { s: 14, m: 22, l: 36 }
@@ -178,7 +176,6 @@ const CustomNode = memo(({ id, data, selected }) => {
   const bgAlpha     = isParent ? 0.05 + Math.max(0, level - 1) * 0.04 : 0
   const width       = nodeType === 'text' ? 'auto' : (groupSize?.width ?? '100%')
   const height      = nodeType === 'text' ? null : (groupSize?.height ?? '100%')
-  const hasPointerContent = nodeType === 'pointer' && content && content.trim() !== ''
   const isReparentSource = reparentSourceNodeId === id
   const isCopySizeSource = copySizeSourceNodeId === id
   const startEditing = useCallback(() => {
@@ -226,7 +223,6 @@ const CustomNode = memo(({ id, data, selected }) => {
       alert('This node already has children. You can only create a new submap for it.')
       return
     }
-    if (nodeType === 'pointer') setEdgeType(id, 'straight-center')
     updateNodeData(id, {
       isSubmap: true,
       submapId: map.id,
@@ -234,7 +230,7 @@ const CustomNode = memo(({ id, data, selected }) => {
       title: title?.trim() ? title : map.name,
     })
     setShowSubmapChoice(false)
-  }, [hasChildren, id, nodeType, setEdgeType, title, updateNodeData])
+  }, [hasChildren, id, title, updateNodeData])
 
   const handleToggleTodo = useCallback(() => {
     pushHistory()
@@ -326,8 +322,6 @@ const CustomNode = memo(({ id, data, selected }) => {
             ? '#eef3fd'
           : nodeType === 'relationship'
             ? '#f8fafc'
-          : nodeType === 'pointer'
-            ? blendWithWhite(borderColor, 0.05)
           : nodeType === 'card' && backgroundMode === 'canvas'
             ? '#ffffff'
           : isSubmap || !isParent
@@ -345,11 +339,8 @@ const CustomNode = memo(({ id, data, selected }) => {
             ? 'none'
           : isParent
             ? `2px solid ${borderColor}60`
-          : nodeType === 'pointer'
-            ? `1px solid ${borderColor}40`
             : `2px ${isSubmap ? 'dashed' : 'solid'} ${borderColor}`,
-        ...(nodeType === 'pointer' ? { borderLeft: `3px solid ${borderColor}` } : {}),
-        borderRadius: level === 0 ? '50px' : nodeType === 'note' ? '10px' :isParent ? '12px' : nodeType === 'pointer' ? '8px' : '10px',
+        borderRadius: level === 0 ? '50px' : nodeType === 'note' ? '10px' :isParent ? '12px' : '10px',
         fontSize: '13px',
         fontWeight: '500',
         color: level === 0 ? '#ffffff' : '#1c1917',
@@ -545,55 +536,8 @@ const CustomNode = memo(({ id, data, selected }) => {
         </div>
       )}
 
-      {/* Header — title (or pointer callout layout) */}
-      {nodeType === 'pointer' ? (
-        <div style={{ flex: 1 }}>
-          {editing ? (
-            <input
-              ref={inputRef}
-              className="nodrag nopan"
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onBlur={commitEdit}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') { e.preventDefault(); commitEdit() }
-                if (e.key === 'Escape') { e.preventDefault(); cancelEdit() }
-                e.stopPropagation()
-              }}
-              style={{
-                display: 'block',
-                width: '100%',
-                border: 'none',
-                outline: 'none',
-                background: 'transparent',
-                fontSize: '11px',
-                fontWeight: 600,
-                color: '#1c1917',
-                fontFamily: 'inherit',
-                padding: '8px 10px 4px',
-                boxSizing: 'border-box',
-              }}
-            />
-          ) : (
-            <>
-              {title?.trim() && (
-                <div style={{ fontSize: '11px', fontWeight: 600, color: '#1c1917', padding: '8px 10px 4px', lineHeight: '1.3', wordBreak: 'break-word' }}>
-                  {title}
-                </div>
-              )}
-              <div
-                className="pointer-content"
-                style={{ fontSize: '11px', fontWeight: 400, color: '#57534e', padding: '0 10px 8px', maxHeight: '120px', overflow: 'hidden', lineHeight: '1.4' }}
-              >
-                {hasPointerContent
-                  ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
-                  : <p style={{ margin: 0, color: '#94a3b8' }}>No content yet</p>
-                }
-              </div>
-            </>
-          )}
-        </div>
-      ) : nodeType !== 'image' && nodeType !== 'note' && nodeType !== 'diagram' && nodeType !== 'object' && nodeType !== 'text' && (!isParent || !!title?.trim()) && (
+      {/* Header — title */}
+      {nodeType !== 'image' && nodeType !== 'note' && nodeType !== 'diagram' && nodeType !== 'object' && nodeType !== 'text' && (!isParent || !!title?.trim()) && (
         <div
           style={{
             flex: (isParent || shouldShowContents) ? '0 0 auto' : 1,

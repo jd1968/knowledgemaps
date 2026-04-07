@@ -408,7 +408,7 @@ function FeedGroupHeader({ node, cardProps }) {
 
 // Fields computed/injected by the canvas — shown read-only
 const COMPUTED_DATA_FIELDS = new Set(['l1Color','hasChildren','hasNotes','allDescendantsCollapsed','hasCollapsibleDescendants','key'])
-const NODE_TYPES = ['card','note','image','text','pointer','submap','object','relationship','diagram']
+const NODE_TYPES = ['card','note','image','text','submap','object','relationship','diagram']
 const TEXT_SIZES = ['s','m','l']
 
 function NodePropertiesDialog({ node, allNodes, allEdges, onClose, onSaveProps }) {
