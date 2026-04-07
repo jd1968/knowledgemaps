@@ -85,7 +85,7 @@ function ResizeHandles({ nodeId, visible }) {
       ...n,
       position: { x, y },
       style: { ...(n.style || {}), width: w, height: h },
-      data: { ...n.data, size: { width: w, height: h } },
+      data: { ...n.data, size: { width: w, height: h }, sizeMode: 'manual' },
     }))
   }, [nodeId, zoom, setNodes])
 
@@ -105,7 +105,7 @@ function ResizeHandles({ nodeId, visible }) {
         ...n,
         position: { x, y },
         style: { ...(n.style || {}), width: w, height: h },
-        data: { ...n.data, size: { width: w, height: h } },
+        data: { ...n.data, size: { width: w, height: h }, sizeMode: 'manual' },
       }
     }))
     // Mark dirty and trigger autosave via store without subscribing to it
@@ -133,8 +133,6 @@ function ResizeHandles({ nodeId, visible }) {
 }
 
 const CustomNode = memo(({ id, data, selected }) => {
-  const openMenuNodeId        = useMindMapStore((state) => state.openMenuNodeId)
-  const setOpenMenuNodeId     = useMindMapStore((state) => state.setOpenMenuNodeId)
   const addChildNode          = useMindMapStore((state) => state.addChildNode)
   const updateNodeData        = useMindMapStore((state) => state.updateNodeData)
   const deleteNode            = useMindMapStore((state) => state.deleteNode)
@@ -157,11 +155,7 @@ const CustomNode = memo(({ id, data, selected }) => {
   const isDirty               = useMindMapStore((state) => state.isDirty)
   const saveMap               = useMindMapStore((state) => state.saveMap)
 
-  const setGlyphMenuNodeId    = useMindMapStore((state) => state.setGlyphMenuNodeId)
-  const clearGlyphMenuNodeIdIf = useMindMapStore((state) => state.clearGlyphMenuNodeIdIf)
   const openDiagramEditor      = useMindMapStore((state) => state.openDiagramEditor)
-  const floatingUiEpoch       = useMindMapStore((state) => state.floatingUiEpoch)
-  const floatingUiAnchorId    = useMindMapStore((state) => state.floatingUiAnchorId)
   const navigate              = useNavigate()
 
   const { zoom: viewportZoom } = useViewport()
@@ -170,13 +164,9 @@ const CustomNode = memo(({ id, data, selected }) => {
   const [hovered, setHovered]             = useState(false)
   const [editing, setEditing]             = useState(false)
   const [draft, setDraft]                 = useState('')
-  const [showConvertMenu, setShowConvertMenu] = useState(false)
-  const [converting, setConverting]       = useState(false)
   const [showSubmapChoice, setShowSubmapChoice] = useState(false)
-  const [menuHovered, setMenuHovered]     = useState(false)
   const inputRef       = useRef(null)
   const nodeRef        = useRef(null)
-  const menuHideTimerRef = useRef(null)
 
   const { title, level, l1Color, hasChildren, hasNotes, isSubmap, submapId, nodeType, groupSize, content, objectType = 'Standard', backgroundMode = 'theme', isTodo = false, iconUrl = '', imageUrl = '', imageBorder = false, textSize = 'm', diagramSnapshot = '' } = data
   const shouldShowContents = !!content?.trim() && nodeType !== 'image' && nodeType !== 'note' && nodeType !== 'diagram' && nodeType !== 'text' && nodeType !== 'pointer' && nodeType !== 'relationship'
@@ -191,59 +181,6 @@ const CustomNode = memo(({ id, data, selected }) => {
   const hasPointerContent = nodeType === 'pointer' && content && content.trim() !== ''
   const isReparentSource = reparentSourceNodeId === id
   const isCopySizeSource = copySizeSourceNodeId === id
-  const showFloatingActions = isEditMode && !editing
-  const isActionMenuVisible = hovered || menuHovered || showConvertMenu || isReparentSource || isCopySizeSource
-
-  const showActionMenu = useCallback(() => {
-    if (menuHideTimerRef.current) {
-      clearTimeout(menuHideTimerRef.current)
-      menuHideTimerRef.current = null
-    }
-    setHovered(true)
-  }, [])
-
-  const hideActionMenuWithDelay = useCallback(() => {
-    if (menuHideTimerRef.current) clearTimeout(menuHideTimerRef.current)
-    menuHideTimerRef.current = setTimeout(() => {
-      setHovered(false)
-      setMenuHovered(false)
-      menuHideTimerRef.current = null
-    }, 180)
-  }, [])
-
-  useEffect(() => {
-    return () => {
-      if (menuHideTimerRef.current) clearTimeout(menuHideTimerRef.current)
-    }
-  }, [])
-
-  // When selection changes globally, clear hover/convert UI on every node except the single
-  // selected anchor (fixes stuck glyph menus when mouseleave does not fire — e.g. overlapping nodes).
-  useEffect(() => {
-    if (id === floatingUiAnchorId) return
-    if (menuHideTimerRef.current) {
-      clearTimeout(menuHideTimerRef.current)
-      menuHideTimerRef.current = null
-    }
-    setHovered(false)
-    setMenuHovered(false)
-    if (showConvertMenu) {
-      setShowConvertMenu(false)
-      if (openMenuNodeId === id) setOpenMenuNodeId(null)
-    }
-  }, [floatingUiEpoch, floatingUiAnchorId, id, showConvertMenu, openMenuNodeId, setOpenMenuNodeId])
-
-  // Bring this node above overlaps while the glyph strip is shown (leaf nodes only). Raising a
-  // parent would paint it above its child nodes in React Flow and hide the subtree.
-  useEffect(() => {
-    if (isActionMenuVisible && !hasChildren) {
-      setGlyphMenuNodeId(id)
-    } else {
-      clearGlyphMenuNodeIdIf(id)
-    }
-    return () => clearGlyphMenuNodeIdIf(id)
-  }, [isActionMenuVisible, hasChildren, id, setGlyphMenuNodeId, clearGlyphMenuNodeIdIf])
-
   const startEditing = useCallback(() => {
     setDraft(title || '')
     setEditing(true)
@@ -270,51 +207,13 @@ const CustomNode = memo(({ id, data, selected }) => {
     }
   }, [editing])
 
-  // Close menus when the user clicks outside the node (capture phase bypasses stopPropagation)
-  useEffect(() => {
-    if (!showConvertMenu) return
-    const handler = (e) => {
-      if (nodeRef.current?.contains(e.target)) return
-      setShowConvertMenu(false)
-      setOpenMenuNodeId(null)
-    }
-    document.addEventListener('mousedown', handler, true)
-    return () => document.removeEventListener('mousedown', handler, true)
-  }, [showConvertMenu, setOpenMenuNodeId])
-
   const handleDelete = useCallback(() => {
     if (!confirm(`Delete "${title || 'Untitled'}"?`)) return
     deleteNode(id)
   }, [title, id, deleteNode])
 
-  const handleConvert = useCallback(async (newType) => {
-    if (newType === nodeType) { setShowConvertMenu(false); return }
-
-    if (newType === 'submap') {
-      setShowConvertMenu(false)
-      setOpenMenuNodeId(null)
-      setShowSubmapChoice(true)
-      return
-    }
-
-    if ((newType === 'note' || newType === 'pointer' || newType === 'diagram' || newType === 'relationship') && hasChildren) {
-      if (!confirm(`"${title}" has children. Converting to ${CONVERT_LABELS[newType]} will prevent adding more children, but existing ones will remain.\n\nContinue?`)) return
-    }
-
-    if (newType === 'pointer') {
-      updateNodeData(id, { nodeType: 'pointer' })
-      setEdgeType(id, 'pointer-edge')
-    } else {
-      if (nodeType === 'pointer') setEdgeType(id, 'straight-center')
-      updateNodeData(id, { nodeType: newType })
-    }
-    setShowConvertMenu(false); setOpenMenuNodeId(null)
-  }, [nodeType, title, id, hasChildren, convertToSubmap, updateNodeData, setEdgeType, setOpenMenuNodeId])
-
   const handleCreateNewSubmap = useCallback(async () => {
-    setConverting(true)
     const result = await convertToSubmap(id)
-    setConverting(false)
     if (!result.success) {
       alert('Failed to convert to submap. Please try again.')
       return
@@ -340,30 +239,24 @@ const CustomNode = memo(({ id, data, selected }) => {
   const handleToggleTodo = useCallback(() => {
     pushHistory()
     updateNodeData(id, { isTodo: !isTodo })
-    setShowConvertMenu(false)
-    setOpenMenuNodeId(null)
-  }, [id, isTodo, pushHistory, setOpenMenuNodeId, updateNodeData])
+  }, [id, isTodo, pushHistory, updateNodeData])
 
   const handleToggleReparentMode = useCallback(() => {
     if (isReparentSource) {
       clearReparentMode()
       return
     }
-    setShowConvertMenu(false)
-    setOpenMenuNodeId(null)
     clearCopySizeMode()
     setReparentSourceNodeId(id)
-  }, [clearCopySizeMode, clearReparentMode, id, isReparentSource, setOpenMenuNodeId, setReparentSourceNodeId])
+  }, [clearCopySizeMode, clearReparentMode, id, isReparentSource, setReparentSourceNodeId])
 
   const handleToggleCopySizeMode = useCallback(() => {
     if (isCopySizeSource) {
       clearCopySizeMode()
       return
     }
-    setShowConvertMenu(false)
-    setOpenMenuNodeId(null)
     setCopySizeSourceNodeId(id)
-  }, [clearCopySizeMode, id, isCopySizeSource, setCopySizeSourceNodeId, setOpenMenuNodeId])
+  }, [clearCopySizeMode, id, isCopySizeSource, setCopySizeSourceNodeId])
 
   // Invisible handles centred on the node — edges connect to the node centre
   const centerHandle = {
@@ -381,8 +274,8 @@ const CustomNode = memo(({ id, data, selected }) => {
   return (
     <div
       ref={nodeRef}
-      onMouseEnter={showActionMenu}
-      onMouseLeave={hideActionMenuWithDelay}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
 
       onClick={(e) => {
         if (!isEditMode && VIEW_MODE_PASSIVE_NODE_TYPES.has(nodeType)) {
@@ -481,7 +374,7 @@ const CustomNode = memo(({ id, data, selected }) => {
       <Handle type="target" position={Position.Left} style={centerHandle} />
 
       {nodeType !== 'text' && (
-        <ResizeHandles nodeId={id} visible={isEditMode && (selected || hovered)} />
+        <ResizeHandles nodeId={id} visible={isEditMode && selected} />
       )}
 
       {!editing && isTodo && (
@@ -777,162 +670,6 @@ const CustomNode = memo(({ id, data, selected }) => {
       )}
 
       <Handle type="source" position={Position.Right} style={centerHandle} />
-
-      {showFloatingActions && (
-        <div
-          className={`node-floating-menu nodrag nopan${isActionMenuVisible ? '' : ' node-floating-menu--hidden'}`}
-          style={{
-            // ~10px screen gap from the node edge; inverse scale keeps glyph size constant vs zoom.
-            left: `calc(100% + ${10 / zoom}px)`,
-            transform: `translateY(-50%) scale(${1 / zoom})`,
-            transformOrigin: 'left center',
-          }}
-          onMouseEnter={() => {
-            if (menuHideTimerRef.current) {
-              clearTimeout(menuHideTimerRef.current)
-              menuHideTimerRef.current = null
-            }
-            setMenuHovered(true)
-            setHovered(true)
-          }}
-          onMouseLeave={hideActionMenuWithDelay}
-          onPointerDown={(e) => e.stopPropagation()}
-        >
-          {isSubmap && submapId && (
-            <button
-              className="submap-open-btn node-floating-btn nodrag nopan"
-              title="Open submap"
-              style={{ background: borderColor }}
-              onClick={async (e) => {
-                e.stopPropagation()
-                if (isDirty && currentMapId) await saveMap()
-                const newCrumbs = [...breadcrumbs, { mapId: currentMapId, mapName: currentMapName }]
-                navigate(`/map/${submapId}`, { state: { breadcrumbs: newCrumbs } })
-              }}
-            >
-              ↗
-            </button>
-          )}
-
-          {!isSubmap && nodeType !== 'note' && nodeType !== 'pointer' && nodeType !== 'relationship' && nodeType !== 'image' && nodeType !== 'diagram' && nodeType !== 'text' && (
-            <button
-              className="add-child-btn node-floating-btn nodrag nopan"
-              title="Add child node"
-              style={{ background: borderColor }}
-              onClick={(e) => {
-                e.stopPropagation()
-                const newId = addChildNode(id, 'card')
-                if (newId) openNodeModal(newId)
-              }}
-            >
-              +
-            </button>
-          )}
-
-          {level > 0 && nodeType !== 'image' && nodeType !== 'note' && nodeType !== 'diagram' && nodeType !== 'relationship' && nodeType !== 'text' && (
-            <NodeIconUpload
-              iconUrl={iconUrl}
-              onUpload={(url) => updateNodeData(id, { iconUrl: url })}
-              className="node-icon-upload-btn node-floating-btn nodrag nopan"
-            >
-              ⊕
-            </NodeIconUpload>
-          )}
-          {level > 0 && nodeType === 'diagram' && (
-            <button
-              className="node-edit-btn node-floating-btn nodrag nopan"
-              title="Open diagram editor"
-              onClick={(e) => { e.stopPropagation(); openDiagramEditor(id) }}
-            >
-              ◫
-            </button>
-          )}
-
-          {level > 0 && !isSubmap && (
-            <button
-              className="node-convert-btn node-floating-btn nodrag nopan"
-              title="Convert type"
-              style={{ background: borderColor }}
-              onClick={(e) => { e.stopPropagation(); const next = !showConvertMenu; setShowConvertMenu(next); setOpenMenuNodeId(next ? id : null) }}
-            >
-              ⇄
-            </button>
-          )}
-
-          {level > 0 && (
-            <button
-              className={`node-todo-btn node-floating-btn nodrag nopan${isTodo ? ' node-todo-btn--active' : ''}`}
-              title={isTodo ? 'Unmark To Do' : 'Mark as To Do'}
-              onClick={(e) => { e.stopPropagation(); handleToggleTodo() }}
-            >
-              ✓
-            </button>
-          )}
-
-          {level > 0 && nodeType !== 'text' && (
-            <button
-              className={`node-copy-size-btn node-floating-btn nodrag nopan${isCopySizeSource ? ' node-copy-size-btn--active' : ''}`}
-              title={isCopySizeSource ? 'Cancel copy size' : 'Copy size — click another shape to match'}
-              onClick={(e) => { e.stopPropagation(); handleToggleCopySizeMode() }}
-            >
-              ⧉
-            </button>
-          )}
-
-          {level > 0 && (
-            <button
-              className={`node-reparent-btn node-floating-btn nodrag nopan${isReparentSource ? ' node-reparent-btn--active' : ''}`}
-              title={isReparentSource ? 'Cancel reparent' : 'Reparent node'}
-              onClick={(e) => { e.stopPropagation(); handleToggleReparentMode() }}
-            >
-              ⇢
-            </button>
-          )}
-
-          <button
-            className="node-edit-btn node-floating-btn nodrag nopan"
-            title="Edit node"
-            onClick={(e) => { e.stopPropagation(); openNodeModal(id) }}
-          >
-            ✎
-          </button>
-
-          {level > 0 && (
-            <button
-              className="node-delete-btn node-floating-btn nodrag nopan"
-              title="Delete node"
-              onClick={(e) => { e.stopPropagation(); handleDelete() }}
-            >
-              ✕
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Convert menu panel */}
-      {showConvertMenu && (
-        <div className="node-convert-menu nodrag nopan" onPointerDown={(e) => e.stopPropagation()}>
-          <span className="node-convert-menu-label">Convert to</span>
-          {['card', 'object', 'relationship', 'pointer', 'diagram', 'submap'].map((t) => (
-            <button
-              key={t}
-              className="node-convert-menu-item"
-              disabled={nodeType === t || converting}
-              onClick={(e) => { e.stopPropagation(); handleConvert(t) }}
-            >
-              {CONVERT_LABELS[t]}
-              {nodeType === t ? ' ✓' : ''}
-              {converting && t === 'submap' ? '…' : ''}
-            </button>
-          ))}
-          <button
-            className="node-convert-menu-item node-convert-menu-item--todo"
-            onClick={(e) => { e.stopPropagation(); handleToggleTodo() }}
-          >
-            {isTodo ? 'Unmark To Do' : 'Mark as To Do'}
-          </button>
-        </div>
-      )}
 
       <SubmapChoiceModal
         open={showSubmapChoice}

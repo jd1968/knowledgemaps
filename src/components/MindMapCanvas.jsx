@@ -219,11 +219,19 @@ const MindMapCanvas = () => {
     snapSubtreeToGrid,
     copySubtreeToClipboard,
     pasteSubtreeFromClipboard,
+    updateNodeData,
+    setEdgeType,
+    deleteNode,
+    convertToSubmap,
+    setReparentSourceNodeId,
+    setCopySizeSourceNodeId,
+    openDiagramEditor,
   } = useMindMapStore()
 
   const navigate = useNavigate()
   const [nodeContextMenu, setNodeContextMenu] = useState(null)
   const [paneContextMenu, setPaneContextMenu] = useState(null)
+  const CONVERT_LABELS = { card: 'Card', object: 'Object', relationship: 'Relationship', pointer: 'Pointer', diagram: 'Diagram', submap: 'Submap' }
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -320,7 +328,7 @@ const MindMapCanvas = () => {
         : (l1ColorMap[getL1Id(node.id)] ?? L1_PALETTE[0])
       const hasChildren = !!(childrenMap[node.id]?.length)
       const hasExpandedContents = !!node.data?.content?.trim() || node.data?.nodeType === 'note' || node.data?.nodeType === 'image' || node.data?.nodeType === 'diagram' || node.data?.nodeType === 'object' || node.data?.nodeType === 'relationship'
-      const useFixedLeafSize = !hasChildren && !hasExpandedContents
+      const useFixedLeafSize = !hasChildren && !hasExpandedContents && node.data?.sizeMode !== 'manual'
       const hasNotes = !!(node.data.content && node.data.content !== '<p></p>' && node.data.content !== '')
       const layout = layouts[node.id]
       const persistedSize = node.data?.size
@@ -397,7 +405,7 @@ const MindMapCanvas = () => {
     dragStartRef.current[draggedNode.id] = { x: draggedNode.position.x, y: draggedNode.position.y }
   }, [isEditMode, moveSubtreeBy])
 
-  // Dragging onto another node does not change hierarchy; reparent uses the reparent glyph only.
+  // Dragging onto another node does not change hierarchy; reparent uses context-menu actions.
   const onNodeDragStop = useCallback((_, draggedNode) => {
     if (!isEditMode) return
     if (draggedNode.data?.level === 0) return
@@ -411,6 +419,33 @@ const MindMapCanvas = () => {
     setNodeContextMenu(null)
     setPaneContextMenu(null)
   }, [])
+
+  const contextNode = useMemo(() => {
+    if (!nodeContextMenu?.nodeId) return null
+    return nodes.find((n) => n.id === nodeContextMenu.nodeId) ?? null
+  }, [nodeContextMenu, nodes])
+
+  const convertNodeType = useCallback(async (node, newType) => {
+    if (!node || newType === node.data?.nodeType) return
+    const nodeType = node.data?.nodeType
+    const title = node.data?.title ?? ''
+    const hasChildren = edges.some((e) => e.source === node.id)
+    if ((newType === 'note' || newType === 'pointer' || newType === 'diagram' || newType === 'relationship') && hasChildren) {
+      if (!confirm(`"${title}" has children. Converting to ${CONVERT_LABELS[newType]} will prevent adding more children, but existing ones will remain.\n\nContinue?`)) return
+    }
+    if (newType === 'submap') {
+      const r = await convertToSubmap(node.id)
+      if (!r?.success) alert('Failed to convert to submap. Please try again.')
+      return
+    }
+    if (newType === 'pointer') {
+      updateNodeData(node.id, { nodeType: 'pointer' })
+      setEdgeType(node.id, 'pointer-edge')
+      return
+    }
+    if (nodeType === 'pointer') setEdgeType(node.id, 'straight-center')
+    updateNodeData(node.id, { nodeType: newType })
+  }, [edges, convertToSubmap, updateNodeData, setEdgeType, CONVERT_LABELS])
 
   const onNodeContextMenu = useCallback(
     (event, node) => {
@@ -531,6 +566,126 @@ const MindMapCanvas = () => {
           <button
             type="button"
             className="map-context-menu__item"
+            onClick={() => {
+              if (!contextNode) return
+              closeContextMenus()
+              openNodeModal(contextNode.id)
+            }}
+          >
+            Edit node
+          </button>
+          {contextNode?.data?.isSubmap && contextNode?.data?.submapId && (
+            <button
+              type="button"
+              className="map-context-menu__item"
+              onClick={async () => {
+                if (isDirty && currentMapId) await saveMap()
+                const newCrumbs = [...breadcrumbs, { mapId: currentMapId, mapName: currentMapName }]
+                closeContextMenus()
+                navigate(`/map/${contextNode.data.submapId}`, { state: { breadcrumbs: newCrumbs } })
+              }}
+            >
+              Open submap
+            </button>
+          )}
+          {contextNode && contextNode.data?.isSubmap !== true && !['note', 'pointer', 'relationship', 'image', 'diagram', 'text'].includes(contextNode.data?.nodeType) && (
+            <button
+              type="button"
+              className="map-context-menu__item"
+              onClick={() => {
+                const id = addChildNode(contextNode.id, 'card')
+                closeContextMenus()
+                if (id) openNodeModal(id)
+              }}
+            >
+              Add child node
+            </button>
+          )}
+          {contextNode && contextNode.data?.level > 0 && (
+            <button
+              type="button"
+              className="map-context-menu__item"
+              onClick={() => {
+                closeContextMenus()
+                if (reparentSourceNodeId === contextNode.id) clearReparentMode()
+                else setReparentSourceNodeId(contextNode.id)
+              }}
+            >
+              {reparentSourceNodeId === contextNode.id ? 'Cancel reparent' : 'Reparent node'}
+            </button>
+          )}
+          {contextNode && contextNode.data?.level > 0 && contextNode.data?.nodeType !== 'text' && (
+            <button
+              type="button"
+              className="map-context-menu__item"
+              onClick={() => {
+                closeContextMenus()
+                if (copySizeSourceNodeId === contextNode.id) clearCopySizeMode()
+                else setCopySizeSourceNodeId(contextNode.id)
+              }}
+            >
+              {copySizeSourceNodeId === contextNode.id ? 'Cancel copy size' : 'Copy size to another shape'}
+            </button>
+          )}
+          {contextNode && contextNode.data?.level > 0 && (
+            <button
+              type="button"
+              className="map-context-menu__item"
+              onClick={() => {
+                closeContextMenus()
+                updateNodeData(contextNode.id, { isTodo: !contextNode.data?.isTodo })
+              }}
+            >
+              {contextNode.data?.isTodo ? 'Unmark To Do' : 'Mark as To Do'}
+            </button>
+          )}
+          {contextNode && contextNode.data?.level > 0 && contextNode.data?.nodeType === 'diagram' && (
+            <button
+              type="button"
+              className="map-context-menu__item"
+              onClick={() => {
+                closeContextMenus()
+                openDiagramEditor(contextNode.id)
+              }}
+            >
+              Open diagram editor
+            </button>
+          )}
+          {contextNode && contextNode.data?.level > 0 && contextNode.data?.isSubmap !== true && (
+            <>
+              {['card', 'object', 'relationship', 'pointer', 'diagram', 'submap'].map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  className="map-context-menu__item"
+                  disabled={contextNode.data?.nodeType === type}
+                  onClick={async () => {
+                    closeContextMenus()
+                    await convertNodeType(contextNode, type)
+                  }}
+                >
+                  Convert to {CONVERT_LABELS[type]}
+                </button>
+              ))}
+            </>
+          )}
+          {contextNode && contextNode.data?.level > 0 && (
+            <button
+              type="button"
+              className="map-context-menu__item"
+              onClick={() => {
+                const nodeTitle = contextNode.data?.title || 'Untitled'
+                if (!confirm(`Delete "${nodeTitle}"?`)) return
+                closeContextMenus()
+                deleteNode(contextNode.id)
+              }}
+            >
+              Delete node
+            </button>
+          )}
+          <button
+            type="button"
+            className="map-context-menu__item"
             onClick={async () => {
               const id = nodeContextMenu.nodeId
               closeContextMenus()
@@ -540,7 +695,7 @@ const MindMapCanvas = () => {
           >
             Copy subtree…
           </button>
-          <p className="map-context-menu__hint">Includes this node and all descendants. Paste from another map via right‑click on the canvas or Ctrl/⌘+V.</p>
+          <p className="map-context-menu__hint">Includes this node and all descendants. Paste from another map via right-click on the canvas or Ctrl/⌘+V.</p>
         </div>
       )}
       {isEditMode && paneContextMenu && (
@@ -611,7 +766,9 @@ const MindMapCanvas = () => {
         selectionMode={SelectionMode.Partial}
         multiSelectionKeyCode={['Shift', 'Meta', 'Control']}
         zoomOnScroll={false}
-        zoomOnPinch={false}
+        // Enable native pinch zoom for trackpads/fine pointers; coarse touch pinch is handled
+        // by PinchZoomHandler to keep behavior consistent on touch devices.
+        zoomOnPinch={!isTouch}
         snapToGrid={isEditMode}
         snapGrid={GRID}
         minZoom={0.2}
@@ -658,7 +815,7 @@ const MindMapCanvas = () => {
                     ? 'Click a new parent node to reparent · Escape, source node, or canvas to cancel'
                     : copySizeSourceNodeId
                       ? 'Click a shape to copy size from the source · Escape, source node, or canvas to cancel'
-                      : 'Hover a node and click + to add a child · Drag to lasso-select · Trackpad to pan & zoom'
+                      : 'Right-click a node for actions · Drag to lasso-select · Trackpad to pan & zoom'
                 : 'Edit Mode is off · Drag to lasso-select · Trackpad to pan & zoom'}
           </div>
         </Panel>
