@@ -301,7 +301,7 @@ const MindMapCanvas = () => {
     rootId,
     getNodeSize: (node) => {
       const hasChildren = !!(childrenMap[node.id]?.length)
-      const hasExpandedContents = node.data?.showContents === true || node.data?.nodeType === 'note' || node.data?.nodeType === 'image' || node.data?.nodeType === 'diagram' || node.data?.nodeType === 'object' || node.data?.nodeType === 'relationship'
+      const hasExpandedContents = !!node.data?.content?.trim() || node.data?.nodeType === 'note' || node.data?.nodeType === 'image' || node.data?.nodeType === 'diagram' || node.data?.nodeType === 'object' || node.data?.nodeType === 'relationship'
       return (!hasChildren && !hasExpandedContents) ? LEAF_NODE_SIZE : getStableNodeSize(node)
     },
     padding: {
@@ -319,7 +319,7 @@ const MindMapCanvas = () => {
         ? ROOT_BORDER
         : (l1ColorMap[getL1Id(node.id)] ?? L1_PALETTE[0])
       const hasChildren = !!(childrenMap[node.id]?.length)
-      const hasExpandedContents = node.data?.showContents === true || node.data?.nodeType === 'note' || node.data?.nodeType === 'image' || node.data?.nodeType === 'diagram' || node.data?.nodeType === 'object' || node.data?.nodeType === 'relationship'
+      const hasExpandedContents = !!node.data?.content?.trim() || node.data?.nodeType === 'note' || node.data?.nodeType === 'image' || node.data?.nodeType === 'diagram' || node.data?.nodeType === 'object' || node.data?.nodeType === 'relationship'
       const useFixedLeafSize = !hasChildren && !hasExpandedContents
       const hasNotes = !!(node.data.content && node.data.content !== '<p></p>' && node.data.content !== '')
       const layout = layouts[node.id]

@@ -30,7 +30,6 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
     nodeType = 'card',
     hasChildren,
     isTodo = false,
-    showContents = false,
     themeColor = '',
     name = '',
     objectType = 'Standard',
@@ -45,7 +44,7 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
   const isPlainNode = nodeType === 'card'
 
   const [isEditing, setIsEditing]         = useState(isEditMode)
-  const [draft, setDraft]                 = useState(isEditMode ? { title: title || '', longTitle: longTitle || title || '', content: content || '', isTodo: !!isTodo, nodeType, showContents: !!showContents, themeColor: themeColor || '', name: name || '', objectType: objectType || 'Standard', description: description || '', relType: relType || 'lookup', fromLabel: fromLabel || '', toLabel: toLabel || '', backgroundMode: backgroundMode || 'theme' } : null)
+  const [draft, setDraft]                 = useState(isEditMode ? { title: title || '', longTitle: longTitle || title || '', content: content || '', isTodo: !!isTodo, nodeType, themeColor: themeColor || '', name: name || '', objectType: objectType || 'Standard', description: description || '', relType: relType || 'lookup', fromLabel: fromLabel || '', toLabel: toLabel || '', backgroundMode: backgroundMode || 'theme' } : null)
   const [showConvertMenu, setShowConvertMenu] = useState(false)
   const [converting, setConverting]       = useState(false)
   const [showSubmapChoice, setShowSubmapChoice] = useState(false)
@@ -82,7 +81,7 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
   }, [isEditMode])
 
   const startEdit = () => {
-    setDraft({ title: title || '', longTitle: longTitle || title || '', content: content || '', isTodo: !!isTodo, nodeType, showContents: !!showContents, themeColor: themeColor || '', name: name || '', objectType: objectType || 'Standard', description: description || '', relType: relType || 'lookup', fromLabel: fromLabel || '', toLabel: toLabel || '', backgroundMode: backgroundMode || 'theme' })
+    setDraft({ title: title || '', longTitle: longTitle || title || '', content: content || '', isTodo: !!isTodo, nodeType, themeColor: themeColor || '', name: name || '', objectType: objectType || 'Standard', description: description || '', relType: relType || 'lookup', fromLabel: fromLabel || '', toLabel: toLabel || '', backgroundMode: backgroundMode || 'theme' })
     setEditTab('details')
     setIsEditing(true)
   }
@@ -103,7 +102,6 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
       content: draft.content,
       isTodo: !!draft.isTodo,
       nodeType: nextType,
-      showContents: !!draft.showContents,
       ...(level === 1 ? { themeColor: draft.themeColor || '' } : {}),
       ...(nextType === 'object' ? {
         name: draft.name || '',
@@ -410,16 +408,6 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
                 </>
               ) : editTab === 'details' ? (
                 <>
-                  <div className="field">
-                    <label className="node-modal-toggle-row">
-                      <input
-                        type="checkbox"
-                        checked={!!draft.showContents}
-                        onChange={(e) => setDraft((d) => ({ ...d, showContents: e.target.checked }))}
-                      />
-                      <span className="field-label" style={{ margin: 0 }}>Show Contents</span>
-                    </label>
-                  </div>
                   <div className="field field--grow">
                     <label className="field-label">Notes</label>
                     <MarkdownEditor

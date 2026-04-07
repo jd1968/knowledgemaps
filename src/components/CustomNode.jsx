@@ -178,7 +178,8 @@ const CustomNode = memo(({ id, data, selected }) => {
   const nodeRef        = useRef(null)
   const menuHideTimerRef = useRef(null)
 
-  const { title, level, l1Color, hasChildren, isSubmap, submapId, hasNotes, nodeType, groupSize, content, objectType = 'Standard', backgroundMode = 'theme', isTodo = false, iconUrl = '', imageUrl = '', imageBorder = false, textSize = 'm', showContents = false, diagramSnapshot = '' } = data
+  const { title, level, l1Color, hasChildren, hasNotes, isSubmap, submapId, nodeType, groupSize, content, objectType = 'Standard', backgroundMode = 'theme', isTodo = false, iconUrl = '', imageUrl = '', imageBorder = false, textSize = 'm', diagramSnapshot = '' } = data
+  const shouldShowContents = !!content?.trim() && nodeType !== 'image' && nodeType !== 'note' && nodeType !== 'diagram' && nodeType !== 'text' && nodeType !== 'pointer' && nodeType !== 'relationship'
 
   const borderColor = l1Color ?? '#94a3b8'
   const TEXT_SIZES  = { s: 14, m: 22, l: 36 }
@@ -702,10 +703,10 @@ const CustomNode = memo(({ id, data, selected }) => {
       ) : nodeType !== 'image' && nodeType !== 'note' && nodeType !== 'diagram' && nodeType !== 'object' && nodeType !== 'text' && (!isParent || !!title?.trim()) && (
         <div
           style={{
-            flex: (isParent || showContents) ? '0 0 auto' : 1,
+            flex: (isParent || shouldShowContents) ? '0 0 auto' : 1,
             display: 'flex',
             flexDirection: 'column',
-            justifyContent: (hasChildren || showContents) ? 'flex-start' : 'center',
+            justifyContent: (hasChildren || shouldShowContents) ? 'flex-start' : 'center',
             minHeight: 0,
             pointerEvents: isParent ? 'none' : 'auto',
           }}
@@ -714,9 +715,9 @@ const CustomNode = memo(({ id, data, selected }) => {
             display: 'flex',
             flexDirection: 'row',
             alignItems: 'center',
-            justifyContent: (isParent || hasChildren || iconUrl || showContents) ? 'flex-start' : 'center',
-            padding: isParent ? '10px 14px' : showContents ? (iconUrl && !editing ? '10px 14px 4px 8px' : '10px 14px 4px') : (iconUrl && !editing ? '10px 14px 10px 8px' : '10px 14px'),
-            textAlign: (isParent || hasChildren || iconUrl || showContents) ? 'left' : 'center',
+            justifyContent: (isParent || hasChildren || iconUrl || shouldShowContents) ? 'flex-start' : 'center',
+            padding: isParent ? '10px 14px' : shouldShowContents ? (iconUrl && !editing ? '10px 14px 4px 8px' : '10px 14px 4px') : (iconUrl && !editing ? '10px 14px 10px 8px' : '10px 14px'),
+            textAlign: (isParent || hasChildren || iconUrl || shouldShowContents) ? 'left' : 'center',
             wordBreak: 'break-word',
             lineHeight: '1.35',
             position: 'relative',
@@ -753,7 +754,7 @@ const CustomNode = memo(({ id, data, selected }) => {
             ) : (
               <span>{title || 'Untitled'}</span>
             )}
-            {!editing && hasNotes && !showContents && (
+            {!editing && hasNotes && !shouldShowContents && (
               <span style={{
                 position: 'absolute',
                 top: '4px',
@@ -769,7 +770,7 @@ const CustomNode = memo(({ id, data, selected }) => {
         </div>
       )}
 
-      {showContents && content?.trim() && nodeType !== 'image' && nodeType !== 'note' && nodeType !== 'diagram' && nodeType !== 'text' && nodeType !== 'pointer' && nodeType !== 'relationship' && !editing && (
+      {shouldShowContents && !editing && (
         <div className="node-contents-body node-contents-markdown">
           <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents} urlTransform={urlTransform}>{content}</ReactMarkdown>
         </div>
