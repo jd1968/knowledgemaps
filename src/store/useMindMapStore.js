@@ -841,7 +841,7 @@ export const useMindMapStore = create((set, get) => ({
 
   // ── Add child node ────────────────────────────────────────────
 
-  addChildNode: (parentId, nodeType = 'card') => {
+  addChildNode: (parentId, nodeType = 'card', options = {}) => {
     if (!get().isEditMode) return
     const { nodes, edges } = get()
     const parent = nodes.find((n) => n.id === parentId)
@@ -868,7 +868,10 @@ export const useMindMapStore = create((set, get) => ({
       const lastHeight = last.data?.size?.height ?? getDefaultSizeForNode(last).height
       y = last.position.y + lastHeight + NEST_V_SPACING
     }
-    const snappedPosition = snapPoint({ x, y })
+    const overridePosition = options?.position
+      ? snapPoint(options.position)
+      : null
+    const snappedPosition = overridePosition ?? snapPoint({ x, y })
 
     const id = uuidv4()
     const size = getDefaultSizeForNode({ data: { level: childLevel, nodeType } })

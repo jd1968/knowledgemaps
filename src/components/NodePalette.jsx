@@ -62,6 +62,7 @@ const ITEMS = [
   { type: 'note',  label: 'Note',  Icon: NoteIcon },
   { type: 'text',  label: 'Text',  Icon: TextIcon },
 ]
+const TOOLBOX_DRAG_MIME = 'application/x-knowledgemaps-node-type'
 
 const ToolboxItem = ({ type, label, Icon, isEditMode, isActive }) => {
   const setPendingToolboxType = useMindMapStore((s) => s.setPendingToolboxType)
@@ -70,9 +71,20 @@ const ToolboxItem = ({ type, label, Icon, isEditMode, isActive }) => {
     <div
       className={`toolbox-item${!isEditMode ? ' toolbox-item--disabled' : ''}${isActive ? ' toolbox-item--active' : ''}`}
       title={isEditMode ? `Click then click canvas to place ${label}` : 'Enable Edit Mode to add items'}
-      onPointerDown={(e) => {
+      draggable={isEditMode}
+      onPointerDown={() => {
         if (!isEditMode) return
-        e.preventDefault()
+        setPendingToolboxType(type)
+      }}
+      onDragStart={(e) => {
+        if (!isEditMode) return
+        setPendingToolboxType(type)
+        e.dataTransfer.setData(TOOLBOX_DRAG_MIME, type)
+        e.dataTransfer.setData('text/plain', type)
+        e.dataTransfer.effectAllowed = 'copy'
+      }}
+      onClick={() => {
+        if (!isEditMode) return
         setPendingToolboxType(type)
       }}
     >

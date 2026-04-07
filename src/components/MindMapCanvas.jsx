@@ -22,6 +22,7 @@ import { STANDARD_THEME_COLORS } from '../lib/themePalette'
 
 const nodeTypes = { mindmap: CustomNode }
 const edgeTypes = { 'straight-center': StraightCenterEdge }
+const TOOLBOX_DRAG_MIME = 'application/x-knowledgemaps-node-type'
 
 // Palette optimised for light backgrounds, one color per L1 branch
 const L1_PALETTE = STANDARD_THEME_COLORS
@@ -197,6 +198,7 @@ const MindMapCanvas = () => {
     deselectNode,
     moveSubtreeBy,
     addNode,
+    addChildNode,
     isEditMode,
     openNodeModal,
     setSelectedNodeIds,
@@ -229,6 +231,7 @@ const MindMapCanvas = () => {
   const navigate = useNavigate()
   const [nodeContextMenu, setNodeContextMenu] = useState(null)
   const [paneContextMenu, setPaneContextMenu] = useState(null)
+  const [dragDropTargetNodeId, setDragDropTargetNodeId] = useState(null)
   const CONVERT_LABELS = { card: 'Card', object: 'Object', relationship: 'Relationship', diagram: 'Diagram', submap: 'Submap' }
 
   const toggleFullscreen = () => {
@@ -349,6 +352,7 @@ const MindMapCanvas = () => {
           hasChildren,
           hasNotes,
           groupSize: fixedGroupSize,
+          isDropTarget: dragDropTargetNodeId === node.id,
         },
       }
     }).sort((a, b) => {
@@ -358,7 +362,7 @@ const MindMapCanvas = () => {
       if (b.id === glyphMenuNodeId) return -1
       return (a.data?.level ?? 0) - (b.data?.level ?? 0)
     })
-  }, [nodes, l1ColorMap, getL1Id, childrenMap, openMenuNodeId, glyphMenuNodeId, layouts])
+  }, [nodes, l1ColorMap, getL1Id, childrenMap, openMenuNodeId, glyphMenuNodeId, layouts, dragDropTargetNodeId])
 
   // No edge connectors — hierarchy is shown through visual nesting
   const displayEdges = useMemo(() =>
@@ -511,15 +515,49 @@ const MindMapCanvas = () => {
     return () => window.removeEventListener('keydown', onKey)
   }, [isEditMode, reparentSourceNodeId, copySizeSourceNodeId, clearReparentMode, clearCopySizeMode])
 
-  const onCanvasPointerUp = useCallback((e) => {
-    if (!pendingToolboxType || !isEditMode) return
+  const onCanvasDragOver = useCallback((e) => {
+    if (!isEditMode) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'copy'
+    const targetEl =
+      e.target?.closest?.('.react-flow__node') ||
+      document.elementFromPoint(e.clientX, e.clientY)?.closest?.('.react-flow__node')
+    const hoveredId = targetEl?.getAttribute?.('data-id') || null
+    setDragDropTargetNodeId((prev) => (prev === hoveredId ? prev : hoveredId))
+  }, [isEditMode])
+
+  const onCanvasDrop = useCallback((e) => {
+    if (!isEditMode) return
+    const droppedType = e.dataTransfer.getData(TOOLBOX_DRAG_MIME) || e.dataTransfer.getData('text/plain') || pendingToolboxType
+    if (!droppedType) return
+    e.preventDefault()
+
+    const targetEl =
+      e.target?.closest?.('.react-flow__node') ||
+      document.elementFromPoint(e.clientX, e.clientY)?.closest?.('.react-flow__node')
+    const parentId = targetEl?.getAttribute?.('data-id')
+
+    if (parentId && nodes.some((n) => n.id === parentId)) {
+      const flowPos = screenToFlowPosition(
+        { x: e.clientX, y: e.clientY },
+        { snapToGrid: true, snapGrid: GRID }
+      )
+      const newId = addChildNode(parentId, droppedType, { position: flowPos })
+      if (newId) openNodeModal(newId)
+      clearPendingToolboxType()
+      setDragDropTargetNodeId(null)
+      return
+    }
+
     const position = screenToFlowPosition(
       { x: e.clientX, y: e.clientY },
       { snapToGrid: true, snapGrid: GRID }
     )
-    addNode({ position, level: 1, nodeType: pendingToolboxType })
+    const created = addNode({ position, level: 1, nodeType: droppedType })
     clearPendingToolboxType()
-  }, [pendingToolboxType, isEditMode, screenToFlowPosition, addNode, clearPendingToolboxType])
+    setDragDropTargetNodeId(null)
+    if (created?.id) openNodeModal(created.id)
+  }, [isEditMode, pendingToolboxType, nodes, addChildNode, openNodeModal, clearPendingToolboxType, screenToFlowPosition, addNode])
 
   // Plain click: only this node selected (sidebar + rings). Shift/Cmd/Ctrl = additive (multi-select).
   const onNodeClick = useCallback(
@@ -546,7 +584,9 @@ const MindMapCanvas = () => {
     <div
       ref={containerRef}
       style={{ width: '100%', height: '100%', cursor: pendingToolboxType ? 'crosshair' : undefined }}
-      onPointerUp={onCanvasPointerUp}
+      onDragOver={onCanvasDragOver}
+      onDrop={onCanvasDrop}
+      onDragLeave={() => setDragDropTargetNodeId(null)}
     >
       {isEditMode && nodeContextMenu && (
         <div
@@ -731,7 +771,17 @@ const MindMapCanvas = () => {
         onNodeDragStart={onNodeDragStart}
         onNodeDrag={onNodeDrag}
         onNodeDragStop={onNodeDragStop}
-        onPaneClick={() => {
+        onPaneClick={(event) => {
+          if (pendingToolboxType && isEditMode) {
+            const position = screenToFlowPosition(
+              { x: event.clientX, y: event.clientY },
+              { snapToGrid: true, snapGrid: GRID }
+            )
+            const created = addNode({ position, level: 1, nodeType: pendingToolboxType })
+            clearPendingToolboxType()
+            if (created?.id) openNodeModal(created.id)
+            return
+          }
           closeContextMenus()
           if (reparentSourceNodeId) {
             clearReparentMode()
@@ -745,7 +795,17 @@ const MindMapCanvas = () => {
         }}
         onNodeContextMenu={onNodeContextMenu}
         onPaneContextMenu={onPaneContextMenu}
-        onNodeClick={onNodeClick}
+        onDragOver={onCanvasDragOver}
+        onDrop={onCanvasDrop}
+        onNodeClick={(event, node) => {
+          if (pendingToolboxType && isEditMode) {
+            const newId = addChildNode(node.id, pendingToolboxType)
+            clearPendingToolboxType()
+            if (newId) openNodeModal(newId)
+            return
+          }
+          onNodeClick(event, node)
+        }}
         onBeforeDelete={async ({ nodes: toRemove, edges: edgesToRemove }) => {
           const nodes = toRemove.filter((n) => (n.data?.level ?? 0) > 0)
           if (nodes.length === toRemove.length) return true

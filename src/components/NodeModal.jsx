@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useMindMapStore } from '../store/useMindMapStore'
 import MarkdownEditor from './MarkdownEditor'
@@ -6,7 +6,6 @@ import SubmapChoiceModal from './SubmapChoiceModal'
 import { STANDARD_THEME_COLORS } from '../lib/themePalette'
 
 const TYPE_LABELS = { card: 'Card', object: 'Object', relationship: 'Relationship', diagram: 'Diagram', submap: 'Submap' }
-const CREATE_TYPE_OPTIONS = ['card', 'object', 'relationship', 'diagram', 'submap']
 
 const isTouch = typeof window !== 'undefined' && window.matchMedia('(hover: none) and (pointer: coarse)').matches
 
@@ -47,6 +46,7 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
   const [converting, setConverting]       = useState(false)
   const [showSubmapChoice, setShowSubmapChoice] = useState(false)
   const [editTab, setEditTab]             = useState('details')
+  const titleInputRef = useRef(null)
   const headerIsTodo = isEditing ? !!draft?.isTodo : isTodo
   const effectiveDraftType = draft?.nodeType || nodeType
   const canSave = effectiveDraftType === 'note' ? true : !!draft?.title?.trim()
@@ -78,6 +78,14 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
     setDraft(null)
     setEditTab('details')
   }, [isEditMode])
+
+  useEffect(() => {
+    if (!isEditing || editTab !== 'details') return
+    const timerId = requestAnimationFrame(() => {
+      titleInputRef.current?.focus()
+    })
+    return () => cancelAnimationFrame(timerId)
+  }, [isEditing, editTab])
 
   const startEdit = () => {
     setDraft({ title: title || '', content: content || '', isTodo: !!isTodo, nodeType, themeColor: themeColor || '', name: name || '', objectType: objectType || 'Standard', description: description || '', relType: relType || 'lookup', fromLabel: fromLabel || '', toLabel: toLabel || '', backgroundMode: backgroundMode || 'theme' })
@@ -232,11 +240,11 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
                   {isObjectNode ? 'Label' : 'Title'}
                 </label>
                 <input
+                  ref={titleInputRef}
                   className="field-input"
                   value={draft.title}
                   onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
                   placeholder={isObjectNode ? 'Object label…' : 'Title…'}
-                  autoFocus
                 />
               </div>
               )}
@@ -290,24 +298,6 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
                     >
                       White
                     </button>
-                  </div>
-                </div>
-              )}
-
-              {editTab === 'details' && isNew && (
-                <div className="field">
-                  <label className="field-label">Type</label>
-                  <div className="node-create-type-row">
-                    {CREATE_TYPE_OPTIONS.map((t) => (
-                      <button
-                        key={t}
-                        type="button"
-                        className={`btn btn--sm${draft?.nodeType === t ? ' btn--primary' : ' btn--secondary'}`}
-                        onClick={() => setDraft((d) => ({ ...(d || { title: '', content: '', isTodo: false, nodeType }), nodeType: t }))}
-                      >
-                        {TYPE_LABELS[t]}
-                      </button>
-                    ))}
                   </div>
                 </div>
               )}

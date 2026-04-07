@@ -166,7 +166,7 @@ const CustomNode = memo(({ id, data, selected }) => {
   const inputRef       = useRef(null)
   const nodeRef        = useRef(null)
 
-  const { title, level, l1Color, hasChildren, hasNotes, isSubmap, submapId, nodeType, groupSize, content, objectType = 'Standard', backgroundMode = 'theme', isTodo = false, iconUrl = '', imageUrl = '', imageBorder = false, textSize = 'm', diagramSnapshot = '' } = data
+  const { title, level, l1Color, hasChildren, hasNotes, isSubmap, submapId, nodeType, groupSize, content, objectType = 'Standard', backgroundMode = 'theme', isTodo = false, iconUrl = '', imageUrl = '', imageBorder = false, textSize = 'm', diagramSnapshot = '', isDropTarget = false } = data
   const shouldShowContents = !!content?.trim() && nodeType !== 'image' && nodeType !== 'note' && nodeType !== 'diagram' && nodeType !== 'text' && nodeType !== 'relationship'
 
   const borderColor = l1Color ?? '#94a3b8'
@@ -360,6 +360,7 @@ const CustomNode = memo(({ id, data, selected }) => {
         boxSizing: 'border-box',
         ...(isReparentSource ? { boxShadow: `0 0 0 3px #b4530980, 2px 4px 14px rgba(0,0,0,0.18)` } : {}),
         ...(isCopySizeSource ? { boxShadow: `0 0 0 3px #7c3aed80, 2px 4px 14px rgba(0,0,0,0.18)` } : {}),
+        ...(isDropTarget ? { boxShadow: `0 0 0 3px #22c55e90, 2px 4px 16px rgba(34,197,94,0.25)` } : {}),
       }}
     >
       <Handle type="target" position={Position.Left} style={centerHandle} />
