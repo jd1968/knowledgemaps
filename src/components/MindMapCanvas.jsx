@@ -644,7 +644,11 @@ const MindMapCanvas = () => {
             </button>
           )}
           {contextNode && contextNode.data?.level > 0 && contextNode.data?.isSubmap !== true && (
-            <>
+            <div className="map-context-menu__submenu">
+              <button type="button" className="map-context-menu__item map-context-menu__item--submenu">
+                Convert To <span aria-hidden="true">›</span>
+              </button>
+              <div className="map-context-menu__submenu-panel" role="menu">
               {['card', 'object', 'relationship', 'diagram', 'submap'].map((type) => (
                 <button
                   key={type}
@@ -659,7 +663,8 @@ const MindMapCanvas = () => {
                   Convert to {CONVERT_LABELS[type]}
                 </button>
               ))}
-            </>
+              </div>
+            </div>
           )}
           {contextNode && contextNode.data?.level > 0 && (
             <button
