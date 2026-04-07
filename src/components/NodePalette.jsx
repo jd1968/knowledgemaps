@@ -30,8 +30,34 @@ const TextIcon = () => (
   </svg>
 )
 
+const DiagramIcon = () => (
+  <svg width="24" height="22" viewBox="0 0 24 22" fill="none">
+    <rect x="1" y="1" width="9" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
+    <rect x="14" y="1" width="9" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
+    <rect x="7.5" y="14" width="9" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
+    <path d="M10 4.5h4M12 8v6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+  </svg>
+)
+
+const ObjectIcon = () => (
+  <svg width="24" height="18" viewBox="0 0 24 18" fill="none">
+    <rect x="1.5" y="1.5" width="21" height="15" rx="6" stroke="currentColor" strokeWidth="1.5" />
+  </svg>
+)
+
+const RelationshipIcon = () => (
+  <svg width="24" height="18" viewBox="0 0 24 18" fill="none">
+    <line x1="4" y1="9" x2="20" y2="9" stroke="currentColor" strokeWidth="1.5" />
+    <circle cx="4" cy="9" r="2" fill="currentColor" />
+    <circle cx="20" cy="9" r="2" fill="currentColor" />
+  </svg>
+)
+
 const ITEMS = [
   { type: 'node',  label: 'Node',  Icon: NodeIcon },
+  { type: 'object', label: 'Object', Icon: ObjectIcon },
+  { type: 'relationship', label: 'Relationship', Icon: RelationshipIcon },
+  { type: 'diagram', label: 'Diagram', Icon: DiagramIcon },
   { type: 'image', label: 'Image', Icon: ImageIcon },
   { type: 'note',  label: 'Note',  Icon: NoteIcon },
   { type: 'text',  label: 'Text',  Icon: TextIcon },

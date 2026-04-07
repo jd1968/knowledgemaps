@@ -67,6 +67,277 @@
   color: var(--text-muted);
 }
 
+.diagram-node-body {
+  width: 100%;
+  height: 100%;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+}
+
+.diagram-node-preview {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.diagram-node-placeholder {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 12px;
+  text-align: center;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.diagram-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+  background: rgba(15, 23, 42, 0.38);
+  display: grid;
+  place-items: center;
+}
+
+.diagram-modal {
+  width: min(1200px, 96vw);
+  height: min(760px, 92vh);
+  background: #fff;
+  border-radius: 14px;
+  border: 1px solid #cbd5e1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.diagram-page {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.diagram-page__crumbs {
+  height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+  border-bottom: 1px solid #e2e8f0;
+  background: #fff;
+}
+
+.diagram-page__crumb-label {
+  font-size: 13px;
+  color: #475569;
+  font-weight: 600;
+}
+
+.diagram-page .diagram-modal {
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+  border: none;
+}
+
+.diagram-modal__header {
+  height: 52px;
+  padding: 0 14px;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.diagram-modal__header > div { display: flex; gap: 8px; }
+
+.diagram-modal__body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 140px 1fr 240px;
+}
+
+.diagram-tools {
+  border-right: 1px solid #e2e8f0;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: #f8fafc;
+}
+
+.diagram-sidebar {
+  border-right: 1px solid #e2e8f0;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: #f8fafc;
+  overflow-y: auto;
+}
+
+.diagram-sidebar-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0 4px 4px;
+}
+
+.diagram-sidebar-item {
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  cursor: grab;
+}
+
+.diagram-sidebar-item-label {
+  font-size: 12px;
+  color: #475569;
+}
+
+.diagram-sidebar-add-btn {
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #fff;
+  padding: 3px 8px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.diagram-toolbar-bar {
+  height: 38px;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  border-bottom: 1px solid #e2e8f0;
+  background: #fff;
+}
+
+.diagram-toolbar-group { display: flex; gap: 6px; }
+
+.diagram-toolbar-btn {
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 4px 8px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.diagram-details-panel {
+  border-left: 1px solid #e2e8f0;
+  padding: 12px;
+  background: #fff;
+  overflow: auto;
+}
+
+.diagram-details-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #64748b;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.diagram-details-grid {
+  display: grid;
+  grid-template-columns: 90px 1fr;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.diagram-details-input {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 8px;
+  font-size: 12px;
+}
+
+.diagram-details-empty { font-size: 13px; color: #64748b; }
+
+.diagram-canvas-wrap { position: relative; min-width: 0; background: #f8fafc; }
+.diagram-inline-input { width: 100%; height: 100%; border: none; outline: none; background: transparent; resize: none; font: inherit; }
+.conn-context-menu {
+  position: absolute;
+  z-index: 50;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  overflow: hidden;
+}
+.conn-context-item { display: block; width: 100%; border: none; background: none; padding: 8px 12px; text-align: left; cursor: pointer; }
+.conn-context-item:hover { background: #f1f5f9; }
+.conn-context-item.danger { color: #b91c1c; }
+.canvas-controls {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 6px;
+}
+.canvas-ctrl-btn { border: 1px solid #cbd5e1; background: #fff; border-radius: 6px; padding: 4px 8px; cursor: pointer; }
+.canvas-ctrl-zoom { font-size: 12px; color: #475569; min-width: 46px; text-align: center; }
+
+.diagram-tool-btn {
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+  padding: 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.diagram-tool-btn--active {
+  border-color: #3b82f6;
+  background: #eff6ff;
+}
+
+.diagram-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  background: #f8fafc;
+}
+
+.diagram-details {
+  border-left: 1px solid #e2e8f0;
+  padding: 12px;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.diagram-details label { font-size: 12px; color: #334155; font-weight: 600; }
+.diagram-details input,
+.diagram-details textarea {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 8px;
+  font-size: 12px;
+}
+.diagram-details textarea { min-height: 140px; resize: vertical; }
+
 /* ── Toolbar ─────────────────────────────────────────────────────── */
 
 .toolbar {
@@ -900,7 +1171,7 @@
 
 .node-modal-overlay { position: fixed; inset: 0; background: rgba(28,25,23,0.4); backdrop-filter: blur(3px); z-index: 1100; display: flex; align-items: center; justify-content: center; padding: 20px; padding-bottom: max(20px, env(safe-area-inset-bottom)); }
 
-.node-modal { background: var(--bg-surface); border-radius: 14px; box-shadow: 0 20px 60px rgba(0,0,0,0.18); border: 1px solid var(--border); width: 90%; max-width: 720px; max-height: 88vh; display: flex; flex-direction: column; overflow: hidden; }
+.node-modal { background: var(--bg-surface); border-radius: 14px; box-shadow: 0 20px 60px rgba(0,0,0,0.18); border: 1px solid var(--border); width: 90%; max-width: 720px; height: min(88vh, 760px); display: flex; flex-direction: column; overflow: hidden; }
 
 .node-modal-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
 .node-modal-header-left { display: flex; align-items: center; gap: 8px; min-width: 0; }

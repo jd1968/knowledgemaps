@@ -16,7 +16,9 @@ const DEFAULT_NODE_SIZE_BY_LEVEL = {
 const normalizeLevel = (level = 1) => Math.min(Math.max(level, 0), 3)
 
 const getDefaultSizeForNode = (node) => {
-  if (node?.data?.nodeType === 'image' || node?.data?.nodeType === 'note') return { width: 200, height: 200 }
+  if (node?.data?.nodeType === 'relationship') return { width: 240, height: 40 }
+  if (node?.data?.nodeType === 'object') return { width: 200, height: 90 }
+  if (node?.data?.nodeType === 'image' || node?.data?.nodeType === 'note' || node?.data?.nodeType === 'diagram') return { width: 220, height: 180 }
   return DEFAULT_NODE_SIZE_BY_LEVEL[normalizeLevel(node?.data?.level ?? 1)]
 }
 
@@ -142,6 +144,7 @@ export const useMindMapStore = create((set, get) => ({
   reparentSourceNodeId: null,
   copySizeSourceNodeId: null,
   pendingToolboxType: null,
+  diagramEditorNodeId: null,
 
   // ── Node focus (map navigation) ───────────────────────────────
   focusNodeId: null,
@@ -157,6 +160,8 @@ export const useMindMapStore = create((set, get) => ({
   clearCopySizeMode: () => set({ copySizeSourceNodeId: null }),
   setPendingToolboxType: (type) => set({ pendingToolboxType: type }),
   clearPendingToolboxType: () => set({ pendingToolboxType: null }),
+  openDiagramEditor: (nodeId) => set({ diagramEditorNodeId: nodeId }),
+  closeDiagramEditor: () => set({ diagramEditorNodeId: null }),
 
   setEditMode: (isEditMode) => set({
     isEditMode,
@@ -622,6 +627,7 @@ export const useMindMapStore = create((set, get) => ({
         saveStatus: 'idle',
         fitViewTrigger: state.fitViewTrigger + 1,
         breadcrumbs,
+        diagramEditorNodeId: null,
         openMenuNodeId: null,
         glyphMenuNodeId: null,
         floatingUiEpoch: state.floatingUiEpoch + 1,

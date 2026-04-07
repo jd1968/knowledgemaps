@@ -5,8 +5,8 @@ import MarkdownEditor from './MarkdownEditor'
 import SubmapChoiceModal from './SubmapChoiceModal'
 import { STANDARD_THEME_COLORS } from '../lib/themePalette'
 
-const TYPE_LABELS = { node: 'Node', pointer: 'Pointer', submap: 'Submap' }
-const CREATE_TYPE_OPTIONS = ['node', 'pointer', 'submap']
+const TYPE_LABELS = { node: 'Node', object: 'Object', relationship: 'Relationship', pointer: 'Pointer', diagram: 'Diagram', submap: 'Submap' }
+const CREATE_TYPE_OPTIONS = ['node', 'object', 'relationship', 'pointer', 'diagram', 'submap']
 
 const isTouch = typeof window !== 'undefined' && window.matchMedia('(hover: none) and (pointer: coarse)').matches
 
@@ -20,17 +20,46 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
   const currentMapId     = useMindMapStore((s) => s.currentMapId)
 
   const { id } = node
-  const { title, level, content, longTitle = '', isSubmap, submapId, nodeType = 'node', hasChildren, isTodo = false, showContents = false, themeColor = '' } = node.data
+  const {
+    title,
+    level,
+    content,
+    longTitle = '',
+    isSubmap,
+    submapId,
+    nodeType = 'node',
+    hasChildren,
+    isTodo = false,
+    showContents = false,
+    themeColor = '',
+    name = '',
+    objectType = 'Standard',
+    description = '',
+    relType = 'lookup',
+    fromLabel = '',
+    toLabel = '',
+    backgroundMode = 'theme',
+  } = node.data
+  const isObjectNode = nodeType === 'object'
+  const isRelationshipNode = nodeType === 'relationship'
+  const isPlainNode = nodeType === 'node'
 
   const [isEditing, setIsEditing]         = useState(isEditMode)
-  const [draft, setDraft]                 = useState(isEditMode ? { title: title || '', longTitle: longTitle || title || '', content: content || '', isTodo: !!isTodo, nodeType, showContents: !!showContents, themeColor: themeColor || '' } : null)
+  const [draft, setDraft]                 = useState(isEditMode ? { title: title || '', longTitle: longTitle || title || '', content: content || '', isTodo: !!isTodo, nodeType, showContents: !!showContents, themeColor: themeColor || '', name: name || '', objectType: objectType || 'Standard', description: description || '', relType: relType || 'lookup', fromLabel: fromLabel || '', toLabel: toLabel || '', backgroundMode: backgroundMode || 'theme' } : null)
   const [showConvertMenu, setShowConvertMenu] = useState(false)
   const [converting, setConverting]       = useState(false)
   const [showSubmapChoice, setShowSubmapChoice] = useState(false)
+  const [editTab, setEditTab]             = useState('details')
   const headerIsTodo = isEditing ? !!draft?.isTodo : isTodo
   const canSave = !!draft?.title?.trim()
 
   const hasNotes = content && content.trim() !== ''
+  const viewDescription = node.data?.description || ''
+  const viewName = node.data?.name || ''
+  const viewObjectType = node.data?.objectType || 'Standard'
+  const viewRelType = node.data?.relType || 'lookup'
+  const viewFromLabel = node.data?.fromLabel || ''
+  const viewToLabel = node.data?.toLabel || ''
   const requestClose = useCallback(() => {
     if (isNew && onDelete) onDelete()
     onClose()
@@ -49,10 +78,12 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
     setIsEditing(false)
     setShowConvertMenu(false)
     setDraft(null)
+    setEditTab('details')
   }, [isEditMode])
 
   const startEdit = () => {
-    setDraft({ title: title || '', longTitle: longTitle || title || '', content: content || '', isTodo: !!isTodo, nodeType, showContents: !!showContents, themeColor: themeColor || '' })
+    setDraft({ title: title || '', longTitle: longTitle || title || '', content: content || '', isTodo: !!isTodo, nodeType, showContents: !!showContents, themeColor: themeColor || '', name: name || '', objectType: objectType || 'Standard', description: description || '', relType: relType || 'lookup', fromLabel: fromLabel || '', toLabel: toLabel || '', backgroundMode: backgroundMode || 'theme' })
+    setEditTab('details')
     setIsEditing(true)
   }
 
@@ -66,7 +97,29 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
       setShowSubmapChoice(true)
       return
     }
-    if (draft) updateNodeData(id, { title: draft.title.trim(), longTitle: draft.longTitle?.trim() || '', content: draft.content, isTodo: !!draft.isTodo, nodeType: nextType, showContents: !!draft.showContents, ...(level === 1 ? { themeColor: draft.themeColor || '' } : {}) })
+    if (draft) updateNodeData(id, {
+      title: draft.title.trim(),
+      longTitle: draft.longTitle?.trim() || '',
+      content: draft.content,
+      isTodo: !!draft.isTodo,
+      nodeType: nextType,
+      showContents: !!draft.showContents,
+      ...(level === 1 ? { themeColor: draft.themeColor || '' } : {}),
+      ...(nextType === 'object' ? {
+        name: draft.name || '',
+        objectType: draft.objectType || 'Standard',
+        description: draft.description || '',
+      } : {}),
+      ...(nextType === 'relationship' ? {
+        relType: draft.relType || 'lookup',
+        fromLabel: draft.fromLabel || '',
+        toLabel: draft.toLabel || '',
+        description: draft.description || '',
+      } : {}),
+      ...(nextType === 'node' ? {
+        backgroundMode: draft.backgroundMode || 'theme',
+      } : {}),
+    })
     if (nextType === 'pointer') setEdgeType(id, 'pointer-edge')
     else if (nodeType === 'pointer') setEdgeType(id, 'straight-center')
     onClose()
@@ -97,7 +150,7 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
       return
     }
 
-    if ((newType === 'note' || newType === 'pointer') && hasChildren) {
+    if ((newType === 'note' || newType === 'pointer' || newType === 'diagram' || newType === 'relationship') && hasChildren) {
       if (!confirm(`"${title}" has children. Converting to ${TYPE_LABELS[newType]} will prevent adding more children, but existing ones will remain.\n\nContinue?`)) return
     }
 
@@ -168,33 +221,57 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
         <div className={`node-modal-body${isEditing ? '' : ' node-modal-body--view'}`}>
           {isEditing ? (
             <>
-              <div className="field">
-                <label className="field-label">Long Title <span className="field-label-hint">(shown on cards — leave blank to use short title)</span></label>
-                <input
-                  className="field-input"
-                  value={draft.longTitle || ''}
-                  onChange={(e) => setDraft((d) => ({ ...d, longTitle: e.target.value }))}
-                  onBlur={(e) => {
-                    if (!draft.title && e.target.value) {
-                      setDraft((d) => ({ ...d, title: e.target.value }))
-                    }
-                  }}
-                  placeholder="More descriptive title for feed cards…"
-                  autoFocus
-                />
+              <div className="node-create-type-row" style={{ marginBottom: 8 }}>
+                <button
+                  type="button"
+                  className={`btn btn--sm${editTab === 'details' ? ' btn--primary' : ' btn--secondary'}`}
+                  onClick={() => setEditTab('details')}
+                >
+                  Details
+                </button>
+                <button
+                  type="button"
+                  className={`btn btn--sm${editTab === 'style' ? ' btn--primary' : ' btn--secondary'}`}
+                  onClick={() => setEditTab('style')}
+                >
+                  Style
+                </button>
               </div>
 
+              {editTab === 'details' && !isObjectNode && (
+                <div className="field">
+                  <label className="field-label">Long Title <span className="field-label-hint">(shown on cards — leave blank to use short title)</span></label>
+                  <input
+                    className="field-input"
+                    value={draft.longTitle || ''}
+                    onChange={(e) => setDraft((d) => ({ ...d, longTitle: e.target.value }))}
+                    onBlur={(e) => {
+                      if (!draft.title && e.target.value) {
+                        setDraft((d) => ({ ...d, title: e.target.value }))
+                      }
+                    }}
+                    placeholder="More descriptive title for feed cards…"
+                    autoFocus
+                  />
+                </div>
+              )}
+
+              {editTab === 'details' && (
               <div className="field">
-                <label className="field-label">Short Title <span className="field-label-hint">(shown on map)</span></label>
+                <label className="field-label">
+                  {isObjectNode ? 'Label' : 'Short Title'} {!isObjectNode && <span className="field-label-hint">(shown on map)</span>}
+                </label>
                 <input
                   className="field-input"
                   value={draft.title}
                   onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
-                  placeholder="Node title…"
+                  placeholder={isObjectNode ? 'Object label…' : 'Node title…'}
+                  autoFocus={isObjectNode}
                 />
               </div>
+              )}
 
-              {level === 1 && (
+              {editTab === 'style' && level === 1 && (
                 <div className="field">
                   <label className="field-label">Theme Color</label>
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -225,8 +302,29 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
                   </div>
                 </div>
               )}
+              {editTab === 'style' && isPlainNode && (
+                <div className="field">
+                  <label className="field-label">Background</label>
+                  <div className="node-create-type-row">
+                    <button
+                      type="button"
+                      className={`btn btn--sm${(draft.backgroundMode || 'theme') === 'theme' ? ' btn--primary' : ' btn--secondary'}`}
+                      onClick={() => setDraft((d) => ({ ...d, backgroundMode: 'theme' }))}
+                    >
+                      Theme color
+                    </button>
+                    <button
+                      type="button"
+                      className={`btn btn--sm${(draft.backgroundMode || 'theme') === 'canvas' ? ' btn--primary' : ' btn--secondary'}`}
+                      onClick={() => setDraft((d) => ({ ...d, backgroundMode: 'canvas' }))}
+                    >
+                      White
+                    </button>
+                  </div>
+                </div>
+              )}
 
-              {isNew && (
+              {editTab === 'details' && isNew && (
                 <div className="field">
                   <label className="field-label">Type</label>
                   <div className="node-create-type-row">
@@ -244,30 +342,120 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
                 </div>
               )}
 
-              <div className="field">
-                <label className="node-modal-toggle-row">
-                  <input
-                    type="checkbox"
-                    checked={!!draft.showContents}
-                    onChange={(e) => setDraft((d) => ({ ...d, showContents: e.target.checked }))}
-                  />
-                  <span className="field-label" style={{ margin: 0 }}>Show Contents</span>
-                </label>
-              </div>
+              {editTab === 'details' && isObjectNode ? (
+                <>
+                  <div className="field">
+                    <label className="field-label">API Name</label>
+                    <input
+                      className="field-input"
+                      value={draft.name || ''}
+                      onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
+                      placeholder="e.g. Account"
+                    />
+                  </div>
+                  <div className="field">
+                    <label className="field-label">Object Type</label>
+                    <select
+                      className="field-input"
+                      value={draft.objectType || 'Standard'}
+                      onChange={(e) => setDraft((d) => ({ ...d, objectType: e.target.value }))}
+                    >
+                      <option value="Standard">Standard</option>
+                      <option value="Packaged">Packaged</option>
+                      <option value="Custom">Custom</option>
+                    </select>
+                  </div>
+                  <div className="field field--grow">
+                    <label className="field-label">Purpose</label>
+                    <textarea
+                      className="field-input"
+                      value={draft.description || ''}
+                      onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))}
+                      placeholder="Add a purpose..."
+                      style={{ minHeight: 120, resize: 'vertical' }}
+                    />
+                  </div>
+                </>
+              ) : editTab === 'details' && isRelationshipNode ? (
+                <>
+                  <div className="field">
+                    <label className="field-label">Relationship Type</label>
+                    <select
+                      className="field-input"
+                      value={draft.relType || 'lookup'}
+                      onChange={(e) => setDraft((d) => ({ ...d, relType: e.target.value }))}
+                    >
+                      <option value="lookup">Lookup</option>
+                      <option value="master-detail">Master-Detail</option>
+                    </select>
+                  </div>
+                  <div className="field">
+                    <label className="field-label">From Label</label>
+                    <input className="field-input" value={draft.fromLabel || ''} onChange={(e) => setDraft((d) => ({ ...d, fromLabel: e.target.value }))} />
+                  </div>
+                  <div className="field">
+                    <label className="field-label">To Label</label>
+                    <input className="field-input" value={draft.toLabel || ''} onChange={(e) => setDraft((d) => ({ ...d, toLabel: e.target.value }))} />
+                  </div>
+                  <div className="field field--grow">
+                    <label className="field-label">Description</label>
+                    <textarea
+                      className="field-input"
+                      value={draft.description || ''}
+                      onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))}
+                      placeholder="Add a description..."
+                      style={{ minHeight: 120, resize: 'vertical' }}
+                    />
+                  </div>
+                </>
+              ) : editTab === 'details' ? (
+                <>
+                  <div className="field">
+                    <label className="node-modal-toggle-row">
+                      <input
+                        type="checkbox"
+                        checked={!!draft.showContents}
+                        onChange={(e) => setDraft((d) => ({ ...d, showContents: e.target.checked }))}
+                      />
+                      <span className="field-label" style={{ margin: 0 }}>Show Contents</span>
+                    </label>
+                  </div>
+                  <div className="field field--grow">
+                    <label className="field-label">Notes</label>
+                    <MarkdownEditor
+                      key={`edit-${id}`}
+                      content={draft.content}
+                      onChange={(md) => setDraft((d) => ({ ...d, content: md }))}
+                      editable={true}
+                    />
+                  </div>
+                </>
+              ) : null}
 
-              <div className="field field--grow">
-                <label className="field-label">Notes</label>
-                <MarkdownEditor
-                  key={`edit-${id}`}
-                  content={draft.content}
-                  onChange={(md) => setDraft((d) => ({ ...d, content: md }))}
-                  editable={true}
-                />
-              </div>
             </>
           ) : (
             <>
-              {hasNotes && (
+              {isObjectNode ? (
+                <div className="field">
+                  <label className="field-label">API Name</label>
+                  <div className="key-display">{viewName || '—'}</div>
+                  <label className="field-label" style={{ marginTop: 8 }}>Object Type</label>
+                  <div className="key-display">{viewObjectType}</div>
+                  <label className="field-label" style={{ marginTop: 8 }}>Purpose</label>
+                  <div className="key-display">{viewDescription || '—'}</div>
+                </div>
+              ) : isRelationshipNode ? (
+                <div className="field">
+                  <label className="field-label">Relationship Type</label>
+                  <div className="key-display">{viewRelType}</div>
+                  <label className="field-label" style={{ marginTop: 8 }}>From Label</label>
+                  <div className="key-display">{viewFromLabel || '—'}</div>
+                  <label className="field-label" style={{ marginTop: 8 }}>To Label</label>
+                  <div className="key-display">{viewToLabel || '—'}</div>
+                  <label className="field-label" style={{ marginTop: 8 }}>Description</label>
+                  <div className="key-display">{viewDescription || '—'}</div>
+                </div>
+              ) : hasNotes && (
                 <div className="field">
                   <MarkdownEditor key={`view-${id}`} content={content} editable={false} />
                 </div>
@@ -294,7 +482,7 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
             showConvertMenu ? (
               <>
                 <span className="node-modal-convert-label">Convert to:</span>
-                {['node', 'pointer', 'submap'].map((t) => (
+                {['node', 'object', 'relationship', 'pointer', 'diagram', 'submap'].map((t) => (
                   <button
                     key={t}
                     className={`btn btn--sm${nodeType === t ? ' btn--disabled' : ' btn--secondary'}`}

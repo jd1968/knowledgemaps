@@ -17,7 +17,12 @@ const blendWithWhite = (hex, alpha) => {
   return `rgb(${Math.round(255 * (1 - alpha) + r * alpha)}, ${Math.round(255 * (1 - alpha) + g * alpha)}, ${Math.round(255 * (1 - alpha) + b * alpha)})`
 }
 
-const CONVERT_LABELS = { node: 'Node', pointer: 'Pointer', submap: '↗ Submap' }
+const CONVERT_LABELS = { node: 'Node', object: 'Object', relationship: 'Relationship', pointer: 'Pointer', diagram: 'Diagram', submap: '↗ Submap' }
+const OBJECT_TYPE_FILLS = {
+  Standard: '#f1f3f7',
+  Packaged: '#e9fbff',
+  Custom: '#ffeef6',
+}
 
 // Eight resize handle positions: corners + edge midpoints
 const HANDLES = [
@@ -153,6 +158,7 @@ const CustomNode = memo(({ id, data, selected }) => {
 
   const setGlyphMenuNodeId    = useMindMapStore((state) => state.setGlyphMenuNodeId)
   const clearGlyphMenuNodeIdIf = useMindMapStore((state) => state.clearGlyphMenuNodeIdIf)
+  const openDiagramEditor      = useMindMapStore((state) => state.openDiagramEditor)
   const floatingUiEpoch       = useMindMapStore((state) => state.floatingUiEpoch)
   const floatingUiAnchorId    = useMindMapStore((state) => state.floatingUiAnchorId)
   const navigate              = useNavigate()
@@ -171,7 +177,7 @@ const CustomNode = memo(({ id, data, selected }) => {
   const nodeRef        = useRef(null)
   const menuHideTimerRef = useRef(null)
 
-  const { title, level, l1Color, hasChildren, isSubmap, submapId, hasNotes, nodeType, groupSize, content, isTodo = false, iconUrl = '', imageUrl = '', imageBorder = false, textSize = 'm', showContents = false } = data
+  const { title, level, l1Color, hasChildren, isSubmap, submapId, hasNotes, nodeType, groupSize, content, objectType = 'Standard', backgroundMode = 'theme', isTodo = false, iconUrl = '', imageUrl = '', imageBorder = false, textSize = 'm', showContents = false, diagramSnapshot = '' } = data
 
   const borderColor = l1Color ?? '#94a3b8'
   const TEXT_SIZES  = { s: 14, m: 22, l: 36 }
@@ -289,7 +295,7 @@ const CustomNode = memo(({ id, data, selected }) => {
       return
     }
 
-    if ((newType === 'note' || newType === 'pointer') && hasChildren) {
+    if ((newType === 'note' || newType === 'pointer' || newType === 'diagram' || newType === 'relationship') && hasChildren) {
       if (!confirm(`"${title}" has children. Converting to ${CONVERT_LABELS[newType]} will prevent adding more children, but existing ones will remain.\n\nContinue?`)) return
     }
 
@@ -402,10 +408,9 @@ const CustomNode = memo(({ id, data, selected }) => {
         // MindMapCanvas onNodeClick opens the modal (view mode).
       }}
       onDoubleClick={(e) => {
-        if (!isEditMode) return
-        if (nodeType === 'note') return
+        if (nodeType === 'diagram') { e.stopPropagation(); openDiagramEditor(id); return }
         e.stopPropagation()
-        startEditing()
+        openNodeModal(id)
       }}
       style={{
         width,
@@ -414,12 +419,18 @@ const CustomNode = memo(({ id, data, selected }) => {
         flexDirection: 'column',
         background: level === 0
           ? '#3a3a3a'
-          : nodeType === 'image' || nodeType === 'text'
+          : nodeType === 'image' || nodeType === 'text' || nodeType === 'object'
             ? 'transparent'
           : nodeType === 'note'
             ? '#fef9c3'
+          : nodeType === 'object'
+            ? '#eef3fd'
+          : nodeType === 'relationship'
+            ? '#f8fafc'
           : nodeType === 'pointer'
             ? blendWithWhite(borderColor, 0.05)
+          : nodeType === 'node' && backgroundMode === 'canvas'
+            ? '#ffffff'
           : isSubmap || !isParent
             ? '#ffffff'
           : blendWithWhite(borderColor, bgAlpha),
@@ -427,8 +438,10 @@ const CustomNode = memo(({ id, data, selected }) => {
           ? 'none'
           : nodeType === 'text'
             ? 'none'
-          : nodeType === 'image'
+          : nodeType === 'image' || nodeType === 'object'
             ? (imageBorder ? `1.5px solid ${borderColor}` : 'none')
+          : nodeType === 'relationship'
+            ? `1.5px dashed ${borderColor}70`
           : nodeType === 'note'
             ? 'none'
           : isParent
@@ -510,6 +523,71 @@ const CustomNode = memo(({ id, data, selected }) => {
               </svg>
               <span>Add image</span>
             </NodeIconUpload>
+          )}
+        </div>
+      )}
+
+      {nodeType === 'diagram' && (
+        <div className="diagram-node-body">
+          {diagramSnapshot ? (
+            <img src={diagramSnapshot} alt="Diagram snapshot" className="diagram-node-preview" />
+          ) : (
+            <div className="diagram-node-placeholder">Open editor to create diagram</div>
+          )}
+        </div>
+      )}
+
+      {nodeType === 'object' && (
+        <div
+          className="object-node-body"
+          style={{
+            width: '100%',
+            height: '100%',
+            borderRadius: 12,
+            background: OBJECT_TYPE_FILLS[objectType] || OBJECT_TYPE_FILLS.Standard,
+            border: `1.5px solid ${selected ? '#5b8dee' : '#c0cfe8'}`,
+            boxShadow: selected
+              ? '0 2px 8px rgba(91,141,238,0.25)'
+              : hovered
+                ? '0 1px 6px rgba(91,141,238,0.16)'
+                : '0 1px 3px rgba(0,0,0,0.1)',
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'flex-start',
+            padding: '8px 10px',
+            fontSize: 13,
+            lineHeight: 1.3,
+            color: '#2d3a5c',
+            wordBreak: 'break-word',
+          }}
+        >
+          {editing ? (
+            <input
+              ref={inputRef}
+              className="nodrag nopan"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onBlur={commitEdit}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') { e.preventDefault(); commitEdit() }
+                if (e.key === 'Escape') { e.preventDefault(); cancelEdit() }
+                e.stopPropagation()
+              }}
+              style={{
+                width: '100%',
+                border: 'none',
+                outline: 'none',
+                background: 'transparent',
+                fontSize: 'inherit',
+                fontWeight: 500,
+                color: 'inherit',
+                fontFamily: 'inherit',
+                lineHeight: 'inherit',
+                padding: 0,
+              }}
+            />
+          ) : (
+            <span>{title || data.name || 'Object'}</span>
           )}
         </div>
       )}
@@ -616,7 +694,7 @@ const CustomNode = memo(({ id, data, selected }) => {
             </>
           )}
         </div>
-      ) : nodeType !== 'image' && nodeType !== 'note' && nodeType !== 'text' && (!isParent || !!title?.trim()) && (
+      ) : nodeType !== 'image' && nodeType !== 'note' && nodeType !== 'diagram' && nodeType !== 'object' && nodeType !== 'text' && (!isParent || !!title?.trim()) && (
         <div
           style={{
             flex: (isParent || showContents) ? '0 0 auto' : 1,
@@ -686,7 +764,7 @@ const CustomNode = memo(({ id, data, selected }) => {
         </div>
       )}
 
-      {showContents && content?.trim() && nodeType !== 'image' && nodeType !== 'note' && nodeType !== 'text' && nodeType !== 'pointer' && !editing && (
+      {showContents && content?.trim() && nodeType !== 'image' && nodeType !== 'note' && nodeType !== 'diagram' && nodeType !== 'text' && nodeType !== 'pointer' && nodeType !== 'relationship' && !editing && (
         <div className="node-contents-body node-contents-markdown">
           <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents} urlTransform={urlTransform}>{content}</ReactMarkdown>
         </div>
@@ -730,7 +808,7 @@ const CustomNode = memo(({ id, data, selected }) => {
             </button>
           )}
 
-          {!isSubmap && nodeType !== 'note' && nodeType !== 'pointer' && nodeType !== 'image' && nodeType !== 'text' && (
+          {!isSubmap && nodeType !== 'note' && nodeType !== 'pointer' && nodeType !== 'relationship' && nodeType !== 'image' && nodeType !== 'diagram' && nodeType !== 'text' && (
             <button
               className="add-child-btn node-floating-btn nodrag nopan"
               title="Add child node"
@@ -745,7 +823,7 @@ const CustomNode = memo(({ id, data, selected }) => {
             </button>
           )}
 
-          {level > 0 && nodeType !== 'image' && nodeType !== 'note' && nodeType !== 'text' && (
+          {level > 0 && nodeType !== 'image' && nodeType !== 'note' && nodeType !== 'diagram' && nodeType !== 'relationship' && nodeType !== 'text' && (
             <NodeIconUpload
               iconUrl={iconUrl}
               onUpload={(url) => updateNodeData(id, { iconUrl: url })}
@@ -753,6 +831,15 @@ const CustomNode = memo(({ id, data, selected }) => {
             >
               ⊕
             </NodeIconUpload>
+          )}
+          {level > 0 && nodeType === 'diagram' && (
+            <button
+              className="node-edit-btn node-floating-btn nodrag nopan"
+              title="Open diagram editor"
+              onClick={(e) => { e.stopPropagation(); openDiagramEditor(id) }}
+            >
+              ◫
+            </button>
           )}
 
           {level > 0 && !isSubmap && (
@@ -820,7 +907,7 @@ const CustomNode = memo(({ id, data, selected }) => {
       {showConvertMenu && (
         <div className="node-convert-menu nodrag nopan" onPointerDown={(e) => e.stopPropagation()}>
           <span className="node-convert-menu-label">Convert to</span>
-          {['node', 'pointer', 'submap'].map((t) => (
+          {['node', 'object', 'relationship', 'pointer', 'diagram', 'submap'].map((t) => (
             <button
               key={t}
               className="node-convert-menu-item"

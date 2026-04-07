@@ -8,6 +8,7 @@ import ContentsView from './components/ContentsView'
 import TextView from './components/MapTextModal'
 import NodePopup from './components/NodePopup'
 import Toolbox from './components/NodePalette'
+import DiagramEditorView from './components/DiagramEditorView'
 import MapListModal from './components/MapListModal'
 import LoginPage from './components/LoginPage'
 import HomePage from './components/HomePage'
@@ -20,7 +21,7 @@ function MapPage() {
   const location = useLocation()
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
-  const { loadMap, setViewMode, isFullscreen, isEditMode } = useMindMapStore()
+  const { loadMap, setViewMode, isFullscreen, isEditMode, diagramEditorNodeId } = useMindMapStore()
 
   const viewMode = searchParams.get('view') || 'map'
 
@@ -41,13 +42,15 @@ function MapPage() {
     <div className={`app${isFullscreen ? ' app--fullscreen' : ''}`}>
       {!isFullscreen && <Toolbar />}
       <div className="app-body">
-        {viewMode === 'map' && !isFullscreen && isEditMode && <Toolbox />}
+        {viewMode === 'map' && !isFullscreen && isEditMode && !diagramEditorNodeId && <Toolbox />}
         {viewMode === 'feed' ? (
           <FeedView />
         ) : viewMode === 'contents' ? (
           <ContentsView />
         ) : viewMode === 'text' ? (
           <TextView />
+        ) : diagramEditorNodeId ? (
+          <DiagramEditorView />
         ) : (
           <div className="canvas-wrapper">
             <MindMapCanvas />
