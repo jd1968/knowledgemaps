@@ -18,6 +18,34 @@ const DEFAULT_NODE_SIZE_BY_LEVEL = {
   2: { width: 150, height: 88 },
   3: { width: 130, height: 76 },
 }
+const RELATIONSHIP_ALLOWED_NODE_TYPES = new Set(['card', 'object', 'diagram', 'submap', 'note', 'image', 'text'])
+const canConnectNodeTypes = (sourceType = 'card', targetType = 'card') => {
+  if (sourceType === 'relationship') return RELATIONSHIP_ALLOWED_NODE_TYPES.has(targetType)
+  if (targetType === 'relationship') return RELATIONSHIP_ALLOWED_NODE_TYPES.has(sourceType)
+  return true
+}
+const relationshipEndFromHandleId = (handleId) => {
+  if (!handleId) return null
+  if (String(handleId).includes('left')) return 'left'
+  if (String(handleId).includes('right')) return 'right'
+  return null
+}
+const isRelationshipEdge = (edge) => !!edge?.data?.isRelationship
+const normalizeRelationshipEdgeForNode = (edge, relationshipNodeId) => {
+  if (!isRelationshipEdge(edge)) return edge
+  if (edge.source === relationshipNodeId) return edge
+  if (edge.target !== relationshipNodeId) return edge
+  const end = relationshipEndFromHandleId(edge.targetHandle)
+  if (!end) return null
+  return {
+    ...edge,
+    source: relationshipNodeId,
+    sourceHandle: `rel-${end}-source`,
+    target: edge.source,
+    targetHandle: null,
+  }
+}
+const hierarchyEdgesOnly = (edges) => edges.filter((e) => !isRelationshipEdge(e))
 
 const normalizeLevel = (level = 1) => Math.min(Math.max(level, 0), 3)
 
@@ -150,6 +178,8 @@ export const useMindMapStore = create((set, get) => ({
   reparentSourceNodeId: null,
   copySizeSourceNodeId: null,
   pendingToolboxType: null,
+  relationshipDrag: null,
+  relationshipSourceNodeId: null,
   diagramEditorNodeId: null,
 
   // ── Node focus (map navigation) ───────────────────────────────
@@ -166,6 +196,10 @@ export const useMindMapStore = create((set, get) => ({
   clearCopySizeMode: () => set({ copySizeSourceNodeId: null }),
   setPendingToolboxType: (type) => set({ pendingToolboxType: type }),
   clearPendingToolboxType: () => set({ pendingToolboxType: null }),
+  startRelationshipEndDrag: (relationshipNodeId, end, startScreenPos = null) => set({ relationshipDrag: { relationshipNodeId, end, startScreenPos } }),
+  clearRelationshipEndDrag: () => set({ relationshipDrag: null }),
+  setRelationshipSourceNodeId: (id) => set({ relationshipSourceNodeId: id }),
+  clearRelationshipDraft: () => set({ relationshipSourceNodeId: null }),
   openDiagramEditor: (nodeId) => set({ diagramEditorNodeId: nodeId }),
   closeDiagramEditor: () => set({ diagramEditorNodeId: null }),
 
@@ -240,20 +274,252 @@ export const useMindMapStore = create((set, get) => ({
 
   onConnect: (connection) => {
     if (!get().isEditMode) return
+    const { nodes } = get()
+    let normalizedConnection = { ...connection }
+    const sourceNode = nodes.find((n) => n.id === normalizedConnection.source)
+    const targetNode = nodes.find((n) => n.id === normalizedConnection.target)
+    const sourceType = sourceNode?.data?.nodeType || 'card'
+    const targetType = targetNode?.data?.nodeType || 'card'
+    const sourceIsRelationship = sourceType === 'relationship'
+    const targetIsRelationship = targetType === 'relationship'
+
+    // Normalize relationship connections so they are always stored as:
+    // relationship(source, specific-end-handle) -> object(target)
+    if (sourceIsRelationship || targetIsRelationship) {
+      const relationshipNode = sourceIsRelationship ? sourceNode : targetNode
+      const objectNode = sourceIsRelationship ? targetNode : sourceNode
+      const end = sourceIsRelationship
+        ? relationshipEndFromHandleId(normalizedConnection.sourceHandle)
+        : relationshipEndFromHandleId(normalizedConnection.targetHandle)
+      if (!relationshipNode || !objectNode || !end) return
+      // Keep obj-target-* handles; discard anything else (e.g. stale handle IDs)
+      const rawTargetHandle = sourceIsRelationship
+        ? normalizedConnection.targetHandle
+        : normalizedConnection.sourceHandle
+      const keepTargetHandle = rawTargetHandle?.startsWith?.('obj-target-') ? rawTargetHandle : null
+      normalizedConnection = {
+        source: relationshipNode.id,
+        sourceHandle: `rel-${end}-source`,
+        target: objectNode.id,
+        targetHandle: keepTargetHandle,
+      }
+    }
+
+    if (!canConnectNodeTypes(sourceType, targetType)) {
+      alert('Relationship nodes can currently connect only to Object nodes.')
+      return
+    }
+    const isRelationshipConnection = sourceIsRelationship || targetIsRelationship
+    const edgeType = isRelationshipConnection ? 'relationship-edge' : 'straight-center'
+    const edgeData = isRelationshipConnection
+      ? { isRelationship: true, relType: sourceNode?.data?.relType || targetNode?.data?.relType || 'lookup' }
+      : undefined
+    const newEdge = {
+      ...normalizedConnection,
+      type: edgeType,
+      ...(edgeData ? { data: edgeData } : {}),
+      style: isRelationshipConnection
+        ? { stroke: '#5b8dee', strokeWidth: 2.2 }
+        : { stroke: '#94a3b8', strokeWidth: 2 },
+      animated: false,
+    }
+
     get().pushHistory()
+    set((state) => {
+      // For relationship endpoints, dragging from the same connector end should re-route
+      // that end (replace existing edge) rather than creating an additional edge.
+      if (isRelationshipConnection) {
+        const replacementIndex = state.edges.findIndex((e) => {
+          if (!isRelationshipEdge(e)) return false
+          if (normalizedConnection.source && e.source === normalizedConnection.source && (e.sourceHandle || null) === (normalizedConnection.sourceHandle || null)) return true
+          if (normalizedConnection.target && e.target === normalizedConnection.target && (e.targetHandle || null) === (normalizedConnection.targetHandle || null)) return true
+          return false
+        })
+        if (replacementIndex >= 0) {
+          const nextEdges = [...state.edges]
+          nextEdges[replacementIndex] = { ...nextEdges[replacementIndex], ...newEdge, id: nextEdges[replacementIndex].id }
+          return { edges: nextEdges, isDirty: true }
+        }
+      }
+
+      return {
+        edges: addEdge(newEdge, state.edges),
+        isDirty: true,
+      }
+    })
+    get().scheduleAutosave()
+  },
+
+  addRelationshipEdge: (sourceId, targetId) => {
+    if (!get().isEditMode) return null
+    const { nodes, edges } = get()
+    const sourceNode = nodes.find((n) => n.id === sourceId)
+    const targetNode = nodes.find((n) => n.id === targetId)
+    const sourceType = sourceNode?.data?.nodeType || 'card'
+    const targetType = targetNode?.data?.nodeType || 'card'
+    if (!canConnectNodeTypes('relationship', sourceType) || !canConnectNodeTypes('relationship', targetType)) {
+      return null
+    }
+    const exists = edges.some((e) => isRelationshipEdge(e) && e.source === sourceId && e.target === targetId)
+    if (exists) return null
+    const id = `rel-${uuidv4()}`
+    const edge = {
+      id,
+      source: sourceId,
+      target: targetId,
+      type: 'relationship-edge',
+      data: { isRelationship: true, relType: 'lookup', fromLabel: '', toLabel: '', description: '' },
+      style: { stroke: '#5b8dee', strokeWidth: 2 },
+    }
+    get().pushHistory()
+    set((state) => ({ edges: [...state.edges, edge], isDirty: true }))
+    get().scheduleAutosave()
+    return id
+  },
+
+  updateRelationshipEdgeData: (edgeId, updates) => {
     set((state) => ({
-      edges: addEdge(
-        {
-          ...connection,
-          type: 'straight-center',
-          style: { stroke: '#94a3b8', strokeWidth: 2 },
-          animated: false,
-        },
-        state.edges
-      ),
+      edges: state.edges.map((e) => e.id === edgeId && isRelationshipEdge(e) ? { ...e, data: { ...(e.data || {}), ...updates } } : e),
       isDirty: true,
     }))
     get().scheduleAutosave()
+  },
+
+  connectRelationshipEndToNode: (relationshipNodeId, end, targetNodeId, targetHandleOverride = null, targetNorm = null) => {
+    if (!get().isEditMode) return
+    const { nodes } = get()
+    const relationshipNode = nodes.find((n) => n.id === relationshipNodeId)
+    const targetNode = nodes.find((n) => n.id === targetNodeId)
+    if (!relationshipNode || !targetNode) return
+    if (relationshipNode.data?.nodeType !== 'relationship') return
+    if (!RELATIONSHIP_ALLOWED_NODE_TYPES.has(targetNode.data?.nodeType || 'card')) return
+    const sourceHandle = `rel-${end}-source`
+
+    const targetHandle = targetHandleOverride || 'obj-target-left'
+
+    const edgeData = { isRelationship: true, relType: relationshipNode.data?.relType || 'lookup', ...(targetNorm ? { targetNorm } : {}) }
+    const newEdge = {
+      id: `rel-${uuidv4()}`,
+      source: relationshipNodeId,
+      sourceHandle,
+      target: targetNodeId,
+      targetHandle,
+      type: 'relationship-edge',
+      data: edgeData,
+      style: { stroke: '#5b8dee', strokeWidth: 2.2 },
+      animated: false,
+    }
+    get().pushHistory()
+    set((state) => {
+      const sanitized = []
+      const seenEnds = new Set()
+      for (const raw of state.edges) {
+        if (!isRelationshipEdge(raw)) {
+          sanitized.push(raw)
+          continue
+        }
+        const normalized = normalizeRelationshipEdgeForNode(raw, relationshipNodeId)
+        if (!normalized) continue
+        if (normalized.source !== relationshipNodeId) {
+          sanitized.push(normalized)
+          continue
+        }
+        const edgeEnd = relationshipEndFromHandleId(normalized.sourceHandle)
+        // Drop malformed or same-end edges; we are replacing this end now.
+        if (!edgeEnd || edgeEnd === end) continue
+        // Keep at most one edge for the opposite end.
+        if (seenEnds.has(edgeEnd)) continue
+        seenEnds.add(edgeEnd)
+        sanitized.push(normalized)
+      }
+      const nodes = state.nodes.map((n) => {
+        if (n.id !== relationshipNodeId) return n
+        const free = { ...(n.data?.relationshipFreeEnds || {}) }
+        delete free[end]
+        return { ...n, data: { ...n.data, relationshipFreeEnds: free } }
+      })
+      return { edges: [...sanitized, newEdge], nodes, isDirty: true, relationshipDrag: null }
+    })
+    get().scheduleAutosave()
+  },
+
+  setRelationshipFreeEnd: (relationshipNodeId, end, point) => {
+    if (!get().isEditMode) return
+    get().pushHistory()
+    set((state) => {
+      const sourceHandle = `rel-${end}-source`
+      const nextEdges = []
+      for (const raw of state.edges) {
+        if (!isRelationshipEdge(raw)) {
+          nextEdges.push(raw)
+          continue
+        }
+        const normalized = normalizeRelationshipEdgeForNode(raw, relationshipNodeId)
+        if (!normalized) continue
+        if (normalized.source === relationshipNodeId && (normalized.sourceHandle || null) === sourceHandle) {
+          continue
+        }
+        nextEdges.push(normalized)
+      }
+      const nodes = state.nodes.map((n) => {
+        if (n.id !== relationshipNodeId) return n
+        const free = { ...(n.data?.relationshipFreeEnds || {}) }
+        if (point) free[end] = point
+        else delete free[end]
+        return { ...n, data: { ...n.data, relationshipFreeEnds: free } }
+      })
+      return { edges: nextEdges, nodes, relationshipDrag: null, isDirty: true }
+    })
+    get().scheduleAutosave()
+  },
+
+  reverseRelationshipConnector: (relationshipNodeId) => {
+    if (!get().isEditMode) return
+    get().pushHistory()
+    set((state) => {
+      const edges = state.edges.map((raw) => {
+        if (!isRelationshipEdge(raw)) return raw
+        const normalized = normalizeRelationshipEdgeForNode(raw, relationshipNodeId)
+        if (!normalized || normalized.source !== relationshipNodeId) return normalized || raw
+        const end = relationshipEndFromHandleId(normalized.sourceHandle)
+        if (!end) return normalized
+        return {
+          ...normalized,
+          sourceHandle: end === 'left' ? 'rel-right-source' : 'rel-left-source',
+        }
+      }).filter(Boolean)
+      const nodes = state.nodes.map((n) => {
+        if (n.id !== relationshipNodeId) return n
+        const free = n.data?.relationshipFreeEnds || {}
+        return {
+          ...n,
+          data: {
+            ...n.data,
+            fromLabel: n.data?.toLabel || '',
+            toLabel: n.data?.fromLabel || '',
+            relationshipFreeEnds: {
+              left: free?.right,
+              right: free?.left,
+            },
+          },
+        }
+      })
+      return { edges, nodes, isDirty: true }
+    })
+    get().scheduleAutosave()
+  },
+
+  moveNodePosition: (nodeId, nextPosition, isFinal = false) => {
+    if (!get().isEditMode) return
+    set((state) => ({
+      nodes: state.nodes.map((n) => (
+        n.id === nodeId
+          ? { ...n, position: nextPosition }
+          : n
+      )),
+      isDirty: isFinal ? true : state.isDirty,
+    }))
+    if (isFinal) get().scheduleAutosave()
   },
 
   // ── Node CRUD ─────────────────────────────────────────────────
@@ -283,6 +549,7 @@ export const useMindMapStore = create((set, get) => ({
     }
     set((state) => ({
       nodes: [...state.nodes.map((n) => ({ ...n, selected: false })), newNode],
+      pendingNewNodeId: id,
       isDirty: true,
       floatingUiEpoch: state.floatingUiEpoch + 1,
       floatingUiAnchorId: id,
@@ -683,6 +950,7 @@ export const useMindMapStore = create((set, get) => ({
   convertToSubmap: async (nodeId) => {
     if (!get().isEditMode) return { success: false }
     const { nodes, edges, currentMapId, currentMapName, isDirty, autosaveTimer } = get()
+    const hierarchyEdges = hierarchyEdgesOnly(edges)
     const node = nodes.find((n) => n.id === nodeId)
     if (!node) return { success: false }
 
@@ -696,7 +964,7 @@ export const useMindMapStore = create((set, get) => ({
 
     // Build children map from edges
     const childrenMap = {}
-    edges.forEach((e) => {
+    hierarchyEdges.forEach((e) => {
       if (!childrenMap[e.source]) childrenMap[e.source] = []
       childrenMap[e.source].push(e.target)
     })
@@ -709,7 +977,7 @@ export const useMindMapStore = create((set, get) => ({
     collectIds(nodeId)
 
     const subtreeNodes = nodes.filter((n) => subtreeIds.has(n.id))
-    const subtreeEdges = edges.filter((e) => subtreeIds.has(e.source) && subtreeIds.has(e.target))
+    const subtreeEdges = hierarchyEdges.filter((e) => subtreeIds.has(e.source) && subtreeIds.has(e.target))
 
     // Offset positions so the converted node lands at a nice centre
     const offsetX = 350 - node.position.x
@@ -844,6 +1112,7 @@ export const useMindMapStore = create((set, get) => ({
   addChildNode: (parentId, nodeType = 'card', options = {}) => {
     if (!get().isEditMode) return
     const { nodes, edges } = get()
+    const hierarchyEdges = hierarchyEdgesOnly(edges)
     const parent = nodes.find((n) => n.id === parentId)
     if (!parent) return
 
@@ -851,10 +1120,15 @@ export const useMindMapStore = create((set, get) => ({
 
     const parentLevel = parent.data.level ?? 0
     const childLevel = parentLevel + 1
+    const parentType = parent.data?.nodeType || 'card'
+    if (!canConnectNodeTypes(parentType, nodeType)) {
+      alert('Relationship nodes can currently connect only to Object nodes.')
+      return null
+    }
 
     // Find existing children of this parent to stack below them
     const childIds = new Set(
-      edges.filter((e) => e.source === parentId).map((e) => e.target)
+      hierarchyEdges.filter((e) => e.source === parentId).map((e) => e.target)
     )
     const childNodes = nodes.filter((n) => childIds.has(n.id))
 
@@ -914,17 +1188,18 @@ export const useMindMapStore = create((set, get) => ({
   reparentNode: (nodeId, newParentId) => {
     if (!get().isEditMode) return
     const { nodes, edges } = get()
+    const hierarchyEdges = hierarchyEdgesOnly(edges)
 
     // Guard: can't reparent to self
     if (nodeId === newParentId) return
 
     // Guard: already a direct child of this parent
-    const currentParentEdge = edges.find(e => e.target === nodeId)
+    const currentParentEdge = hierarchyEdges.find(e => e.target === nodeId)
     if (currentParentEdge?.source === newParentId) return
 
     // Guard: newParentId must not be a descendant of nodeId (would create cycle)
     const isDescendant = (fromId, targetId) => {
-      for (const e of edges) {
+      for (const e of hierarchyEdges) {
         if (e.source !== fromId) continue
         if (e.target === targetId || isDescendant(e.target, targetId)) return true
       }
@@ -934,13 +1209,20 @@ export const useMindMapStore = create((set, get) => ({
 
     const newParentNode = nodes.find(n => n.id === newParentId)
     const newParentLevel = newParentNode?.data?.level ?? 0
+    const movingNode = nodes.find((n) => n.id === nodeId)
+    const sourceType = newParentNode?.data?.nodeType || 'card'
+    const targetType = movingNode?.data?.nodeType || 'card'
+    if (!canConnectNodeTypes(sourceType, targetType)) {
+      alert('Relationship nodes can currently connect only to Object nodes.')
+      return
+    }
 
     // Preserve the existing edge type (e.g. pointer-edge) when reparenting
     const existingEdgeType = currentParentEdge?.type ?? 'straight-center'
 
     // Build new edge list: remove old parent edge, add new one
     const newEdges = [
-      ...edges.filter(e => e.target !== nodeId),
+      ...edges.filter(e => e.target !== nodeId || isRelationshipEdge(e)),
       {
         id: `e-${newParentId}-${nodeId}`,
         source: newParentId,
@@ -1023,11 +1305,12 @@ export const useMindMapStore = create((set, get) => ({
     if (!get().isEditMode) return
     if (!dx && !dy) return
     const { edges } = get()
+    const hierarchyEdges = hierarchyEdgesOnly(edges)
     const descendants = new Set()
     const stack = [rootId]
     while (stack.length) {
       const current = stack.pop()
-      edges.forEach((e) => {
+      hierarchyEdges.forEach((e) => {
         if (e.source === current && !descendants.has(e.target)) {
           descendants.add(e.target)
           stack.push(e.target)
@@ -1052,11 +1335,12 @@ export const useMindMapStore = create((set, get) => ({
 
   snapSubtreeToGrid: (rootId, includeRoot = true) => {
     const { nodes, edges } = get()
+    const hierarchyEdges = hierarchyEdgesOnly(edges)
     const ids = new Set(includeRoot ? [rootId] : [])
     const stack = [rootId]
     while (stack.length) {
       const current = stack.pop()
-      edges.forEach((e) => {
+      hierarchyEdges.forEach((e) => {
         if (e.source === current && !ids.has(e.target)) {
           ids.add(e.target)
           stack.push(e.target)

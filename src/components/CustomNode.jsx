@@ -166,7 +166,8 @@ const CustomNode = memo(({ id, data, selected }) => {
   const inputRef       = useRef(null)
   const nodeRef        = useRef(null)
 
-  const { title, level, l1Color, hasChildren, hasNotes, isSubmap, submapId, nodeType, groupSize, content, objectType = 'Standard', backgroundMode = 'theme', isTodo = false, iconUrl = '', imageUrl = '', imageBorder = false, textSize = 'm', diagramSnapshot = '', isDropTarget = false } = data
+  const { title, level, l1Color, hasChildren, hasNotes, isSubmap, submapId, nodeType, groupSize, content, objectType = 'Standard', backgroundMode = 'theme', isTodo = false, iconUrl = '', imageUrl = '', imageBorder = false, textSize = 'm', diagramSnapshot = '', dropTargetState = null } = data
+  const isRelationshipNode = nodeType === 'relationship'
   const shouldShowContents = !!content?.trim() && nodeType !== 'image' && nodeType !== 'note' && nodeType !== 'diagram' && nodeType !== 'text' && nodeType !== 'relationship'
 
   const borderColor = l1Color ?? '#94a3b8'
@@ -314,6 +315,8 @@ const CustomNode = memo(({ id, data, selected }) => {
         flexDirection: 'column',
         background: level === 0
           ? '#3a3a3a'
+          : nodeType === 'relationship'
+            ? 'transparent'
           : nodeType === 'image' || nodeType === 'text' || nodeType === 'object'
             ? 'transparent'
           : nodeType === 'note'
@@ -329,6 +332,8 @@ const CustomNode = memo(({ id, data, selected }) => {
           : blendWithWhite(borderColor, bgAlpha),
         border: level === 0
           ? 'none'
+          : nodeType === 'relationship'
+            ? 'none'
           : nodeType === 'text'
             ? 'none'
           : nodeType === 'image' || nodeType === 'object'
@@ -340,12 +345,14 @@ const CustomNode = memo(({ id, data, selected }) => {
           : isParent
             ? `2px solid ${borderColor}60`
             : `2px ${isSubmap ? 'dashed' : 'solid'} ${borderColor}`,
-        borderRadius: level === 0 ? '50px' : nodeType === 'note' ? '10px' :isParent ? '12px' : '10px',
+        borderRadius: level === 0 ? '50px' : nodeType === 'relationship' ? 0 : nodeType === 'note' ? '10px' :isParent ? '12px' : '10px',
         fontSize: '13px',
         fontWeight: '500',
         color: level === 0 ? '#ffffff' : '#1c1917',
         cursor: (reparentSourceNodeId || copySizeSourceNodeId) ? 'copy' : (editing ? 'text' : 'pointer'),
-        boxShadow: nodeType === 'image' || nodeType === 'text'
+        boxShadow: nodeType === 'relationship'
+          ? 'none'
+          : nodeType === 'image' || nodeType === 'text'
           ? (selected ? `0 0 0 2px ${borderColor}60` : hovered ? `0 0 0 1.5px ${borderColor}40` : 'none')
           : selected
             ? `0 0 0 3px ${borderColor}40, 2px 4px 14px rgba(0,0,0,0.18)`
@@ -360,13 +367,20 @@ const CustomNode = memo(({ id, data, selected }) => {
         boxSizing: 'border-box',
         ...(isReparentSource ? { boxShadow: `0 0 0 3px #b4530980, 2px 4px 14px rgba(0,0,0,0.18)` } : {}),
         ...(isCopySizeSource ? { boxShadow: `0 0 0 3px #7c3aed80, 2px 4px 14px rgba(0,0,0,0.18)` } : {}),
-        ...(isDropTarget ? { boxShadow: `0 0 0 3px #22c55e90, 2px 4px 16px rgba(34,197,94,0.25)` } : {}),
+        ...(dropTargetState === 'valid' ? { boxShadow: `0 0 0 3px #22c55e90, 2px 4px 16px rgba(34,197,94,0.25)` } : {}),
+        ...(dropTargetState === 'invalid' ? { boxShadow: `0 0 0 3px #ef444490, 2px 4px 16px rgba(239,68,68,0.2)` } : {}),
       }}
     >
-      <Handle type="target" position={Position.Left} style={centerHandle} />
+      {!isRelationshipNode && nodeType !== 'object' && (
+        <Handle
+          type="target"
+          position={Position.Left}
+          style={centerHandle}
+        />
+      )}
 
       {nodeType !== 'text' && (
-        <ResizeHandles nodeId={id} visible={isEditMode && selected} />
+        <ResizeHandles nodeId={id} visible={isEditMode && selected && !isRelationshipNode} />
       )}
 
       {!editing && isTodo && (
@@ -483,6 +497,20 @@ const CustomNode = memo(({ id, data, selected }) => {
         </div>
       )}
 
+      {isRelationshipNode && (
+        <div
+          style={{
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            position: 'relative',
+            pointerEvents: 'none',
+          }}
+        />
+      )}
+
       {/* Sticky note body */}
       {nodeType === 'note' && (
         <div className="sticky-note-body">
@@ -538,7 +566,7 @@ const CustomNode = memo(({ id, data, selected }) => {
       )}
 
       {/* Header — title */}
-      {nodeType !== 'image' && nodeType !== 'note' && nodeType !== 'diagram' && nodeType !== 'object' && nodeType !== 'text' && (!isParent || !!title?.trim()) && (
+      {nodeType !== 'image' && nodeType !== 'note' && nodeType !== 'diagram' && nodeType !== 'object' && nodeType !== 'text' && nodeType !== 'relationship' && (!isParent || !!title?.trim()) && (
         <div
           style={{
             flex: (isParent || shouldShowContents) ? '0 0 auto' : 1,
@@ -614,7 +642,22 @@ const CustomNode = memo(({ id, data, selected }) => {
         </div>
       )}
 
-      <Handle type="source" position={Position.Right} style={centerHandle} />
+      {!isRelationshipNode && <Handle type="source" position={Position.Right} style={centerHandle} />}
+      {isRelationshipNode && (
+        <>
+          {/* Positioned to match the visual circle centers (9% + half button width 7px) */}
+          <Handle type="source" id="rel-left-source" position={Position.Left} style={{ width: 1, height: 1, background: 'transparent', border: 'none', minWidth: 'unset', minHeight: 'unset', left: 'calc(9% + 7px)', top: '50%', transform: 'translate(-50%, -50%)', pointerEvents: 'none' }} />
+          <Handle type="source" id="rel-right-source" position={Position.Right} style={{ width: 1, height: 1, background: 'transparent', border: 'none', minWidth: 'unset', minHeight: 'unset', right: 'calc(9% + 7px)', top: '50%', transform: 'translate(50%, -50%)', pointerEvents: 'none' }} />
+        </>
+      )}
+      {nodeType === 'object' && (
+        <>
+          <Handle type="target" id="obj-target-left"   position={Position.Left}   style={{ position: 'absolute', width: 1, height: 1, minWidth: 'unset', minHeight: 'unset', background: 'transparent', border: 'none', left: 0,     top: '50%', transform: 'translateY(-50%)' }} />
+          <Handle type="target" id="obj-target-right"  position={Position.Right}  style={{ position: 'absolute', width: 1, height: 1, minWidth: 'unset', minHeight: 'unset', background: 'transparent', border: 'none', right: 0,    top: '50%', transform: 'translateY(-50%)' }} />
+          <Handle type="target" id="obj-target-top"    position={Position.Top}    style={{ position: 'absolute', width: 1, height: 1, minWidth: 'unset', minHeight: 'unset', background: 'transparent', border: 'none', top: 0,      left: '50%', transform: 'translateX(-50%)' }} />
+          <Handle type="target" id="obj-target-bottom" position={Position.Bottom} style={{ position: 'absolute', width: 1, height: 1, minWidth: 'unset', minHeight: 'unset', background: 'transparent', border: 'none', bottom: 0,   left: '50%', transform: 'translateX(-50%)' }} />
+        </>
+      )}
 
       <SubmapChoiceModal
         open={showSubmapChoice}

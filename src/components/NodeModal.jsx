@@ -49,15 +49,12 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
   const titleInputRef = useRef(null)
   const headerIsTodo = isEditing ? !!draft?.isTodo : isTodo
   const effectiveDraftType = draft?.nodeType || nodeType
-  const canSave = effectiveDraftType === 'note' ? true : !!draft?.title?.trim()
+  const canSave = effectiveDraftType === 'note' || effectiveDraftType === 'relationship' ? true : !!draft?.title?.trim()
 
   const hasNotes = content && content.trim() !== ''
   const viewDescription = node.data?.description || ''
   const viewName = node.data?.name || ''
   const viewObjectType = node.data?.objectType || 'Standard'
-  const viewRelType = node.data?.relType || 'lookup'
-  const viewFromLabel = node.data?.fromLabel || ''
-  const viewToLabel = node.data?.toLabel || ''
   const requestClose = useCallback(() => {
     if (isNew && onDelete) onDelete()
     onClose()
@@ -99,7 +96,7 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
       return
     }
     const nextType = draft?.nodeType || nodeType
-    const nextTitle = nextType === 'note'
+    const nextTitle = nextType === 'note' || nextType === 'relationship'
       ? (draft?.title?.trim() || '')
       : draft.title.trim()
     if (nextType === 'submap' && (!isSubmap || isNew)) {
@@ -234,19 +231,19 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
                 </button>
               </div>
 
-              {editTab === 'details' && (
-              <div className="field">
-                <label className="field-label">
-                  {isObjectNode ? 'Label' : 'Title'}
-                </label>
-                <input
-                  ref={titleInputRef}
-                  className="field-input"
-                  value={draft.title}
-                  onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
-                  placeholder={isObjectNode ? 'Object label…' : 'Title…'}
-                />
-              </div>
+              {editTab === 'details' && !isRelationshipNode && (
+                <div className="field">
+                  <label className="field-label">
+                    {isObjectNode ? 'Label' : 'Title'}
+                  </label>
+                  <input
+                    ref={titleInputRef}
+                    className="field-input"
+                    value={draft.title}
+                    onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
+                    placeholder={isObjectNode ? 'Object label…' : 'Title…'}
+                  />
+                </div>
               )}
 
               {editTab === 'style' && level === 1 && (
@@ -397,13 +394,13 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
               ) : isRelationshipNode ? (
                 <div className="field">
                   <label className="field-label">Relationship Type</label>
-                  <div className="key-display">{viewRelType}</div>
+                  <div className="key-display">{node.data?.relType || 'lookup'}</div>
                   <label className="field-label" style={{ marginTop: 8 }}>From Label</label>
-                  <div className="key-display">{viewFromLabel || '—'}</div>
+                  <div className="key-display">{node.data?.fromLabel || '—'}</div>
                   <label className="field-label" style={{ marginTop: 8 }}>To Label</label>
-                  <div className="key-display">{viewToLabel || '—'}</div>
+                  <div className="key-display">{node.data?.toLabel || '—'}</div>
                   <label className="field-label" style={{ marginTop: 8 }}>Description</label>
-                  <div className="key-display">{viewDescription || '—'}</div>
+                  <div className="key-display">{node.data?.description || '—'}</div>
                 </div>
               ) : hasNotes && (
                 <div className="field">
