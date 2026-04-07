@@ -24,7 +24,6 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
     title,
     level,
     content,
-    longTitle = '',
     isSubmap,
     submapId,
     nodeType = 'card',
@@ -44,7 +43,7 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
   const isPlainNode = nodeType === 'card'
 
   const [isEditing, setIsEditing]         = useState(isEditMode)
-  const [draft, setDraft]                 = useState(isEditMode ? { title: title || '', longTitle: longTitle || title || '', content: content || '', isTodo: !!isTodo, nodeType, themeColor: themeColor || '', name: name || '', objectType: objectType || 'Standard', description: description || '', relType: relType || 'lookup', fromLabel: fromLabel || '', toLabel: toLabel || '', backgroundMode: backgroundMode || 'theme' } : null)
+  const [draft, setDraft]                 = useState(isEditMode ? { title: title || '', content: content || '', isTodo: !!isTodo, nodeType, themeColor: themeColor || '', name: name || '', objectType: objectType || 'Standard', description: description || '', relType: relType || 'lookup', fromLabel: fromLabel || '', toLabel: toLabel || '', backgroundMode: backgroundMode || 'theme' } : null)
   const [showConvertMenu, setShowConvertMenu] = useState(false)
   const [converting, setConverting]       = useState(false)
   const [showSubmapChoice, setShowSubmapChoice] = useState(false)
@@ -81,7 +80,7 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
   }, [isEditMode])
 
   const startEdit = () => {
-    setDraft({ title: title || '', longTitle: longTitle || title || '', content: content || '', isTodo: !!isTodo, nodeType, themeColor: themeColor || '', name: name || '', objectType: objectType || 'Standard', description: description || '', relType: relType || 'lookup', fromLabel: fromLabel || '', toLabel: toLabel || '', backgroundMode: backgroundMode || 'theme' })
+    setDraft({ title: title || '', content: content || '', isTodo: !!isTodo, nodeType, themeColor: themeColor || '', name: name || '', objectType: objectType || 'Standard', description: description || '', relType: relType || 'lookup', fromLabel: fromLabel || '', toLabel: toLabel || '', backgroundMode: backgroundMode || 'theme' })
     setEditTab('details')
     setIsEditing(true)
   }
@@ -98,7 +97,6 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
     }
     if (draft) updateNodeData(id, {
       title: draft.title.trim(),
-      longTitle: draft.longTitle?.trim() || '',
       content: draft.content,
       isTodo: !!draft.isTodo,
       nodeType: nextType,
@@ -168,7 +166,7 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
       alert('Title is required.')
       return
     }
-    if (draft) updateNodeData(id, { title: draft.title.trim(), longTitle: draft.longTitle?.trim() || '', content: draft.content, isTodo: !!draft.isTodo, ...(level === 1 ? { themeColor: draft.themeColor || '' } : {}) })
+    if (draft) updateNodeData(id, { title: draft.title.trim(), content: draft.content, isTodo: !!draft.isTodo, ...(level === 1 ? { themeColor: draft.themeColor || '' } : {}) })
     await handleConvertToSubmap()
     setShowSubmapChoice(false)
   }, [canSave, draft, handleConvertToSubmap, id, level, updateNodeData])
@@ -179,14 +177,12 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
       return
     }
     const nextTitle = draft?.title?.trim() || title?.trim() || map.name
-    const nextLongTitle = draft?.longTitle?.trim() ?? longTitle
     const nextContent = draft?.content ?? content
     const nextTodo = draft?.isTodo ?? isTodo
     const nextThemeColor = draft?.themeColor ?? themeColor
     if (nodeType === 'pointer') setEdgeType(id, 'straight-center')
     updateNodeData(id, {
       title: nextTitle,
-      longTitle: nextLongTitle || '',
       content: nextContent,
       isTodo: !!nextTodo,
       ...(level === 1 ? { themeColor: nextThemeColor || '' } : {}),
@@ -209,7 +205,7 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
         {/* Header */}
         <div className="node-modal-header">
           <div className="node-modal-header-left">
-            <span className="node-modal-header-title">{longTitle || title || 'Untitled'}</span>
+            <span className="node-modal-header-title">{title || 'Untitled'}</span>
             {headerIsTodo && <span className="node-modal-todo-chip">To Do</span>}
           </div>
           <button className="icon-btn" onClick={requestClose} aria-label="Close">✕</button>
@@ -236,35 +232,17 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
                 </button>
               </div>
 
-              {editTab === 'details' && !isObjectNode && (
-                <div className="field">
-                  <label className="field-label">Long Title <span className="field-label-hint">(shown on cards — leave blank to use short title)</span></label>
-                  <input
-                    className="field-input"
-                    value={draft.longTitle || ''}
-                    onChange={(e) => setDraft((d) => ({ ...d, longTitle: e.target.value }))}
-                    onBlur={(e) => {
-                      if (!draft.title && e.target.value) {
-                        setDraft((d) => ({ ...d, title: e.target.value }))
-                      }
-                    }}
-                    placeholder="More descriptive title for feed cards…"
-                    autoFocus
-                  />
-                </div>
-              )}
-
               {editTab === 'details' && (
               <div className="field">
                 <label className="field-label">
-                  {isObjectNode ? 'Label' : 'Short Title'} {!isObjectNode && <span className="field-label-hint">(shown on map)</span>}
+                  {isObjectNode ? 'Label' : 'Title'}
                 </label>
                 <input
                   className="field-input"
                   value={draft.title}
                   onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
-                  placeholder={isObjectNode ? 'Object label…' : 'Node title…'}
-                  autoFocus={isObjectNode}
+                  placeholder={isObjectNode ? 'Object label…' : 'Title…'}
+                  autoFocus
                 />
               </div>
               )}

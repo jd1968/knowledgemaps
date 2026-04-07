@@ -83,7 +83,6 @@ function FeedCard({ node, nodeMap, parentMap, onSave, onEditStart, onEditEnd, on
   const [editingTitle, setEditingTitle] = useState(false)
   const [editingContent, setEditingContent] = useState(false)
   const [localTitle, setLocalTitle] = useState(node.data.title)
-  const [localLongTitle, setLocalLongTitle] = useState(node.data.longTitle || '')
   const [localContent, setLocalContent] = useState(node.data.content)
   const [expanded, setExpanded] = useState(false)
   const [isClamped, setIsClamped] = useState(false)
@@ -93,8 +92,6 @@ function FeedCard({ node, nodeMap, parentMap, onSave, onEditStart, onEditEnd, on
   // Always-current value refs — avoid stale closures in registered callbacks
   const localTitleRef = useRef(localTitle)
   useEffect(() => { localTitleRef.current = localTitle }, [localTitle])
-  const localLongTitleRef = useRef(localLongTitle)
-  useEffect(() => { localLongTitleRef.current = localLongTitle }, [localLongTitle])
   const localContentRef = useRef(localContent)
   useEffect(() => { localContentRef.current = localContent }, [localContent])
 
@@ -121,17 +118,13 @@ function FeedCard({ node, nodeMap, parentMap, onSave, onEditStart, onEditEnd, on
 
   const commitTitleChanges = () => {
     const trimmedTitle = localTitleRef.current.trim() || node.data.title
-    const trimmedLongTitle = localLongTitleRef.current.trim()
     setLocalTitle(trimmedTitle)
-    setLocalLongTitle(trimmedLongTitle)
     const changes = {}
     if (trimmedTitle !== node.data.title) changes.title = trimmedTitle
-    if (trimmedLongTitle !== (node.data.longTitle || '')) changes.longTitle = trimmedLongTitle
     if (Object.keys(changes).length > 0) onSave(node, changes)
   }
 
   const startTitleEdit = () => {
-    if (!localLongTitle) setLocalLongTitle(localTitle)
     setEditingTitle(true)
     onEditStart(
       () => {  // confirm from fixed bar
@@ -145,7 +138,6 @@ function FeedCard({ node, nodeMap, parentMap, onSave, onEditStart, onEditEnd, on
         if (titleHandledRef.current) return
         titleHandledRef.current = true
         setLocalTitle(node.data.title)
-        setLocalLongTitle(node.data.longTitle || '')
         setEditingTitle(false)
         onEditEnd()
       }
@@ -164,7 +156,6 @@ function FeedCard({ node, nodeMap, parentMap, onSave, onEditStart, onEditEnd, on
     if (titleHandledRef.current) return
     titleHandledRef.current = true
     setLocalTitle(node.data.title)
-    setLocalLongTitle(node.data.longTitle || '')
     setEditingTitle(false)
     onEditEnd()
   }
@@ -243,22 +234,12 @@ function FeedCard({ node, nodeMap, parentMap, onSave, onEditStart, onEditEnd, on
             }}
           >
             <input
-              className="feed-card__title-input feed-card__title-input--long"
-              value={localLongTitle}
-              onChange={(e) => setLocalLongTitle(e.target.value)}
-              placeholder="Long title (shown on cards)…"
-              autoFocus
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') titleInputRef.current?.focus()
-                if (e.key === 'Escape') cancelTitleOnEscape()
-              }}
-            />
-            <input
               ref={titleInputRef}
               className="feed-card__title-input feed-card__title-input--short"
               value={localTitle}
               onChange={(e) => setLocalTitle(e.target.value)}
-              placeholder="Short title (shown on map)…"
+              placeholder="Title…"
+              autoFocus
               onKeyDown={(e) => {
                 if (e.key === 'Enter') e.target.blur()
                 if (e.key === 'Escape') cancelTitleOnEscape()
@@ -271,7 +252,7 @@ function FeedCard({ node, nodeMap, parentMap, onSave, onEditStart, onEditEnd, on
             onClick={startTitleEdit}
             title="Click to edit"
           >
-            {localLongTitle || localTitle}
+            {localTitle}
           </h3>
         )}
         {typeLabel && !editingTitle && (
@@ -343,35 +324,28 @@ function FeedGroupHeader({ node, cardProps }) {
   const [hovered, setHovered] = useState(false)
   const [editingTitle, setEditingTitle] = useState(false)
   const [localTitle, setLocalTitle] = useState(node.data.title)
-  const [localLongTitle, setLocalLongTitle] = useState(node.data.longTitle || '')
   const titleHandledRef = useRef(false)
-  const longTitleInputRef = useRef(null)
+  const titleInputRef = useRef(null)
 
   const localTitleRef = useRef(localTitle)
   useEffect(() => { localTitleRef.current = localTitle }, [localTitle])
-  const localLongTitleRef = useRef(localLongTitle)
-  useEffect(() => { localLongTitleRef.current = localLongTitle }, [localLongTitle])
 
   const commitTitle = () => {
     const trimmedTitle = localTitleRef.current.trim() || node.data.title
-    const trimmedLongTitle = localLongTitleRef.current.trim()
     setLocalTitle(trimmedTitle)
-    setLocalLongTitle(trimmedLongTitle)
     const changes = {}
     if (trimmedTitle !== node.data.title) changes.title = trimmedTitle
-    if (trimmedLongTitle !== (node.data.longTitle || '')) changes.longTitle = trimmedLongTitle
     if (Object.keys(changes).length > 0) onSave(node, changes)
   }
 
   const startEdit = () => {
-    if (!localLongTitle) setLocalLongTitle(localTitle)
     setEditingTitle(true)
     onEditStart(
       () => { if (titleHandledRef.current) return; titleHandledRef.current = true; setEditingTitle(false); onEditEnd(); commitTitle() },
-      () => { if (titleHandledRef.current) return; titleHandledRef.current = true; setLocalTitle(node.data.title); setLocalLongTitle(node.data.longTitle || ''); setEditingTitle(false); onEditEnd() }
+      () => { if (titleHandledRef.current) return; titleHandledRef.current = true; setLocalTitle(node.data.title); setEditingTitle(false); onEditEnd() }
     )
     // focus after render
-    setTimeout(() => longTitleInputRef.current?.focus(), 0)
+    setTimeout(() => titleInputRef.current?.focus(), 0)
   }
 
   const commitOnBlur = (e) => {
@@ -386,12 +360,9 @@ function FeedGroupHeader({ node, cardProps }) {
     if (titleHandledRef.current) return
     titleHandledRef.current = true
     setLocalTitle(node.data.title)
-    setLocalLongTitle(node.data.longTitle || '')
     setEditingTitle(false)
     onEditEnd()
   }
-
-  const displayTitle = localLongTitle || localTitle
 
   return (
     <div
@@ -409,23 +380,16 @@ function FeedGroupHeader({ node, cardProps }) {
           onBlur={commitOnBlur}
         >
           <input
-            ref={longTitleInputRef}
-            className="feed-card__title-input feed-card__title-input--long"
-            value={localLongTitle}
-            onChange={(e) => setLocalLongTitle(e.target.value)}
-            placeholder="Long title…"
-            onKeyDown={(e) => { if (e.key === 'Escape') cancelOnEscape() }}
-          />
-          <input
+            ref={titleInputRef}
             className="feed-card__title-input feed-card__title-input--short"
             value={localTitle}
             onChange={(e) => setLocalTitle(e.target.value)}
-            placeholder="Short title (shown on map)…"
+            placeholder="Title…"
             onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); if (e.key === 'Escape') cancelOnEscape() }}
           />
         </div>
       ) : (
-        <span className="feed-group-header__title">{displayTitle}</span>
+        <span className="feed-group-header__title">{localTitle}</span>
       )}
       {(hovered || editingTitle) && (
         <div className="feed-card__actions feed-group-header__actions">
@@ -700,22 +664,20 @@ export default function FeedView() {
       try {
         const [mapResult, contentsResult] = await Promise.all([
           supabase.from('maps').select('id, name, data').eq('id', currentMapId).single(),
-          supabase.from('nodes').select('id, content, long_title').eq('map_id', currentMapId),
+          supabase.from('nodes').select('id, content').eq('map_id', currentMapId),
         ])
 
         if (mapResult.error) throw mapResult.error
         if (contentsResult.error) throw contentsResult.error
 
-        const nodeDataById = new Map(
-          contentsResult.data.map((n) => [n.id, { content: n.content || '', longTitle: n.long_title || '' }])
-        )
+        const nodeDataById = new Map(contentsResult.data.map((n) => [n.id, { content: n.content || '' }]))
 
         const map = mapResult.data
         const mapNodes = map.data?.nodes || []
         const mapEdges = map.data?.edges || []
 
         const mergedNodes = mapNodes.map((node) => {
-          const { content, longTitle } = nodeDataById.get(node.id) ?? { content: '', longTitle: '' }
+          const { content } = nodeDataById.get(node.id) ?? { content: '' }
           return {
             ...node,
             _feedMapId: map.id,
@@ -723,7 +685,6 @@ export default function FeedView() {
               ...node.data,
               nodeType: node.data.isSubmap ? 'submap' : (node.data.nodeType || 'card'),
               content,
-              longTitle,
             },
           }
         })
@@ -777,7 +738,6 @@ export default function FeedView() {
     try {
       const nodeTableChanges = {}
       if (changes.content !== undefined) nodeTableChanges.content = changes.content
-      if (changes.longTitle !== undefined) nodeTableChanges.long_title = changes.longTitle
       if (Object.keys(nodeTableChanges).length > 0) {
         await supabase.from('nodes').update(nodeTableChanges).eq('id', node.id)
       }
@@ -855,18 +815,17 @@ export default function FeedView() {
         isDirty: true,
       }))
     }
-    // 3. Persist to nodes table (content + longTitle)
+    // 3. Persist to nodes table (content)
     try {
       const nodeTableChanges = {}
       if (newData.content !== node.data.content) nodeTableChanges.content = newData.content
-      if (newData.longTitle !== node.data.longTitle) nodeTableChanges.long_title = newData.longTitle
       if (Object.keys(nodeTableChanges).length > 0) {
         await supabase.from('nodes').update(nodeTableChanges).eq('id', node.id)
       }
       // 4. Persist position, style, and all data fields to map data
       const { data: map } = await supabase.from('maps').select('data').eq('id', node._feedMapId).single()
       if (map) {
-        const { content: _c, longTitle: _lt, ...mapDataFields } = newData
+        const { content: _c, ...mapDataFields } = newData
         const updatedNodes = map.data.nodes.map(n =>
           n.id === node.id
             ? { ...n, position, ...(style ? { style } : {}), data: { ...n.data, ...mapDataFields } }

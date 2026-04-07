@@ -53,7 +53,7 @@ export default function ContentsView() {
             onClick={() => setSelectedNodeIds([node.id])}
           >
             <span className="contents-view__item-title">
-              {node.data?.longTitle || node.data?.title || 'Untitled'}
+              {node.data?.title || 'Untitled'}
             </span>
             <span className="contents-view__item-actions">
               {!!(node.data?.content && node.data.content.trim() !== '') && (
