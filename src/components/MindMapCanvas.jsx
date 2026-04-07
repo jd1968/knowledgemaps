@@ -12,6 +12,7 @@ import {
   useViewport,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
+import { useNavigate } from 'react-router-dom'
 import { useMindMapStore } from '../store/useMindMapStore'
 import CustomNode from './CustomNode'
 import StraightCenterEdge from './StraightCenterEdge'
@@ -199,6 +200,11 @@ const MindMapCanvas = () => {
     isEditMode,
     openNodeModal,
     setSelectedNodeIds,
+    breadcrumbs,
+    currentMapId,
+    currentMapName,
+    isDirty,
+    saveMap,
     openMenuNodeId,
     glyphMenuNodeId,
     reparentSourceNodeId,
@@ -214,6 +220,7 @@ const MindMapCanvas = () => {
     pasteSubtreeFromClipboard,
   } = useMindMapStore()
 
+  const navigate = useNavigate()
   const [nodeContextMenu, setNodeContextMenu] = useState(null)
   const [paneContextMenu, setPaneContextMenu] = useState(null)
 
@@ -488,8 +495,14 @@ const MindMapCanvas = () => {
 
   // Plain click: only this node selected (sidebar + rings). Shift/Cmd/Ctrl = additive (multi-select).
   const onNodeClick = useCallback(
-    (event, node) => {
+    async (event, node) => {
       if (!isEditMode) {
+        if (node.data?.isSubmap && node.data?.submapId) {
+          if (isDirty && currentMapId) await saveMap()
+          const newCrumbs = [...breadcrumbs, { mapId: currentMapId, mapName: currentMapName }]
+          navigate(`/map/${node.data.submapId}`, { state: { breadcrumbs: newCrumbs } })
+          return
+        }
         openNodeModal(node.id)
         setSelectedNodeIds([node.id])
         return
@@ -497,7 +510,7 @@ const MindMapCanvas = () => {
       if (event.shiftKey || event.metaKey || event.ctrlKey) return
       setSelectedNodeIds([node.id])
     },
-    [isEditMode, openNodeModal, setSelectedNodeIds]
+    [isEditMode, openNodeModal, setSelectedNodeIds, isDirty, currentMapId, saveMap, breadcrumbs, currentMapName, navigate]
   )
 
   return (
