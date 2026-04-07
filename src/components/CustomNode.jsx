@@ -8,14 +8,6 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { markdownComponents, urlTransform } from './MarkdownEditor'
 
-const LEVEL_CONFIG = {
-  0: { width: 220, height: null, fontSize: '22px', fontWeight: '700' },
-  1: { width: 190, height: null,  fontSize: '18px', fontWeight: '600' },
-  2: { width: 150, height: null,  fontSize: '13px', fontWeight: '500' },
-  3: { width: 130, height: null,  fontSize: '12px', fontWeight: '400' },
-}
-
-const getConfig = (level) => LEVEL_CONFIG[Math.min(Math.max(level, 0), 3)]
 
 // Blend a hex colour with white at the given opacity (0–1), returning an opaque rgb()
 const blendWithWhite = (hex, alpha) => {
@@ -180,7 +172,7 @@ const CustomNode = memo(({ id, data, selected }) => {
   const menuHideTimerRef = useRef(null)
 
   const { title, level, l1Color, hasChildren, isSubmap, submapId, hasNotes, nodeType, groupSize, content, isTodo = false, iconUrl = '', imageUrl = '', imageBorder = false, textSize = 'm', showContents = false } = data
-  const cfg         = getConfig(level)
+
   const borderColor = l1Color ?? '#94a3b8'
   const TEXT_SIZES  = { s: 14, m: 22, l: 36 }
   const isParent    = !!groupSize
@@ -446,8 +438,8 @@ const CustomNode = memo(({ id, data, selected }) => {
             : `2px ${isSubmap ? 'dashed' : 'solid'} ${borderColor}`,
         ...(nodeType === 'pointer' ? { borderLeft: `3px solid ${borderColor}` } : {}),
         borderRadius: level === 0 ? '50px' : nodeType === 'note' ? '10px' :isParent ? '12px' : nodeType === 'pointer' ? '8px' : '10px',
-        fontSize: cfg.fontSize,
-        fontWeight: cfg.fontWeight,
+        fontSize: '13px',
+        fontWeight: '500',
         color: level === 0 ? '#ffffff' : '#1c1917',
         cursor: (reparentSourceNodeId || copySizeSourceNodeId) ? 'copy' : (editing ? 'text' : 'pointer'),
         boxShadow: nodeType === 'image' || nodeType === 'text'

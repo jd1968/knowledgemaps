@@ -149,7 +149,11 @@ const Toolbar = () => {
   }
 
   const commitName = () => {
-    if (tempName.trim()) setMapName(tempName.trim())
+    const name = tempName.trim()
+    if (name && name !== currentMapName) {
+      setMapName(name)
+      saveMap(name)
+    }
     setEditingName(false)
   }
 
