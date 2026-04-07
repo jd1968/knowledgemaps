@@ -17,7 +17,7 @@ const blendWithWhite = (hex, alpha) => {
   return `rgb(${Math.round(255 * (1 - alpha) + r * alpha)}, ${Math.round(255 * (1 - alpha) + g * alpha)}, ${Math.round(255 * (1 - alpha) + b * alpha)})`
 }
 
-const CONVERT_LABELS = { node: 'Node', object: 'Object', relationship: 'Relationship', pointer: 'Pointer', diagram: 'Diagram', submap: '↗ Submap' }
+const CONVERT_LABELS = { card: 'Card', object: 'Object', relationship: 'Relationship', pointer: 'Pointer', diagram: 'Diagram', submap: '↗ Submap' }
 const OBJECT_TYPE_FILLS = {
   Standard: '#f1f3f7',
   Packaged: '#e9fbff',
@@ -38,6 +38,7 @@ const HANDLES = [
 
 const MIN_W = 60
 const MIN_H = 30
+const VIEW_MODE_PASSIVE_NODE_TYPES = new Set(['card', 'image', 'note', 'text'])
 
 function ResizeHandles({ nodeId, visible }) {
   const { getNode, setNodes } = useReactFlow()
@@ -383,6 +384,10 @@ const CustomNode = memo(({ id, data, selected }) => {
       onMouseLeave={hideActionMenuWithDelay}
 
       onClick={(e) => {
+        if (!isEditMode && VIEW_MODE_PASSIVE_NODE_TYPES.has(nodeType)) {
+          e.stopPropagation()
+          return
+        }
         if (copySizeSourceNodeId) {
           e.stopPropagation()
           if (id === copySizeSourceNodeId) {
@@ -429,7 +434,7 @@ const CustomNode = memo(({ id, data, selected }) => {
             ? '#f8fafc'
           : nodeType === 'pointer'
             ? blendWithWhite(borderColor, 0.05)
-          : nodeType === 'node' && backgroundMode === 'canvas'
+          : nodeType === 'card' && backgroundMode === 'canvas'
             ? '#ffffff'
           : isSubmap || !isParent
             ? '#ffffff'
@@ -815,7 +820,7 @@ const CustomNode = memo(({ id, data, selected }) => {
               style={{ background: borderColor }}
               onClick={(e) => {
                 e.stopPropagation()
-                const newId = addChildNode(id, 'node')
+                const newId = addChildNode(id, 'card')
                 if (newId) openNodeModal(newId)
               }}
             >
@@ -907,7 +912,7 @@ const CustomNode = memo(({ id, data, selected }) => {
       {showConvertMenu && (
         <div className="node-convert-menu nodrag nopan" onPointerDown={(e) => e.stopPropagation()}>
           <span className="node-convert-menu-label">Convert to</span>
-          {['node', 'object', 'relationship', 'pointer', 'diagram', 'submap'].map((t) => (
+          {['card', 'object', 'relationship', 'pointer', 'diagram', 'submap'].map((t) => (
             <button
               key={t}
               className="node-convert-menu-item"

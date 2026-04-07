@@ -6,6 +6,11 @@ import { GRID_SIZE, NEST_PAD_LEFT, NEST_PAD_TOP, NEST_V_SPACING, snapPoint, snap
 import { buildSubtreePayload, parseSubtreePayload, remapSubtreeForPaste } from '../lib/subtreeClipboard'
 
 const HISTORY_LIMIT = 50
+const normalizeNodeType = (nodeType, isSubmap = false) => {
+  if (isSubmap) return 'submap'
+  if (!nodeType) return 'card'
+  return nodeType
+}
 const DEFAULT_NODE_SIZE_BY_LEVEL = {
   0: { width: 200, height: 200 },
   1: { width: 190, height: 50 },
@@ -104,7 +109,7 @@ const initialNodes = [
       title: 'Central Topic',
       key: ROOT_ID,
       level: 0,
-      nodeType: 'node',
+      nodeType: 'card',
       content: '',
     },
   },
@@ -252,7 +257,7 @@ export const useMindMapStore = create((set, get) => ({
 
   // ── Node CRUD ─────────────────────────────────────────────────
 
-  addNode: ({ position, level = 1, title = '', nodeType = 'node' }) => {
+  addNode: ({ position, level = 1, title = '', nodeType = 'card' }) => {
     if (!get().isEditMode) return null
     get().pushHistory()
     const id = uuidv4()
@@ -611,7 +616,7 @@ export const useMindMapStore = create((set, get) => ({
         selected: false,
         data: {
           ...n.data,
-          nodeType: n.data.nodeType ?? (n.data.isSubmap ? 'submap' : 'node'),
+          nodeType: normalizeNodeType(n.data.nodeType, !!n.data.isSubmap),
           content: '',
         },
       }))
@@ -829,7 +834,7 @@ export const useMindMapStore = create((set, get) => ({
 
   // ── Add child node ────────────────────────────────────────────
 
-  addChildNode: (parentId, nodeType = 'node') => {
+  addChildNode: (parentId, nodeType = 'card') => {
     if (!get().isEditMode) return
     const { nodes, edges } = get()
     const parent = nodes.find((n) => n.id === parentId)

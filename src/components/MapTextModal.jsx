@@ -35,8 +35,8 @@ function buildMarkdown(nodes, edges, mapName) {
     }
 
     const title = node.data?.title || 'Untitled'
-    const nodeType = (node.data?.nodeType === 'folder' ? 'node' : node.data?.nodeType) || 'node'
-    const typeSuffix = nodeType !== 'node' ? ` *(${nodeType})*` : ''
+    const nodeType = node.data?.nodeType || 'card'
+    const typeSuffix = nodeType !== 'card' ? ` *(${nodeType})*` : ''
 
     const headingLevel = Math.min(depth + 1, 6)
     lines.push(`${'#'.repeat(headingLevel)} ${title}${typeSuffix}`)

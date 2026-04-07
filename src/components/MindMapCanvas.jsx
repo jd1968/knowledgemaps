@@ -46,6 +46,7 @@ const getStableNodeSize = (node) => {
 
 const LEVEL_ZOOM = { 0: 0.7, 1: 1.0, 2: 1.3, 3: 1.6 }
 const zoomForLevel = (level) => LEVEL_ZOOM[Math.min(level ?? 2, 3)] ?? 1.6
+const VIEW_MODE_PASSIVE_NODE_TYPES = new Set(['card', 'image', 'note', 'text'])
 
 // Watches focusNodeId and flies the viewport to that node at a level-appropriate zoom
 const FocusNodeHandler = () => {
@@ -503,8 +504,9 @@ const MindMapCanvas = () => {
           navigate(`/map/${node.data.submapId}`, { state: { breadcrumbs: newCrumbs } })
           return
         }
-        openNodeModal(node.id)
         setSelectedNodeIds([node.id])
+        if (VIEW_MODE_PASSIVE_NODE_TYPES.has(node.data?.nodeType)) return
+        openNodeModal(node.id)
         return
       }
       if (event.shiftKey || event.metaKey || event.ctrlKey) return

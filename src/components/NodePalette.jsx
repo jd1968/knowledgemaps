@@ -54,7 +54,7 @@ const RelationshipIcon = () => (
 )
 
 const ITEMS = [
-  { type: 'node',  label: 'Node',  Icon: NodeIcon },
+  { type: 'card',  label: 'Card',  Icon: NodeIcon },
   { type: 'object', label: 'Object', Icon: ObjectIcon },
   { type: 'relationship', label: 'Relationship', Icon: RelationshipIcon },
   { type: 'diagram', label: 'Diagram', Icon: DiagramIcon },

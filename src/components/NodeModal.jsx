@@ -5,8 +5,8 @@ import MarkdownEditor from './MarkdownEditor'
 import SubmapChoiceModal from './SubmapChoiceModal'
 import { STANDARD_THEME_COLORS } from '../lib/themePalette'
 
-const TYPE_LABELS = { node: 'Node', object: 'Object', relationship: 'Relationship', pointer: 'Pointer', diagram: 'Diagram', submap: 'Submap' }
-const CREATE_TYPE_OPTIONS = ['node', 'object', 'relationship', 'pointer', 'diagram', 'submap']
+const TYPE_LABELS = { card: 'Card', object: 'Object', relationship: 'Relationship', pointer: 'Pointer', diagram: 'Diagram', submap: 'Submap' }
+const CREATE_TYPE_OPTIONS = ['card', 'object', 'relationship', 'pointer', 'diagram', 'submap']
 
 const isTouch = typeof window !== 'undefined' && window.matchMedia('(hover: none) and (pointer: coarse)').matches
 
@@ -27,7 +27,7 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
     longTitle = '',
     isSubmap,
     submapId,
-    nodeType = 'node',
+    nodeType = 'card',
     hasChildren,
     isTodo = false,
     showContents = false,
@@ -42,7 +42,7 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
   } = node.data
   const isObjectNode = nodeType === 'object'
   const isRelationshipNode = nodeType === 'relationship'
-  const isPlainNode = nodeType === 'node'
+  const isPlainNode = nodeType === 'card'
 
   const [isEditing, setIsEditing]         = useState(isEditMode)
   const [draft, setDraft]                 = useState(isEditMode ? { title: title || '', longTitle: longTitle || title || '', content: content || '', isTodo: !!isTodo, nodeType, showContents: !!showContents, themeColor: themeColor || '', name: name || '', objectType: objectType || 'Standard', description: description || '', relType: relType || 'lookup', fromLabel: fromLabel || '', toLabel: toLabel || '', backgroundMode: backgroundMode || 'theme' } : null)
@@ -116,7 +116,7 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
         toLabel: draft.toLabel || '',
         description: draft.description || '',
       } : {}),
-      ...(nextType === 'node' ? {
+      ...(nextType === 'card' ? {
         backgroundMode: draft.backgroundMode || 'theme',
       } : {}),
     })
@@ -482,7 +482,7 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
             showConvertMenu ? (
               <>
                 <span className="node-modal-convert-label">Convert to:</span>
-                {['node', 'object', 'relationship', 'pointer', 'diagram', 'submap'].map((t) => (
+                {['card', 'object', 'relationship', 'pointer', 'diagram', 'submap'].map((t) => (
                   <button
                     key={t}
                     className={`btn btn--sm${nodeType === t ? ' btn--disabled' : ' btn--secondary'}`}

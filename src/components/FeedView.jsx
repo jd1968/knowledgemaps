@@ -49,10 +49,10 @@ function buildRenderTree(orderedItems) {
     const hasChildren = i + 1 < orderedItems.length && orderedItems[i + 1].depth > depth
     while (stack.length > 1 && depth <= stack[stack.length - 1].depth) stack.pop()
     const parent = stack[stack.length - 1].container
-    const nt = node.data.nodeType === 'folder' ? 'node' : node.data.nodeType
-    if (hasChildren && (nt === 'group' || nt === 'node')) {
+    const nt = node.data.nodeType || 'card'
+    if (hasChildren && nt === 'card') {
       const showSelfCard = node.data.level === 1 || node.data.content?.trim()
-      const groupItem = { type: 'group', node, depth, children: showSelfCard ? [{ type: 'card', node }] : [] }
+      const groupItem = { type: 'section', node, depth, children: showSelfCard ? [{ type: 'card', node }] : [] }
       parent.children.push(groupItem)
       stack.push({ container: groupItem, depth })
     } else {
@@ -209,8 +209,8 @@ function FeedCard({ node, nodeMap, parentMap, onSave, onEditStart, onEditEnd, on
   }
 
   const crumbs = getAncestorCrumbs(node.id, nodeMap, parentMap)
-  const rawType = node.data.nodeType === 'folder' ? 'node' : node.data.nodeType
-  const typeLabel = rawType !== 'node' ? rawType : null
+  const normalizedType = node.data.nodeType || 'card'
+  const typeLabel = normalizedType !== 'card' ? normalizedType : null
   const showBreadcrumbs = import.meta.env.FEED_SHOW_BREADCRUMBS !== 'false'
 
   return (
@@ -444,7 +444,7 @@ function FeedGroupHeader({ node, cardProps }) {
 
 // Fields computed/injected by the canvas — shown read-only
 const COMPUTED_DATA_FIELDS = new Set(['l1Color','hasChildren','hasNotes','allDescendantsCollapsed','hasCollapsibleDescendants','key'])
-const NODE_TYPES = ['node','group','note','image','text','pointer','submap','folder']
+const NODE_TYPES = ['card','note','image','text','pointer','submap','object','relationship','diagram']
 const TEXT_SIZES = ['s','m','l']
 
 function NodePropertiesDialog({ node, allNodes, allEdges, onClose, onSaveProps }) {
@@ -483,7 +483,6 @@ function NodePropertiesDialog({ node, allNodes, allEdges, onClose, onSaveProps }
   if (data?.level === 0) diagnostics.push({ type: 'info', msg: 'Root node — hidden on canvas (level 0)' })
   if (CANVAS_ONLY_TYPES.has(nt)) diagnostics.push({ type: 'warn', msg: `Type "${nt}" is canvas-only — excluded from feed, contents and text views` })
   if (data?.level === 1 && !parentEdge) diagnostics.push({ type: 'warn', msg: 'No parent edge — placed via toolbox without connection to root (shows on canvas via level attribute)' })
-  if (nt === 'folder') diagnostics.push({ type: 'warn', msg: "Legacy type 'folder' — treated as 'node'" })
   if (data?.isSubmap) diagnostics.push({ type: 'info', msg: 'Submap node — clicking opens a linked map' })
   if (!data?.title?.trim()) diagnostics.push({ type: 'warn', msg: 'No title set' })
   if (diagnostics.length === 0) diagnostics.push({ type: 'ok', msg: 'No display issues detected' })
@@ -650,7 +649,7 @@ function FeedSection({ items, paletteIndex = 0, cardProps }) {
     if (item.type === 'card') {
       return <FeedCard key={item.node.id} node={item.node} {...cardProps} />
     }
-    // group
+    // section
     return (
       <div key={item.node.id} className="feed-group-section">
         <FeedGroupHeader node={item.node} cardProps={cardProps} />
@@ -722,7 +721,7 @@ export default function FeedView() {
             _feedMapId: map.id,
             data: {
               ...node.data,
-              nodeType: node.data.nodeType ?? (node.data.isSubmap ? 'submap' : 'node'),
+              nodeType: node.data.isSubmap ? 'submap' : (node.data.nodeType || 'card'),
               content,
               longTitle,
             },

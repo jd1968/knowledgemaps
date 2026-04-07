@@ -59,7 +59,7 @@ export default function ContentsView() {
               {!!(node.data?.content && node.data.content.trim() !== '') && (
                 <span className="contents-view__item-notes" title="Has notes" aria-label="Has notes">≡</span>
               )}
-              {node.data?.nodeType && node.data.nodeType !== 'node' && node.data.nodeType !== 'folder' && (
+              {node.data?.nodeType && node.data.nodeType !== 'card' && (
                 <span className="contents-view__item-type">{node.data.nodeType}</span>
               )}
               <span
