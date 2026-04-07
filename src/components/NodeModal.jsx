@@ -48,7 +48,8 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
   const [showSubmapChoice, setShowSubmapChoice] = useState(false)
   const [editTab, setEditTab]             = useState('details')
   const headerIsTodo = isEditing ? !!draft?.isTodo : isTodo
-  const canSave = !!draft?.title?.trim()
+  const effectiveDraftType = draft?.nodeType || nodeType
+  const canSave = effectiveDraftType === 'note' ? true : !!draft?.title?.trim()
 
   const hasNotes = content && content.trim() !== ''
   const viewDescription = node.data?.description || ''
@@ -86,16 +87,19 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
 
   const saveEdit = () => {
     if (!canSave) {
-      alert('Title is required.')
+      alert('Title is required for this node type.')
       return
     }
     const nextType = draft?.nodeType || nodeType
+    const nextTitle = nextType === 'note'
+      ? (draft?.title?.trim() || '')
+      : draft.title.trim()
     if (nextType === 'submap' && (!isSubmap || isNew)) {
       setShowSubmapChoice(true)
       return
     }
     if (draft) updateNodeData(id, {
-      title: draft.title.trim(),
+      title: nextTitle,
       content: draft.content,
       isTodo: !!draft.isTodo,
       nodeType: nextType,
@@ -154,7 +158,7 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
 
   const handleCreateNewSubmap = useCallback(async () => {
     if (!canSave) {
-      alert('Title is required.')
+      alert('Title is required for this node type.')
       return
     }
     if (draft) updateNodeData(id, { title: draft.title.trim(), content: draft.content, isTodo: !!draft.isTodo, ...(level === 1 ? { themeColor: draft.themeColor || '' } : {}) })

@@ -15,7 +15,8 @@ No test framework is configured.
 
 ## Architecture
 
-**Knowledge Maps** is a React SPA for creating visual mind maps with hierarchical nodes, rich markdown notes, and nested submaps.
+**Knowledge 
+** is a React SPA for creating visual mind maps with hierarchical nodes, rich markdown notes, and nested submaps.
 
 ### Stack
 - **Frontend:** React 18 + Vite, state via Zustand, visual canvas via `@xyflow/react`
