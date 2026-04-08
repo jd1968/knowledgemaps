@@ -1200,11 +1200,17 @@ const MindMapCanvas = () => {
         { x: e.clientX, y: e.clientY },
         { snapToGrid: true, snapGrid: GRID }
       )
-      const created = addNode({ position, level: 1, nodeType: 'relationship' })
+      let createdId = null
+      if (parentId && nodes.some((n) => n.id === parentId)) {
+        createdId = addChildNode(parentId, 'relationship', { position })
+      } else {
+        const created = addNode({ position, level: 1, nodeType: 'relationship' })
+        createdId = created?.id || null
+      }
       clearPendingToolboxType()
       setDragDropTargetNodeId(null)
       setDragDropNodeType(null)
-      if (created?.id) openNodeModal(created.id)
+      if (createdId) openNodeModal(createdId)
       return
     }
 
@@ -1253,13 +1259,12 @@ const MindMapCanvas = () => {
     [isEditMode, openNodeModal, setSelectedNodeIds, isDirty, currentMapId, saveMap, breadcrumbs, currentMapName, navigate]
   )
 
-  const containerRect = containerRef.current?.getBoundingClientRect()
-  const overlayTransform = `translate(${(containerRect?.left ?? 0) + viewport.x} ${(containerRect?.top ?? 0) + viewport.y}) scale(${viewport.zoom})`
+  const overlayTransform = `translate(${viewport.x} ${viewport.y}) scale(${viewport.zoom})`
 
   return (
     <div
       ref={containerRef}
-      style={{ width: '100%', height: '100%', cursor: pendingToolboxType ? 'crosshair' : undefined }}
+      style={{ width: '100%', height: '100%', position: 'relative', cursor: pendingToolboxType ? 'crosshair' : undefined }}
     >
       {isEditMode && nodeContextMenu && (
         <div
@@ -1466,6 +1471,18 @@ const MindMapCanvas = () => {
             type="button"
             className="map-context-menu__item"
             onClick={() => {
+              const relId = relationshipContextMenu.id
+              setRelationshipContextMenu(null)
+              if (reparentSourceNodeId === relId) clearReparentMode()
+              else setReparentSourceNodeId(relId)
+            }}
+          >
+            {reparentSourceNodeId === relationshipContextMenu.id ? 'Cancel reparent' : 'Reparent node'}
+          </button>
+          <button
+            type="button"
+            className="map-context-menu__item"
+            onClick={() => {
               deleteNode(relationshipContextMenu.id)
               setRelationshipContextMenu(null)
               setSelectedRelationshipId(null)
@@ -1524,16 +1541,6 @@ const MindMapCanvas = () => {
           setHoveredRelationshipEnd(null)
           setRelationshipLabelDrag(null)
           if (pendingToolboxType && isEditMode) {
-            if (pendingToolboxType === 'relationship') {
-              const position = screenToFlowPosition(
-                { x: event.clientX, y: event.clientY },
-                { snapToGrid: true, snapGrid: GRID }
-              )
-              const created = addNode({ position, level: 1, nodeType: 'relationship' })
-              clearPendingToolboxType()
-              if (created?.id) openNodeModal(created.id)
-              return
-            }
             const newId = addChildNode(node.id, pendingToolboxType)
             clearPendingToolboxType()
             if (newId) openNodeModal(newId)
@@ -1613,44 +1620,43 @@ const MindMapCanvas = () => {
           </div>
         </Panel>
         {relationshipSegments.length > 0 && (
-          <Panel position="top-left">
-            <div style={{ position: 'fixed', inset: 0, zIndex: 9999, pointerEvents: 'none' }}>
-              <svg width="100%" height="100%">
-                <defs>
-                  <marker id="km-md-start" markerUnits="userSpaceOnUse" viewBox="-5 0 25 20" markerWidth="25" markerHeight="20" refX="0" refY="10" orient="auto">
-                    <path d="M 7 4 L 7 16 M 12 4 L 12 16" fill="none" stroke="#e53935" strokeWidth="2" strokeLinecap="round" />
-                  </marker>
-                  <marker id="km-md-start-sel" markerUnits="userSpaceOnUse" viewBox="-5 0 25 20" markerWidth="25" markerHeight="20" refX="0" refY="10" orient="auto">
-                    <path d="M 7 4 L 7 16 M 12 4 L 12 16" fill="none" stroke="#c62828" strokeWidth="2.5" strokeLinecap="round" />
-                  </marker>
-                  <marker id="km-md-end" markerUnits="userSpaceOnUse" viewBox="0 0 25 20" markerWidth="25" markerHeight="20" refX="20" refY="10" orient="auto">
-                    <circle cx="6" cy="10" r="5" fill="#fff" stroke="#e53935" strokeWidth="2" />
-                    <path d="M 12 10 L 20 4 M 12 10 L 20 16" fill="none" stroke="#e53935" strokeWidth="2" strokeLinecap="round" />
-                  </marker>
-                  <marker id="km-md-end-sel" markerUnits="userSpaceOnUse" viewBox="0 0 25 20" markerWidth="25" markerHeight="20" refX="20" refY="10" orient="auto">
-                    <circle cx="6" cy="10" r="5" fill="#fff" stroke="#c62828" strokeWidth="2.5" />
-                    <path d="M 12 10 L 20 4 M 12 10 L 20 16" fill="none" stroke="#c62828" strokeWidth="2.5" strokeLinecap="round" />
-                  </marker>
-                  <marker id="km-lookup-start" markerUnits="userSpaceOnUse" viewBox="-5 0 25 20" markerWidth="25" markerHeight="20" refX="0" refY="10" orient="auto">
-                    <path d="M 5 4 L 5 16" fill="none" stroke="#5b8dee" strokeWidth="2" strokeLinecap="round" />
-                    <circle cx="14" cy="10" r="5" fill="#fff" stroke="#5b8dee" strokeWidth="2" />
-                  </marker>
-                  <marker id="km-lookup-start-sel" markerUnits="userSpaceOnUse" viewBox="-5 0 25 20" markerWidth="25" markerHeight="20" refX="0" refY="10" orient="auto">
-                    <path d="M 5 4 L 5 16" fill="none" stroke="#3a6fd8" strokeWidth="2.5" strokeLinecap="round" />
-                    <circle cx="14" cy="10" r="5" fill="#fff" stroke="#3a6fd8" strokeWidth="2.5" />
-                  </marker>
-                  <marker id="km-lookup-end" markerUnits="userSpaceOnUse" viewBox="0 0 25 20" markerWidth="25" markerHeight="20" refX="20" refY="10" orient="auto">
-                    <circle cx="6" cy="10" r="5" fill="#fff" stroke="#5b8dee" strokeWidth="2" />
-                    <path d="M 12 10 L 20 4 M 12 10 L 20 16" fill="none" stroke="#5b8dee" strokeWidth="2" strokeLinecap="round" />
-                  </marker>
-                  <marker id="km-lookup-end-sel" markerUnits="userSpaceOnUse" viewBox="0 0 25 20" markerWidth="25" markerHeight="20" refX="20" refY="10" orient="auto">
-                    <circle cx="6" cy="10" r="5" fill="#fff" stroke="#3a6fd8" strokeWidth="2.5" />
-                    <path d="M 12 10 L 20 4 M 12 10 L 20 16" fill="none" stroke="#3a6fd8" strokeWidth="2.5" strokeLinecap="round" />
-                  </marker>
-                </defs>
-                <g transform={overlayTransform}>
-                  {relationshipSegments.map((seg) => (
-                    <g key={seg.id}>
+          <div style={{ position: 'absolute', inset: 0, zIndex: 9999, pointerEvents: 'none' }}>
+            <svg width="100%" height="100%">
+              <defs>
+                <marker id="km-md-start" markerUnits="userSpaceOnUse" viewBox="-5 0 25 20" markerWidth="25" markerHeight="20" refX="0" refY="10" orient="auto">
+                  <path d="M 7 4 L 7 16 M 12 4 L 12 16" fill="none" stroke="#e53935" strokeWidth="2" strokeLinecap="round" />
+                </marker>
+                <marker id="km-md-start-sel" markerUnits="userSpaceOnUse" viewBox="-5 0 25 20" markerWidth="25" markerHeight="20" refX="0" refY="10" orient="auto">
+                  <path d="M 7 4 L 7 16 M 12 4 L 12 16" fill="none" stroke="#c62828" strokeWidth="2.5" strokeLinecap="round" />
+                </marker>
+                <marker id="km-md-end" markerUnits="userSpaceOnUse" viewBox="0 0 25 20" markerWidth="25" markerHeight="20" refX="20" refY="10" orient="auto">
+                  <circle cx="6" cy="10" r="5" fill="#fff" stroke="#e53935" strokeWidth="2" />
+                  <path d="M 12 10 L 20 4 M 12 10 L 20 16" fill="none" stroke="#e53935" strokeWidth="2" strokeLinecap="round" />
+                </marker>
+                <marker id="km-md-end-sel" markerUnits="userSpaceOnUse" viewBox="0 0 25 20" markerWidth="25" markerHeight="20" refX="20" refY="10" orient="auto">
+                  <circle cx="6" cy="10" r="5" fill="#fff" stroke="#c62828" strokeWidth="2.5" />
+                  <path d="M 12 10 L 20 4 M 12 10 L 20 16" fill="none" stroke="#c62828" strokeWidth="2.5" strokeLinecap="round" />
+                </marker>
+                <marker id="km-lookup-start" markerUnits="userSpaceOnUse" viewBox="-5 0 25 20" markerWidth="25" markerHeight="20" refX="0" refY="10" orient="auto">
+                  <path d="M 5 4 L 5 16" fill="none" stroke="#5b8dee" strokeWidth="2" strokeLinecap="round" />
+                  <circle cx="14" cy="10" r="5" fill="#fff" stroke="#5b8dee" strokeWidth="2" />
+                </marker>
+                <marker id="km-lookup-start-sel" markerUnits="userSpaceOnUse" viewBox="-5 0 25 20" markerWidth="25" markerHeight="20" refX="0" refY="10" orient="auto">
+                  <path d="M 5 4 L 5 16" fill="none" stroke="#3a6fd8" strokeWidth="2.5" strokeLinecap="round" />
+                  <circle cx="14" cy="10" r="5" fill="#fff" stroke="#3a6fd8" strokeWidth="2.5" />
+                </marker>
+                <marker id="km-lookup-end" markerUnits="userSpaceOnUse" viewBox="0 0 25 20" markerWidth="25" markerHeight="20" refX="20" refY="10" orient="auto">
+                  <circle cx="6" cy="10" r="5" fill="#fff" stroke="#5b8dee" strokeWidth="2" />
+                  <path d="M 12 10 L 20 4 M 12 10 L 20 16" fill="none" stroke="#5b8dee" strokeWidth="2" strokeLinecap="round" />
+                </marker>
+                <marker id="km-lookup-end-sel" markerUnits="userSpaceOnUse" viewBox="0 0 25 20" markerWidth="25" markerHeight="20" refX="20" refY="10" orient="auto">
+                  <circle cx="6" cy="10" r="5" fill="#fff" stroke="#3a6fd8" strokeWidth="2.5" />
+                  <path d="M 12 10 L 20 4 M 12 10 L 20 16" fill="none" stroke="#3a6fd8" strokeWidth="2.5" strokeLinecap="round" />
+                </marker>
+              </defs>
+              <g transform={overlayTransform}>
+                {relationshipSegments.map((seg) => (
+                  <g key={seg.id}>
                       <path
                         d={seg.pathD}
                         stroke="transparent"
@@ -2015,23 +2021,22 @@ const MindMapCanvas = () => {
                           />
                         </>
                       )}
-                    </g>
-                  ))}
-                  {relationshipSnapPreview && (
-                    <circle
-                      cx={relationshipSnapPreview.x}
-                      cy={relationshipSnapPreview.y}
-                      r={6}
-                      fill="#ffffff"
-                      stroke="#3a6fd8"
-                      strokeWidth={2.5}
-                      pointerEvents="none"
-                    />
-                  )}
-                </g>
-              </svg>
-            </div>
-          </Panel>
+                  </g>
+                ))}
+                {relationshipSnapPreview && (
+                  <circle
+                    cx={relationshipSnapPreview.x}
+                    cy={relationshipSnapPreview.y}
+                    r={6}
+                    fill="#ffffff"
+                    stroke="#3a6fd8"
+                    strokeWidth={2.5}
+                    pointerEvents="none"
+                  />
+                )}
+              </g>
+            </svg>
+          </div>
         )}
         <FitViewOnLoad />
         <FocusNodeHandler />

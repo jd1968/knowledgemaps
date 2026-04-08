@@ -190,10 +190,13 @@ const CustomNode = memo(({ id, data, selected }) => {
   const [showSubmapChoice, setShowSubmapChoice] = useState(false)
   const inputRef       = useRef(null)
   const nodeRef        = useRef(null)
+  const contentPreviewRef = useRef(null)
+  const [isContentOverflowing, setIsContentOverflowing] = useState(false)
 
   const { title, level, l1Color, hasChildren, hasNotes, isSubmap, submapId, nodeType, groupSize, content, objectType = 'Standard', backgroundMode = 'theme', isTodo = false, iconUrl = '', imageUrl = '', imageBorder = false, textSize = 'm', diagramSnapshot = '', dropTargetState = null } = data
   const isRelationshipNode = nodeType === 'relationship'
   const shouldShowContents = !!content?.trim() && nodeType !== 'image' && nodeType !== 'note' && nodeType !== 'diagram' && nodeType !== 'text' && nodeType !== 'relationship' && nodeType !== 'or'
+  const shouldTruncateContents = nodeType === 'card' && shouldShowContents
 
   const borderColor = l1Color ?? '#94a3b8'
   const TEXT_SIZES  = { s: 14, m: 22, l: 36 }
@@ -229,6 +232,42 @@ const CustomNode = memo(({ id, data, selected }) => {
       inputRef.current.select()
     }
   }, [editing])
+
+  useEffect(() => {
+    if (!shouldTruncateContents || editing) {
+      setIsContentOverflowing(false)
+      return undefined
+    }
+    const el = contentPreviewRef.current
+    if (!el) return undefined
+
+    let frameId = null
+    const measureOverflow = () => {
+      if (frameId) cancelAnimationFrame(frameId)
+      frameId = requestAnimationFrame(() => {
+        const overflow = (el.scrollHeight - el.clientHeight) > 1
+        setIsContentOverflowing(overflow)
+      })
+    }
+
+    measureOverflow()
+
+    const ro = typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(() => measureOverflow())
+      : null
+    if (ro) ro.observe(el)
+    window.addEventListener('resize', measureOverflow)
+
+    const images = Array.from(el.querySelectorAll('img'))
+    images.forEach((img) => img.addEventListener('load', measureOverflow))
+
+    return () => {
+      if (frameId) cancelAnimationFrame(frameId)
+      if (ro) ro.disconnect()
+      window.removeEventListener('resize', measureOverflow)
+      images.forEach((img) => img.removeEventListener('load', measureOverflow))
+    }
+  }, [shouldTruncateContents, editing, content, groupSize?.width, groupSize?.height])
 
   const handleDelete = useCallback(() => {
     if (!confirm(`Delete "${title || 'Untitled'}"?`)) return
@@ -708,9 +747,33 @@ const CustomNode = memo(({ id, data, selected }) => {
       )}
 
       {shouldShowContents && !editing && (
-        <div className="node-contents-body node-contents-markdown">
-          <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents} urlTransform={urlTransform}>{content}</ReactMarkdown>
-        </div>
+        shouldTruncateContents ? (
+          <div className="node-contents-wrap">
+            <div
+              ref={contentPreviewRef}
+              className={`node-contents-body node-contents-markdown node-contents-body--preview${isContentOverflowing ? ' node-contents-body--truncated' : ''}`}
+            >
+              <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents} urlTransform={urlTransform}>{content}</ReactMarkdown>
+            </div>
+            {isContentOverflowing && (
+              <button
+                type="button"
+                className="node-contents-show-more nodrag nopan"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  openNodeModal(id)
+                }}
+              >
+                Show more...
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="node-contents-body node-contents-markdown">
+            <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents} urlTransform={urlTransform}>{content}</ReactMarkdown>
+          </div>
+        )
       )}
 
       {!isRelationshipNode && <Handle type="source" position={Position.Right} style={centerHandle} />}

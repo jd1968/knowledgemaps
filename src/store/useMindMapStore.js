@@ -77,6 +77,28 @@ const resolveNodePixelSize = (node) => {
   return snapSize(getDefaultSizeForNode(node), { gridSize: GRID_SIZE })
 }
 
+const shiftPoint = (point, dx, dy) => {
+  if (!point || typeof point.x !== 'number' || typeof point.y !== 'number') return point
+  return { x: point.x + dx, y: point.y + dy }
+}
+
+const shiftRelationshipNodeData = (nodeData, dx, dy) => {
+  if (nodeData?.nodeType !== 'relationship') return nodeData
+  const free = nodeData.relationshipFreeEnds || {}
+  const shiftedFree = {}
+  if (free.left) shiftedFree.left = shiftPoint(free.left, dx, dy)
+  if (free.right) shiftedFree.right = shiftPoint(free.right, dx, dy)
+  const hasShiftedFree = Object.keys(shiftedFree).length > 0
+  const waypoints = Array.isArray(nodeData.elbowWaypoints)
+    ? nodeData.elbowWaypoints.map((p) => shiftPoint(p, dx, dy))
+    : nodeData.elbowWaypoints
+  return {
+    ...nodeData,
+    ...(hasShiftedFree ? { relationshipFreeEnds: shiftedFree } : {}),
+    ...(Array.isArray(waypoints) ? { elbowWaypoints: waypoints } : {}),
+  }
+}
+
 const applySelectionChanges = (changes, nodes) => applyNodeChanges(
   changes.filter((c) => c.type === 'select'),
   nodes
@@ -1380,6 +1402,7 @@ export const useMindMapStore = create((set, get) => ({
           ? {
               ...n,
               position: { x: n.position.x + dx, y: n.position.y + dy },
+              data: shiftRelationshipNodeData(n.data, dx, dy),
             }
           : n
       ),
@@ -1403,11 +1426,18 @@ export const useMindMapStore = create((set, get) => ({
       })
     }
     set((state) => ({
-      nodes: state.nodes.map((n) => (
-        ids.has(n.id)
-          ? { ...n, position: snapPoint(n.position) }
-          : n
-      )),
+      nodes: state.nodes.map((n) => {
+        if (!ids.has(n.id)) return n
+        const snappedPosition = snapPoint(n.position)
+        const dx = snappedPosition.x - n.position.x
+        const dy = snappedPosition.y - n.position.y
+        if (!dx && !dy) return n
+        return {
+          ...n,
+          position: snappedPosition,
+          data: shiftRelationshipNodeData(n.data, dx, dy),
+        }
+      }),
       isDirty: true,
     }))
     get().scheduleAutosave()
