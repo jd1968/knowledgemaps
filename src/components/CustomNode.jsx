@@ -183,7 +183,7 @@ const CustomNode = memo(({ id, data, selected }) => {
 
   const { title, level, l1Color, hasChildren, hasNotes, isSubmap, submapId, nodeType, groupSize, content, objectType = 'Standard', backgroundMode = 'theme', isTodo = false, iconUrl = '', imageUrl = '', imageBorder = false, textSize = 'm', diagramSnapshot = '', dropTargetState = null } = data
   const isRelationshipNode = nodeType === 'relationship'
-  const shouldShowContents = !!content?.trim() && nodeType !== 'image' && nodeType !== 'note' && nodeType !== 'diagram' && nodeType !== 'text' && nodeType !== 'relationship'
+  const shouldShowContents = !!content?.trim() && nodeType !== 'image' && nodeType !== 'note' && nodeType !== 'diagram' && nodeType !== 'text' && nodeType !== 'relationship' && nodeType !== 'or'
 
   const borderColor = l1Color ?? '#94a3b8'
   const TEXT_SIZES  = { s: 14, m: 22, l: 36 }
@@ -332,6 +332,8 @@ const CustomNode = memo(({ id, data, selected }) => {
           ? '#3a3a3a'
           : nodeType === 'relationship'
             ? 'transparent'
+          : nodeType === 'or'
+            ? 'transparent'
           : nodeType === 'image' || nodeType === 'text' || nodeType === 'object'
             ? 'transparent'
           : nodeType === 'note'
@@ -349,6 +351,8 @@ const CustomNode = memo(({ id, data, selected }) => {
           ? 'none'
           : nodeType === 'relationship'
             ? 'none'
+          : nodeType === 'or'
+            ? 'none'
           : nodeType === 'text'
             ? 'none'
           : nodeType === 'image' || nodeType === 'object'
@@ -360,12 +364,14 @@ const CustomNode = memo(({ id, data, selected }) => {
           : isParent
             ? `2px solid ${borderColor}60`
             : `2px ${isSubmap ? 'dashed' : 'solid'} ${borderColor}`,
-        borderRadius: level === 0 ? '50px' : nodeType === 'relationship' ? 0 : nodeType === 'note' ? '10px' :isParent ? '12px' : '10px',
+        borderRadius: level === 0 ? '50px' : nodeType === 'relationship' ? 0 : nodeType === 'or' ? 0 : nodeType === 'note' ? '10px' :isParent ? '12px' : '10px',
         fontSize: '13px',
         fontWeight: '500',
         color: level === 0 ? '#ffffff' : '#1c1917',
         cursor: (reparentSourceNodeId || copySizeSourceNodeId) ? 'copy' : (editing ? 'text' : 'pointer'),
         boxShadow: nodeType === 'relationship'
+          ? 'none'
+          : nodeType === 'or'
           ? 'none'
           : nodeType === 'image' || nodeType === 'text'
           ? (selected ? `0 0 0 2px ${borderColor}60` : hovered ? `0 0 0 1.5px ${borderColor}40` : 'none')
@@ -512,6 +518,46 @@ const CustomNode = memo(({ id, data, selected }) => {
         </div>
       )}
 
+      {nodeType === 'or' && (
+        <div
+          style={{
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            pointerEvents: 'none',
+            position: 'relative',
+          }}
+        >
+          <svg width="100%" height="100%" viewBox="0 0 120 54" preserveAspectRatio="none">
+            <path
+              d="M 8 38 Q 60 10 112 38"
+              fill="none"
+              stroke={selected ? '#3a6fd8' : '#667085'}
+              strokeWidth={selected ? 2.4 : 2}
+              strokeLinecap="round"
+            />
+          </svg>
+          <span
+            style={{
+              position: 'absolute',
+              left: '50%',
+              bottom: 5,
+              transform: 'translateX(-50%)',
+              fontSize: 11,
+              fontWeight: 500,
+              lineHeight: 1,
+              color: selected ? '#2e4d9b' : '#4b5565',
+              fontFamily: 'Inter, system-ui, sans-serif',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {title?.trim() || 'or'}
+          </span>
+        </div>
+      )}
+
       {isRelationshipNode && (
         <div
           style={{
@@ -581,7 +627,7 @@ const CustomNode = memo(({ id, data, selected }) => {
       )}
 
       {/* Header — title */}
-      {nodeType !== 'image' && nodeType !== 'note' && nodeType !== 'diagram' && nodeType !== 'object' && nodeType !== 'text' && nodeType !== 'relationship' && (!isParent || !!title?.trim()) && (
+      {nodeType !== 'image' && nodeType !== 'note' && nodeType !== 'diagram' && nodeType !== 'object' && nodeType !== 'text' && nodeType !== 'relationship' && nodeType !== 'or' && (!isParent || !!title?.trim()) && (
         <div
           style={{
             flex: (isParent || shouldShowContents) ? '0 0 auto' : 1,

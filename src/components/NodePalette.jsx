@@ -53,10 +53,18 @@ const RelationshipIcon = () => (
   </svg>
 )
 
+const OrIcon = () => (
+  <svg width="24" height="20" viewBox="0 0 24 20" fill="none">
+    <path d="M 2 14 Q 12 2 22 14" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    <text x="12" y="18" textAnchor="middle" fontSize="7" fontWeight="700" fill="currentColor">OR</text>
+  </svg>
+)
+
 const ITEMS = [
   { type: 'card',  label: 'Card',  Icon: NodeIcon },
   { type: 'object', label: 'Object', Icon: ObjectIcon },
   { type: 'relationship', label: 'Relationship', Icon: RelationshipIcon },
+  { type: 'or', label: 'or', Icon: OrIcon },
   { type: 'diagram', label: 'Diagram', Icon: DiagramIcon },
   { type: 'image', label: 'Image', Icon: ImageIcon },
   { type: 'note',  label: 'Note',  Icon: NoteIcon },

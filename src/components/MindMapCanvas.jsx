@@ -24,7 +24,7 @@ import { STANDARD_THEME_COLORS } from '../lib/themePalette'
 const nodeTypes = { mindmap: CustomNode }
 const edgeTypes = { 'straight-center': StraightCenterEdge, 'relationship-edge': RelationshipEdge }
 const TOOLBOX_DRAG_MIME = 'application/x-knowledgemaps-node-type'
-const RELATIONSHIP_ALLOWED_NODE_TYPES = new Set(['card', 'object', 'diagram', 'submap', 'note', 'image', 'text'])
+const RELATIONSHIP_ALLOWED_NODE_TYPES = new Set(['card', 'object', 'diagram', 'submap', 'note', 'image', 'text', 'or'])
 const canConnectNodeTypes = (sourceType = 'card', targetType = 'card') => {
   if (sourceType === 'relationship') return RELATIONSHIP_ALLOWED_NODE_TYPES.has(targetType)
   if (targetType === 'relationship') return RELATIONSHIP_ALLOWED_NODE_TYPES.has(sourceType)
@@ -181,6 +181,24 @@ const relationshipPathData = (left, right, lineStyle, leftNorm = null, rightNorm
   const points = [left, ...waypoints, right]
   const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')
   return { pathD, waypoints }
+}
+const relationshipEndLabelBase = (endPoint, adjacentPoint, end) => {
+  const vx = (adjacentPoint?.x ?? endPoint.x) - endPoint.x
+  const vy = (adjacentPoint?.y ?? endPoint.y) - endPoint.y
+  const len = Math.hypot(vx, vy)
+  let ux = len > 0.001 ? vx / len : (end === 'left' ? 1 : -1)
+  let uy = len > 0.001 ? vy / len : 0
+  let nx = -uy
+  let ny = ux
+  // Prefer label placement above the connector by default.
+  if (ny > 0) {
+    nx = -nx
+    ny = -ny
+  }
+  return {
+    x: endPoint.x + ux * 24 + nx * 10,
+    y: endPoint.y + uy * 24 + ny * 10,
+  }
 }
 
 // Palette optimised for light backgrounds, one color per L1 branch
@@ -408,9 +426,11 @@ const MindMapCanvas = () => {
   const [hoveredRelationshipEnd, setHoveredRelationshipEnd] = useState(null)
   const [relationshipSnapPreview, setRelationshipSnapPreview] = useState(null)
   const [relationshipContextMenu, setRelationshipContextMenu] = useState(null)
+  const [relationshipLabelDrag, setRelationshipLabelDrag] = useState(null)
+  const relationshipClickRef = useRef({ id: null, ts: 0, x: 0, y: 0 })
   const viewport = useViewport()
   const { screenToFlowPosition, getViewport, setViewport } = useReactFlow()
-  const CONVERT_LABELS = { card: 'Card', object: 'Object', relationship: 'Relationship', diagram: 'Diagram', submap: 'Submap' }
+  const CONVERT_LABELS = { card: 'Card', object: 'Object', relationship: 'Relationship', or: 'Or', diagram: 'Diagram', submap: 'Submap' }
   const hierarchyEdges = useMemo(() => edges.filter((e) => !isRelationshipEdge(e)), [edges])
   const relationshipEdges = useMemo(() => edges.filter((e) => isRelationshipEdge(e)), [edges])
 
@@ -490,7 +510,7 @@ const MindMapCanvas = () => {
     rootId,
     getNodeSize: (node) => {
       const hasChildren = !!(childrenMap[node.id]?.length)
-      const hasExpandedContents = !!node.data?.content?.trim() || node.data?.nodeType === 'note' || node.data?.nodeType === 'image' || node.data?.nodeType === 'diagram' || node.data?.nodeType === 'object' || node.data?.nodeType === 'relationship'
+      const hasExpandedContents = !!node.data?.content?.trim() || node.data?.nodeType === 'note' || node.data?.nodeType === 'image' || node.data?.nodeType === 'diagram' || node.data?.nodeType === 'object' || node.data?.nodeType === 'relationship' || node.data?.nodeType === 'or'
       return (!hasChildren && !hasExpandedContents) ? LEAF_NODE_SIZE : getStableNodeSize(node)
     },
     padding: {
@@ -508,7 +528,7 @@ const MindMapCanvas = () => {
         ? ROOT_BORDER
         : (l1ColorMap[getL1Id(node.id)] ?? L1_PALETTE[0])
       const hasChildren = !!(childrenMap[node.id]?.length)
-      const hasExpandedContents = !!node.data?.content?.trim() || node.data?.nodeType === 'note' || node.data?.nodeType === 'image' || node.data?.nodeType === 'diagram' || node.data?.nodeType === 'object' || node.data?.nodeType === 'relationship'
+      const hasExpandedContents = !!node.data?.content?.trim() || node.data?.nodeType === 'note' || node.data?.nodeType === 'image' || node.data?.nodeType === 'diagram' || node.data?.nodeType === 'object' || node.data?.nodeType === 'relationship' || node.data?.nodeType === 'or'
       const useFixedLeafSize = !hasChildren && !hasExpandedContents && node.data?.sizeMode !== 'manual'
       const hasNotes = !!(node.data.content && node.data.content !== '<p></p>' && node.data.content !== '')
       const layout = layouts[node.id]
@@ -668,6 +688,7 @@ const MindMapCanvas = () => {
     setHoveredRelationshipId(null)
     setHoveredRelationshipEnd(null)
     setRelationshipSegmentDrag(null)
+    setRelationshipLabelDrag(null)
   }, [])
 
   const contextNode = useMemo(() => {
@@ -675,12 +696,21 @@ const MindMapCanvas = () => {
     return nodes.find((n) => n.id === nodeContextMenu.nodeId) ?? null
   }, [nodeContextMenu, nodes])
 
+  const isRelationshipDoubleClick = useCallback((relationshipId, clientX, clientY) => {
+    const now = Date.now()
+    const prev = relationshipClickRef.current
+    const near = Math.hypot(clientX - prev.x, clientY - prev.y) <= 14
+    const isDouble = prev.id === relationshipId && (now - prev.ts) <= 360 && near
+    relationshipClickRef.current = { id: relationshipId, ts: now, x: clientX, y: clientY }
+    return isDouble
+  }, [])
+
   const convertNodeType = useCallback(async (node, newType) => {
     if (!node || newType === node.data?.nodeType) return
     const nodeType = node.data?.nodeType
     const title = node.data?.title ?? ''
     const hasChildren = edges.some((e) => e.source === node.id)
-    if ((newType === 'note' || newType === 'diagram' || newType === 'relationship') && hasChildren) {
+    if ((newType === 'note' || newType === 'diagram' || newType === 'relationship' || newType === 'or') && hasChildren) {
       if (!confirm(`"${title}" has children. Converting to ${CONVERT_LABELS[newType]} will prevent adding more children, but existing ones will remain.\n\nContinue?`)) return
     }
     if (newType === 'submap') {
@@ -745,6 +775,7 @@ const MindMapCanvas = () => {
       deleteNode(selectedRelationshipId)
       setSelectedRelationshipId(null)
       setRelationshipContextMenu(null)
+      setRelationshipLabelDrag(null)
     }
     window.addEventListener('keydown', onDeleteKey)
     return () => window.removeEventListener('keydown', onDeleteKey)
@@ -986,6 +1017,46 @@ const MindMapCanvas = () => {
     }
   }, [relationshipSegmentDrag, isEditMode, clientToWorld, snapWorldToGrid, setRelationshipElbowWaypoints])
 
+  useEffect(() => {
+    if (!relationshipLabelDrag || !isEditMode) return
+    const onMove = (e) => {
+      const world = clientToWorld(e.clientX, e.clientY)
+      if (!world) return
+      setRelationshipLabelDrag((prev) => {
+        if (!prev) return prev
+        const dx = world.x - prev.startWorld.x
+        const dy = world.y - prev.startWorld.y
+        return {
+          ...prev,
+          liveOffset: { x: prev.baseOffset.x + dx, y: prev.baseOffset.y + dy },
+        }
+      })
+    }
+    const onUp = () => {
+      setRelationshipLabelDrag((drag) => {
+        if (!drag) return null
+        const state = useMindMapStore.getState()
+        const relNode = state.nodes.find((n) => n.id === drag.relationshipNodeId)
+        if (relNode) {
+          const existingOffsets = relNode.data?.relationshipLabelOffsets || {}
+          state.updateNodeData(drag.relationshipNodeId, {
+            relationshipLabelOffsets: {
+              ...existingOffsets,
+              [drag.end]: drag.liveOffset || drag.baseOffset,
+            },
+          })
+        }
+        return null
+      })
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp, { once: true })
+    return () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+    }
+  }, [relationshipLabelDrag, isEditMode, clientToWorld])
+
   const relationshipSegments = useMemo(() => {
     const rect = containerRef.current?.getBoundingClientRect()
     const ox = rect?.left ?? 0
@@ -1050,6 +1121,17 @@ const MindMapCanvas = () => {
         const storedWaypoints = Array.isArray(rel.data?.elbowWaypoints) ? rel.data.elbowWaypoints : []
         const isDraggingSeg = relationshipSegmentDrag?.relationshipNodeId === rel.id
         const pathData = relationshipPathData(left, right, lineStyle, leftAnchor?.norm, rightAnchor?.norm, storedWaypoints, isDraggingSeg)
+        const leftAdjacent = pathData.waypoints[0] || right
+        const rightAdjacent = pathData.waypoints[pathData.waypoints.length - 1] || left
+        const fromLabelBase = relationshipEndLabelBase(left, leftAdjacent, 'left')
+        const toLabelBase = relationshipEndLabelBase(right, rightAdjacent, 'right')
+        const storedLabelOffsets = rel.data?.relationshipLabelOffsets || {}
+        const fromLabelOffset = relationshipLabelDrag?.relationshipNodeId === rel.id && relationshipLabelDrag?.end === 'from'
+          ? (relationshipLabelDrag.liveOffset || relationshipLabelDrag.baseOffset || { x: 0, y: 0 })
+          : (storedLabelOffsets.from || { x: 0, y: 0 })
+        const toLabelOffset = relationshipLabelDrag?.relationshipNodeId === rel.id && relationshipLabelDrag?.end === 'to'
+          ? (relationshipLabelDrag.liveOffset || relationshipLabelDrag.baseOffset || { x: 0, y: 0 })
+          : (storedLabelOffsets.to || { x: 0, y: 0 })
         const draggableElbowSegments = []
         if (lineStyle === 'elbow' && pathData.waypoints.length >= 1) {
           const points = [left, ...pathData.waypoints, right]
@@ -1072,10 +1154,16 @@ const MindMapCanvas = () => {
           rightNorm: rightAnchor?.norm || null,
           pathD: pathData.pathD,
           elbowWaypoints: pathData.waypoints,
+          fromLabel: rel.data?.fromLabel || '',
+          toLabel: rel.data?.toLabel || '',
+          fromLabelOffset,
+          toLabelOffset,
+          fromLabelPos: { x: fromLabelBase.x + fromLabelOffset.x, y: fromLabelBase.y + fromLabelOffset.y },
+          toLabelPos: { x: toLabelBase.x + toLabelOffset.x, y: toLabelBase.y + toLabelOffset.y },
           draggableElbowSegments,
         }
       })
-  }, [nodes, relationshipEdges, relationshipDrag, relationshipDragScreenPos, relationshipSegmentDrag, viewport])
+  }, [nodes, relationshipEdges, relationshipDrag, relationshipDragScreenPos, relationshipSegmentDrag, relationshipLabelDrag, viewport])
 
   const onCanvasDragOver = useCallback((e) => {
     if (!isEditMode) return
@@ -1205,7 +1293,7 @@ const MindMapCanvas = () => {
               Open submap
             </button>
           )}
-          {contextNode && contextNode.data?.isSubmap !== true && !['note', 'relationship', 'image', 'diagram', 'text'].includes(contextNode.data?.nodeType) && (
+          {contextNode && contextNode.data?.isSubmap !== true && !['note', 'relationship', 'or', 'image', 'diagram', 'text'].includes(contextNode.data?.nodeType) && (
             <button
               type="button"
               className="map-context-menu__item"
@@ -1274,7 +1362,7 @@ const MindMapCanvas = () => {
                 Convert To <span aria-hidden="true">›</span>
               </button>
               <div className="map-context-menu__submenu-panel" role="menu">
-              {['card', 'object', 'relationship', 'diagram', 'submap'].map((type) => (
+              {['card', 'object', 'relationship', 'or', 'diagram', 'submap'].map((type) => (
                 <button
                   key={type}
                   type="button"
@@ -1381,6 +1469,7 @@ const MindMapCanvas = () => {
               deleteNode(relationshipContextMenu.id)
               setRelationshipContextMenu(null)
               setSelectedRelationshipId(null)
+              setRelationshipLabelDrag(null)
             }}
           >
             Delete connector
@@ -1402,6 +1491,7 @@ const MindMapCanvas = () => {
           setRelationshipContextMenu(null)
           setHoveredRelationshipId(null)
           setHoveredRelationshipEnd(null)
+          setRelationshipLabelDrag(null)
           if (pendingToolboxType && isEditMode) {
             const position = screenToFlowPosition(
               { x: event.clientX, y: event.clientY },
@@ -1432,6 +1522,7 @@ const MindMapCanvas = () => {
           setRelationshipContextMenu(null)
           setHoveredRelationshipId(null)
           setHoveredRelationshipEnd(null)
+          setRelationshipLabelDrag(null)
           if (pendingToolboxType && isEditMode) {
             if (pendingToolboxType === 'relationship') {
               const position = screenToFlowPosition(
@@ -1585,6 +1676,15 @@ const MindMapCanvas = () => {
                         }}
                         onPointerDown={(e) => {
                           if (!isEditMode || relationshipDrag || e.button !== 0) return
+                          if (isRelationshipDoubleClick(seg.id, e.clientX, e.clientY)) {
+                            e.stopPropagation()
+                            e.preventDefault()
+                            setSelectedNodeIds([])
+                            setSelectedRelationshipId(seg.id)
+                            setRelationshipContextMenu(null)
+                            openNodeModal(seg.id)
+                            return
+                          }
                           e.stopPropagation()
                           e.preventDefault()
                           setSelectedNodeIds([])
@@ -1597,6 +1697,14 @@ const MindMapCanvas = () => {
                             startScreen: { x: e.clientX, y: e.clientY },
                             startWorld: { x: relNode.position.x, y: relNode.position.y },
                           })
+                        }}
+                        onDoubleClick={(e) => {
+                          e.stopPropagation()
+                          e.preventDefault()
+                          setSelectedNodeIds([])
+                          setSelectedRelationshipId(seg.id)
+                          setRelationshipContextMenu(null)
+                          openNodeModal(seg.id)
                         }}
                       />
                       <path
@@ -1614,6 +1722,104 @@ const MindMapCanvas = () => {
                         fill="none"
                         pointerEvents="none"
                       />
+                      {seg.fromLabel?.trim() && (
+                        <text
+                          x={seg.fromLabelPos.x}
+                          y={seg.fromLabelPos.y}
+                          textAnchor="middle"
+                          dominantBaseline="middle"
+                          fontSize="11"
+                          fontWeight="500"
+                          fill={selectedRelationshipId === seg.id ? '#1f3f8f' : '#4b5563'}
+                          stroke="#ffffff"
+                          strokeWidth="3"
+                          paintOrder="stroke"
+                          style={{
+                            pointerEvents: isEditMode ? 'auto' : 'none',
+                            cursor: isEditMode ? 'move' : 'default',
+                            userSelect: 'none',
+                          }}
+                          onContextMenu={(e) => {
+                            if (!isEditMode) return
+                            e.preventDefault()
+                            e.stopPropagation()
+                            setSelectedNodeIds([])
+                            setNodeContextMenu(null)
+                            setPaneContextMenu(null)
+                            setSelectedRelationshipId(seg.id)
+                            setRelationshipContextMenu({ id: seg.id, x: e.clientX, y: e.clientY })
+                          }}
+                          onPointerDown={(e) => {
+                            if (!isEditMode || e.button !== 0) return
+                            const world = clientToWorld(e.clientX, e.clientY)
+                            if (!world) return
+                            e.stopPropagation()
+                            e.preventDefault()
+                            pushHistory()
+                            setSelectedNodeIds([])
+                            setSelectedRelationshipId(seg.id)
+                            setRelationshipContextMenu(null)
+                            setRelationshipLabelDrag({
+                              relationshipNodeId: seg.id,
+                              end: 'from',
+                              startWorld: world,
+                              baseOffset: seg.fromLabelOffset || { x: 0, y: 0 },
+                              liveOffset: seg.fromLabelOffset || { x: 0, y: 0 },
+                            })
+                          }}
+                        >
+                          {seg.fromLabel}
+                        </text>
+                      )}
+                      {seg.toLabel?.trim() && (
+                        <text
+                          x={seg.toLabelPos.x}
+                          y={seg.toLabelPos.y}
+                          textAnchor="middle"
+                          dominantBaseline="middle"
+                          fontSize="11"
+                          fontWeight="500"
+                          fill={selectedRelationshipId === seg.id ? '#1f3f8f' : '#4b5563'}
+                          stroke="#ffffff"
+                          strokeWidth="3"
+                          paintOrder="stroke"
+                          style={{
+                            pointerEvents: isEditMode ? 'auto' : 'none',
+                            cursor: isEditMode ? 'move' : 'default',
+                            userSelect: 'none',
+                          }}
+                          onContextMenu={(e) => {
+                            if (!isEditMode) return
+                            e.preventDefault()
+                            e.stopPropagation()
+                            setSelectedNodeIds([])
+                            setNodeContextMenu(null)
+                            setPaneContextMenu(null)
+                            setSelectedRelationshipId(seg.id)
+                            setRelationshipContextMenu({ id: seg.id, x: e.clientX, y: e.clientY })
+                          }}
+                          onPointerDown={(e) => {
+                            if (!isEditMode || e.button !== 0) return
+                            const world = clientToWorld(e.clientX, e.clientY)
+                            if (!world) return
+                            e.stopPropagation()
+                            e.preventDefault()
+                            pushHistory()
+                            setSelectedNodeIds([])
+                            setSelectedRelationshipId(seg.id)
+                            setRelationshipContextMenu(null)
+                            setRelationshipLabelDrag({
+                              relationshipNodeId: seg.id,
+                              end: 'to',
+                              startWorld: world,
+                              baseOffset: seg.toLabelOffset || { x: 0, y: 0 },
+                              liveOffset: seg.toLabelOffset || { x: 0, y: 0 },
+                            })
+                          }}
+                        >
+                          {seg.toLabel}
+                        </text>
+                      )}
                       {isEditMode && selectedRelationshipId === seg.id && seg.lineStyle === 'elbow' && !relationshipDrag && !relationshipLineDrag && seg.draggableElbowSegments.map((s) => {
                         const midX = (s.p1.x + s.p2.x) / 2
                         const midY = (s.p1.y + s.p2.y) / 2
@@ -1628,8 +1834,35 @@ const MindMapCanvas = () => {
                               stroke="transparent"
                               strokeWidth="14"
                               style={{ pointerEvents: 'auto', cursor: s.isHorizontal ? 'ns-resize' : 'ew-resize' }}
+                              onContextMenu={(e) => {
+                                if (!isEditMode) return
+                                e.preventDefault()
+                                e.stopPropagation()
+                                setSelectedNodeIds([])
+                                setNodeContextMenu(null)
+                                setPaneContextMenu(null)
+                                setSelectedRelationshipId(seg.id)
+                                setRelationshipContextMenu({ id: seg.id, x: e.clientX, y: e.clientY })
+                              }}
+                              onDoubleClick={(e) => {
+                                e.stopPropagation()
+                                e.preventDefault()
+                                setSelectedNodeIds([])
+                                setSelectedRelationshipId(seg.id)
+                                setRelationshipContextMenu(null)
+                                openNodeModal(seg.id)
+                              }}
                               onPointerDown={(e) => {
                                 if (e.button !== 0) return
+                                if (isRelationshipDoubleClick(seg.id, e.clientX, e.clientY)) {
+                                  e.stopPropagation()
+                                  e.preventDefault()
+                                  setSelectedNodeIds([])
+                                  setSelectedRelationshipId(seg.id)
+                                  setRelationshipContextMenu(null)
+                                  openNodeModal(seg.id)
+                                  return
+                                }
                                 e.stopPropagation()
                                 e.preventDefault()
                                 const world = snapWorldToGrid(clientToWorld(e.clientX, e.clientY))
@@ -1694,8 +1927,27 @@ const MindMapCanvas = () => {
                             r={REL_ENDPOINT_RADIUS + 5}
                             fill="transparent"
                             style={{ cursor: isEditMode ? 'grab' : 'default', pointerEvents: isEditMode ? 'auto' : 'none' }}
+                            onContextMenu={(e) => {
+                              if (!isEditMode) return
+                              e.preventDefault()
+                              e.stopPropagation()
+                              setSelectedNodeIds([])
+                              setNodeContextMenu(null)
+                              setPaneContextMenu(null)
+                              setSelectedRelationshipId(seg.id)
+                              setRelationshipContextMenu({ id: seg.id, x: e.clientX, y: e.clientY })
+                            }}
                             onPointerDown={(e) => {
                               if (!isEditMode || e.button !== 0) return
+                              if (isRelationshipDoubleClick(seg.id, e.clientX, e.clientY)) {
+                                e.stopPropagation()
+                                e.preventDefault()
+                                setSelectedNodeIds([])
+                                setSelectedRelationshipId(seg.id)
+                                setRelationshipContextMenu(null)
+                                openNodeModal(seg.id)
+                                return
+                              }
                               e.stopPropagation()
                               e.preventDefault()
                               setSelectedNodeIds([])
@@ -1721,8 +1973,27 @@ const MindMapCanvas = () => {
                             r={REL_ENDPOINT_RADIUS + 5}
                             fill="transparent"
                             style={{ cursor: isEditMode ? 'grab' : 'default', pointerEvents: isEditMode ? 'auto' : 'none' }}
+                            onContextMenu={(e) => {
+                              if (!isEditMode) return
+                              e.preventDefault()
+                              e.stopPropagation()
+                              setSelectedNodeIds([])
+                              setNodeContextMenu(null)
+                              setPaneContextMenu(null)
+                              setSelectedRelationshipId(seg.id)
+                              setRelationshipContextMenu({ id: seg.id, x: e.clientX, y: e.clientY })
+                            }}
                             onPointerDown={(e) => {
                               if (!isEditMode || e.button !== 0) return
+                              if (isRelationshipDoubleClick(seg.id, e.clientX, e.clientY)) {
+                                e.stopPropagation()
+                                e.preventDefault()
+                                setSelectedNodeIds([])
+                                setSelectedRelationshipId(seg.id)
+                                setRelationshipContextMenu(null)
+                                openNodeModal(seg.id)
+                                return
+                              }
                               e.stopPropagation()
                               e.preventDefault()
                               setSelectedNodeIds([])

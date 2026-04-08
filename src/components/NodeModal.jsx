@@ -5,7 +5,7 @@ import MarkdownEditor from './MarkdownEditor'
 import SubmapChoiceModal from './SubmapChoiceModal'
 import { STANDARD_THEME_COLORS } from '../lib/themePalette'
 
-const TYPE_LABELS = { card: 'Card', object: 'Object', relationship: 'Relationship', diagram: 'Diagram', submap: 'Submap' }
+const TYPE_LABELS = { card: 'Card', object: 'Object', relationship: 'Relationship', or: 'Or', diagram: 'Diagram', submap: 'Submap' }
 
 const isTouch = typeof window !== 'undefined' && window.matchMedia('(hover: none) and (pointer: coarse)').matches
 
@@ -16,6 +16,8 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
   const convertToSubmap  = useMindMapStore((s) => s.convertToSubmap)
   const isEditMode       = useMindMapStore((s) => s.isEditMode)
   const currentMapId     = useMindMapStore((s) => s.currentMapId)
+  const allNodes         = useMindMapStore((s) => s.nodes)
+  const allEdges         = useMindMapStore((s) => s.edges)
 
   const { id } = node
   const {
@@ -40,6 +42,21 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
   const isObjectNode = nodeType === 'object'
   const isRelationshipNode = nodeType === 'relationship'
   const isPlainNode = nodeType === 'card'
+  const getNodeTitleById = useCallback((nodeId) => {
+    if (!nodeId) return ''
+    const found = allNodes.find((n) => n.id === nodeId)
+    return found?.data?.title?.trim() || found?.data?.name?.trim() || ''
+  }, [allNodes])
+  const fromShapeLabel = useCallback(() => {
+    if (!isRelationshipNode) return ''
+    const edge = allEdges.find((e) => e?.data?.isRelationship && e.source === id && (e.sourceHandle || '') === 'rel-left-source')
+    return getNodeTitleById(edge?.target) || ''
+  }, [allEdges, getNodeTitleById, id, isRelationshipNode])
+  const toShapeLabel = useCallback(() => {
+    if (!isRelationshipNode) return ''
+    const edge = allEdges.find((e) => e?.data?.isRelationship && e.source === id && (e.sourceHandle || '') === 'rel-right-source')
+    return getNodeTitleById(edge?.target) || ''
+  }, [allEdges, getNodeTitleById, id, isRelationshipNode])
 
   const [isEditing, setIsEditing]         = useState(isEditMode)
   const [draft, setDraft]                 = useState(isEditMode ? { title: title || '', content: content || '', isTodo: !!isTodo, nodeType, themeColor: themeColor || '', name: name || '', objectType: objectType || 'Standard', description: description || '', relType: relType || 'lookup', lineStyle: lineStyle || 'elbow', fromLabel: fromLabel || '', toLabel: toLabel || '', backgroundMode: backgroundMode || 'theme' } : null)
@@ -50,7 +67,7 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
   const titleInputRef = useRef(null)
   const headerIsTodo = isEditing ? !!draft?.isTodo : isTodo
   const effectiveDraftType = draft?.nodeType || nodeType
-  const canSave = effectiveDraftType === 'note' || effectiveDraftType === 'relationship' ? true : !!draft?.title?.trim()
+  const canSave = effectiveDraftType === 'note' || effectiveDraftType === 'relationship' || effectiveDraftType === 'or' ? true : !!draft?.title?.trim()
 
   const hasNotes = content && content.trim() !== ''
   const viewDescription = node.data?.description || ''
@@ -97,7 +114,7 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
       return
     }
     const nextType = draft?.nodeType || nodeType
-    const nextTitle = nextType === 'note' || nextType === 'relationship'
+    const nextTitle = nextType === 'note' || nextType === 'relationship' || nextType === 'or'
       ? (draft?.title?.trim() || '')
       : draft.title.trim()
     if (nextType === 'submap' && (!isSubmap || isNew)) {
@@ -154,7 +171,7 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
       return
     }
 
-    if ((newType === 'note' || newType === 'diagram' || newType === 'relationship') && hasChildren) {
+    if ((newType === 'note' || newType === 'diagram' || newType === 'relationship' || newType === 'or') && hasChildren) {
       if (!confirm(`"${title}" has children. Converting to ${TYPE_LABELS[newType]} will prevent adding more children, but existing ones will remain.\n\nContinue?`)) return
     }
 
@@ -337,6 +354,26 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
                 </>
               ) : editTab === 'details' && isRelationshipNode ? (
                 <>
+                  <div style={{ display: 'grid', gap: 8, marginBottom: 8 }}>
+                    <div className="field" style={{ marginBottom: 0 }}>
+                      <label className="field-label">From Shape</label>
+                      <div className="key-display">{fromShapeLabel() || 'Unconnected'}</div>
+                    </div>
+                    <div className="field" style={{ marginBottom: 0 }}>
+                      <label className="field-label">From Label</label>
+                      <input className="field-input" value={draft.fromLabel || ''} onChange={(e) => setDraft((d) => ({ ...d, fromLabel: e.target.value }))} />
+                    </div>
+                  </div>
+                  <div style={{ display: 'grid', gap: 8, marginBottom: 8 }}>
+                    <div className="field" style={{ marginBottom: 0 }}>
+                      <label className="field-label">To Shape</label>
+                      <div className="key-display">{toShapeLabel() || 'Unconnected'}</div>
+                    </div>
+                    <div className="field" style={{ marginBottom: 0 }}>
+                      <label className="field-label">To Label</label>
+                      <input className="field-input" value={draft.toLabel || ''} onChange={(e) => setDraft((d) => ({ ...d, toLabel: e.target.value }))} />
+                    </div>
+                  </div>
                   <div className="field">
                     <label className="field-label">Relationship Type</label>
                     <select
@@ -359,14 +396,6 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
                       <option value="straight">Straight</option>
                       <option value="curve">Curve</option>
                     </select>
-                  </div>
-                  <div className="field">
-                    <label className="field-label">From Label</label>
-                    <input className="field-input" value={draft.fromLabel || ''} onChange={(e) => setDraft((d) => ({ ...d, fromLabel: e.target.value }))} />
-                  </div>
-                  <div className="field">
-                    <label className="field-label">To Label</label>
-                    <input className="field-input" value={draft.toLabel || ''} onChange={(e) => setDraft((d) => ({ ...d, toLabel: e.target.value }))} />
                   </div>
                   <div className="field field--grow">
                     <label className="field-label">Description</label>
@@ -407,14 +436,18 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
                 </div>
               ) : isRelationshipNode ? (
                 <div className="field">
+                  <label className="field-label">From</label>
+                  <div className="key-display" style={{ marginBottom: 6 }}>
+                    Shape: {fromShapeLabel() || 'Unconnected'} · Label: {node.data?.fromLabel || '—'}
+                  </div>
+                  <label className="field-label" style={{ marginTop: 8 }}>To</label>
+                  <div className="key-display" style={{ marginBottom: 6 }}>
+                    Shape: {toShapeLabel() || 'Unconnected'} · Label: {node.data?.toLabel || '—'}
+                  </div>
                   <label className="field-label">Relationship Type</label>
                   <div className="key-display">{node.data?.relType || 'lookup'}</div>
                   <label className="field-label" style={{ marginTop: 8 }}>Line Style</label>
                   <div className="key-display">{node.data?.lineStyle || 'elbow'}</div>
-                  <label className="field-label" style={{ marginTop: 8 }}>From Label</label>
-                  <div className="key-display">{node.data?.fromLabel || '—'}</div>
-                  <label className="field-label" style={{ marginTop: 8 }}>To Label</label>
-                  <div className="key-display">{node.data?.toLabel || '—'}</div>
                   <label className="field-label" style={{ marginTop: 8 }}>Description</label>
                   <div className="key-display">{node.data?.description || '—'}</div>
                 </div>
@@ -445,7 +478,7 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
             showConvertMenu ? (
               <>
                 <span className="node-modal-convert-label">Convert to:</span>
-                {['card', 'object', 'relationship', 'diagram', 'submap'].map((t) => (
+                {['card', 'object', 'relationship', 'or', 'diagram', 'submap'].map((t) => (
                   <button
                     key={t}
                     className={`btn btn--sm${nodeType === t ? ' btn--disabled' : ' btn--secondary'}`}
