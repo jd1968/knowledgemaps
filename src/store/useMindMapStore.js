@@ -87,13 +87,12 @@ const applyPositionChanges = (changes, nodes) => applyNodeChanges(
   nodes
 )
 
-const applyResizeChanges = (changes, nodes, edges) => {
+const applyResizeChanges = (changes, nodes, _edges) => {
   const dimensionChanges = changes
     .filter((c) => c.type === 'dimensions' && c.dimensions)
 
   if (dimensionChanges.length === 0) return nodes
 
-  const parentIds = new Set(edges.map((e) => e.source))
   const changeById = new Map(dimensionChanges.map((c) => [c.id, c]))
   const nodesAfterDimensions = applyNodeChanges(dimensionChanges, nodes)
 
@@ -115,7 +114,8 @@ const applyResizeChanges = (changes, nodes, edges) => {
         ...node.data,
         // Single persisted size authority for all resizable nodes.
         size: dims,
-        ...(parentIds.has(node.id) ? { sizeMode: 'manual' } : {}),
+          // Any direct resize should persist as a manual size, including leaf cards.
+          sizeMode: 'manual',
       },
     }
   })
@@ -589,7 +589,8 @@ export const useMindMapStore = create((set, get) => ({
             ? { x: isResizing ? x : snapValue(x, GRID_SIZE), y: isResizing ? y : snapValue(y, GRID_SIZE) }
             : node.position,
           style: { ...(node.style || {}), width: size.width, height: size.height },
-          data: { ...node.data, size },
+          // Mark explicit user resizes as manual so layout defaults don't override them.
+          data: { ...node.data, size, sizeMode: 'manual' },
         }
       }),
       isDirty: !isResizing,
@@ -851,10 +852,22 @@ export const useMindMapStore = create((set, get) => ({
 
     // Strip content from diagram JSON — content lives in the nodes table
     const mapData = {
-      nodes: nodes.map(({ data: { content: _c, ...rest }, selected: _s, dragging: _d, measured: _m, ...node }) => ({
-        ...node,
-        data: { ...rest, nodeType: normalizeNodeType(rest.nodeType, !!rest.isSubmap) },
-      })),
+      nodes: nodes.map((rawNode) => {
+        const {
+          data: { content: _c, ...restData },
+          selected: _s,
+          dragging: _d,
+          measured: _m,
+          width: _w,
+          height: _h,
+          resizing: _r,
+          ...node
+        } = rawNode
+        return {
+          ...node,
+          data: { ...restData, nodeType: normalizeNodeType(restData.nodeType, !!restData.isSubmap) },
+        }
+      }),
       edges: edges.map((e) => ({ ...e, type: normalizeEdgeType(e.type) })),
     }
 
@@ -915,15 +928,26 @@ export const useMindMapStore = create((set, get) => ({
       const mapResult = await supabase.from('maps').select('*').eq('id', mapId).single()
       if (mapResult.error) throw mapResult.error
 
-      const nodes = (mapResult.data.data.nodes || []).map((n) => ({
-        ...n,
-        selected: false,
-        data: {
-          ...n.data,
-          nodeType: normalizeNodeType(n.data.nodeType, !!n.data.isSubmap),
-          content: '',
-        },
-      }))
+      const nodes = (mapResult.data.data.nodes || []).map((rawNode) => {
+        const {
+          selected: _s,
+          dragging: _d,
+          measured: _m,
+          width: _w,
+          height: _h,
+          resizing: _r,
+          ...n
+        } = rawNode
+        return {
+          ...n,
+          selected: false,
+          data: {
+            ...n.data,
+            nodeType: normalizeNodeType(n.data.nodeType, !!n.data.isSubmap),
+            content: '',
+          },
+        }
+      })
 
       set((state) => ({
         nodes,

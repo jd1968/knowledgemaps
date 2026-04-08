@@ -64,7 +64,17 @@ function ResizeHandles({ nodeId, visible }) {
     const startPX = node.position.x
     const startPY = node.position.y
 
-    dragRef.current = { dir, startX, startY, startW, startH, startPX, startPY, moved: false }
+    dragRef.current = {
+      dir,
+      startX,
+      startY,
+      startW,
+      startH,
+      startPX,
+      startPY,
+      moved: false,
+      last: { width: startW, height: startH, x: startPX, y: startPY },
+    }
     setIsDragging(true)
   }, [visible, nodeId, getNode])
 
@@ -91,6 +101,7 @@ function ResizeHandles({ nodeId, visible }) {
       x: snapValue(x, GRID_SIZE),
       y: snapValue(y, GRID_SIZE),
     }
+    drag.last = snapped
     if (!drag.moved && (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5)) {
       pushHistory()
       drag.moved = true
@@ -106,17 +117,16 @@ function ResizeHandles({ nodeId, visible }) {
       setIsDragging(false)
       return
     }
-    const node = getNode(nodeId)
-    if (node) {
-      const width = node.measured?.width ?? node.style?.width ?? node.data?.size?.width ?? drag.startW
-      const height = node.measured?.height ?? node.style?.height ?? node.data?.size?.height ?? drag.startH
-      const x = node.position.x
-      const y = node.position.y
-      resizeNode(nodeId, { width, height, x, y }, false)
+    const finalDims = drag.last || {
+      width: drag.startW,
+      height: drag.startH,
+      x: drag.startPX,
+      y: drag.startPY,
     }
+    resizeNode(nodeId, finalDims, false)
     dragRef.current = null
     setIsDragging(false)
-  }, [nodeId, getNode, resizeNode])
+  }, [nodeId, resizeNode])
 
   useEffect(() => {
     if (!isDragging) return undefined
