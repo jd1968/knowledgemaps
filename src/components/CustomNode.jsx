@@ -7,6 +7,7 @@ import { NodeIconDisplay, NodeIconUpload } from './NodeIcon'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { markdownComponents, urlTransform } from './MarkdownEditor'
+import { GRID_SIZE, snapValue } from '../lib/grid'
 
 
 // Blend a hex colour with white at the given opacity (0–1), returning an opaque rgb()
@@ -40,15 +41,18 @@ const MIN_H = 30
 const VIEW_MODE_PASSIVE_NODE_TYPES = new Set(['card', 'image', 'note', 'text'])
 
 function ResizeHandles({ nodeId, visible }) {
-  const { getNode, setNodes } = useReactFlow()
+  const { getNode } = useReactFlow()
   const { zoom } = useViewport()
+  const resizeNode = useMindMapStore((state) => state.resizeNode)
+  const pushHistory = useMindMapStore((state) => state.pushHistory)
   const dragRef = useRef(null)
+  const [isDragging, setIsDragging] = useState(false)
 
   const onPointerDown = useCallback((e, dir) => {
     if (!visible) return
+    if (e.button !== 0) return
     e.stopPropagation()
     e.preventDefault()
-    e.currentTarget.setPointerCapture(e.pointerId)
 
     const node = getNode(nodeId)
     if (!node) return
@@ -60,13 +64,13 @@ function ResizeHandles({ nodeId, visible }) {
     const startPX = node.position.x
     const startPY = node.position.y
 
-    dragRef.current = { dir, startX, startY, startW, startH, startPX, startPY }
+    dragRef.current = { dir, startX, startY, startW, startH, startPX, startPY, moved: false }
+    setIsDragging(true)
   }, [visible, nodeId, getNode])
 
   const onPointerMove = useCallback((e) => {
     const drag = dragRef.current
     if (!drag) return
-    e.stopPropagation()
 
     const scale = zoom || 1
     const dx = (e.clientX - drag.startX) / scale
@@ -80,37 +84,51 @@ function ResizeHandles({ nodeId, visible }) {
     if (dir.includes('w')) { w = Math.max(MIN_W, startW - dx); x = startPX + (startW - w) }
     if (dir.includes('n')) { h = Math.max(MIN_H, startH - dy); y = startPY + (startH - h) }
 
-    setNodes((nodes) => nodes.map((n) => n.id !== nodeId ? n : {
-      ...n,
-      position: { x, y },
-      style: { ...(n.style || {}), width: w, height: h },
-      data: { ...n.data, size: { width: w, height: h }, sizeMode: 'manual' },
-    }))
-  }, [nodeId, zoom, setNodes])
+    // Match data-model feel: resize snaps continuously while dragging.
+    const snapped = {
+      width: Math.max(MIN_W, snapValue(w, GRID_SIZE)),
+      height: Math.max(MIN_H, snapValue(h, GRID_SIZE)),
+      x: snapValue(x, GRID_SIZE),
+      y: snapValue(y, GRID_SIZE),
+    }
+    if (!drag.moved && (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5)) {
+      pushHistory()
+      drag.moved = true
+    }
+    resizeNode(nodeId, snapped, true)
+  }, [nodeId, zoom, resizeNode, pushHistory])
 
   const onPointerUp = useCallback((e) => {
-    if (!dragRef.current) return
-    e.stopPropagation()
+    const drag = dragRef.current
+    if (!drag) return
+    if (!drag.moved) {
+      dragRef.current = null
+      setIsDragging(false)
+      return
+    }
+    const node = getNode(nodeId)
+    if (node) {
+      const width = node.measured?.width ?? node.style?.width ?? node.data?.size?.width ?? drag.startW
+      const height = node.measured?.height ?? node.style?.height ?? node.data?.size?.height ?? drag.startH
+      const x = node.position.x
+      const y = node.position.y
+      resizeNode(nodeId, { width, height, x, y }, false)
+    }
     dragRef.current = null
+    setIsDragging(false)
+  }, [nodeId, getNode, resizeNode])
 
-    // Snap on release
-    setNodes((nodes) => nodes.map((n) => {
-      if (n.id !== nodeId) return n
-      const w = Math.max(MIN_W, Math.round((n.style?.width  ?? 160) / 10) * 10)
-      const h = Math.max(MIN_H, Math.round((n.style?.height ?? 80)  / 10) * 10)
-      const x = Math.round(n.position.x / 10) * 10
-      const y = Math.round(n.position.y / 10) * 10
-      return {
-        ...n,
-        position: { x, y },
-        style: { ...(n.style || {}), width: w, height: h },
-        data: { ...n.data, size: { width: w, height: h }, sizeMode: 'manual' },
-      }
-    }))
-    // Mark dirty and trigger autosave via store without subscribing to it
-    const store = useMindMapStore.getState()
-    store.scheduleAutosave?.()
-  }, [nodeId, setNodes])
+  useEffect(() => {
+    if (!isDragging) return undefined
+    window.addEventListener('pointermove', onPointerMove)
+    window.addEventListener('pointerup', onPointerUp)
+    window.addEventListener('pointercancel', onPointerUp)
+    return () => {
+      window.removeEventListener('pointermove', onPointerMove)
+      window.removeEventListener('pointerup', onPointerUp)
+      window.removeEventListener('pointercancel', onPointerUp)
+    }
+  }, [isDragging, onPointerMove, onPointerUp])
 
   if (!visible) return null
 
@@ -122,9 +140,6 @@ function ResizeHandles({ nodeId, visible }) {
           className="km-resize-handle nopan nodrag"
           style={{ ...style, cursor, position: 'absolute', zIndex: 20 }}
           onPointerDown={(e) => onPointerDown(e, dir)}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={onPointerUp}
         />
       ))}
     </>

@@ -32,6 +32,7 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
     objectType = 'Standard',
     description = '',
     relType = 'lookup',
+    lineStyle = 'elbow',
     fromLabel = '',
     toLabel = '',
     backgroundMode = 'theme',
@@ -41,7 +42,7 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
   const isPlainNode = nodeType === 'card'
 
   const [isEditing, setIsEditing]         = useState(isEditMode)
-  const [draft, setDraft]                 = useState(isEditMode ? { title: title || '', content: content || '', isTodo: !!isTodo, nodeType, themeColor: themeColor || '', name: name || '', objectType: objectType || 'Standard', description: description || '', relType: relType || 'lookup', fromLabel: fromLabel || '', toLabel: toLabel || '', backgroundMode: backgroundMode || 'theme' } : null)
+  const [draft, setDraft]                 = useState(isEditMode ? { title: title || '', content: content || '', isTodo: !!isTodo, nodeType, themeColor: themeColor || '', name: name || '', objectType: objectType || 'Standard', description: description || '', relType: relType || 'lookup', lineStyle: lineStyle || 'elbow', fromLabel: fromLabel || '', toLabel: toLabel || '', backgroundMode: backgroundMode || 'theme' } : null)
   const [showConvertMenu, setShowConvertMenu] = useState(false)
   const [converting, setConverting]       = useState(false)
   const [showSubmapChoice, setShowSubmapChoice] = useState(false)
@@ -85,7 +86,7 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
   }, [isEditing, editTab])
 
   const startEdit = () => {
-    setDraft({ title: title || '', content: content || '', isTodo: !!isTodo, nodeType, themeColor: themeColor || '', name: name || '', objectType: objectType || 'Standard', description: description || '', relType: relType || 'lookup', fromLabel: fromLabel || '', toLabel: toLabel || '', backgroundMode: backgroundMode || 'theme' })
+    setDraft({ title: title || '', content: content || '', isTodo: !!isTodo, nodeType, themeColor: themeColor || '', name: name || '', objectType: objectType || 'Standard', description: description || '', relType: relType || 'lookup', lineStyle: lineStyle || 'elbow', fromLabel: fromLabel || '', toLabel: toLabel || '', backgroundMode: backgroundMode || 'theme' })
     setEditTab('details')
     setIsEditing(true)
   }
@@ -116,6 +117,7 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
       } : {}),
       ...(nextType === 'relationship' ? {
         relType: draft.relType || 'lookup',
+        lineStyle: draft.lineStyle || 'elbow',
         fromLabel: draft.fromLabel || '',
         toLabel: draft.toLabel || '',
         description: draft.description || '',
@@ -347,6 +349,18 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
                     </select>
                   </div>
                   <div className="field">
+                    <label className="field-label">Line Style</label>
+                    <select
+                      className="field-input"
+                      value={draft.lineStyle || 'elbow'}
+                      onChange={(e) => setDraft((d) => ({ ...d, lineStyle: e.target.value }))}
+                    >
+                      <option value="elbow">Elbow</option>
+                      <option value="straight">Straight</option>
+                      <option value="curve">Curve</option>
+                    </select>
+                  </div>
+                  <div className="field">
                     <label className="field-label">From Label</label>
                     <input className="field-input" value={draft.fromLabel || ''} onChange={(e) => setDraft((d) => ({ ...d, fromLabel: e.target.value }))} />
                   </div>
@@ -395,6 +409,8 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
                 <div className="field">
                   <label className="field-label">Relationship Type</label>
                   <div className="key-display">{node.data?.relType || 'lookup'}</div>
+                  <label className="field-label" style={{ marginTop: 8 }}>Line Style</label>
+                  <div className="key-display">{node.data?.lineStyle || 'elbow'}</div>
                   <label className="field-label" style={{ marginTop: 8 }}>From Label</label>
                   <div className="key-display">{node.data?.fromLabel || '—'}</div>
                   <label className="field-label" style={{ marginTop: 8 }}>To Label</label>

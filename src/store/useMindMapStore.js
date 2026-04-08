@@ -544,6 +544,13 @@ export const useMindMapStore = create((set, get) => ({
         level,
         nodeType,
         ...(nodeType === 'text' ? {} : { size: baseSize }),
+        ...(nodeType === 'relationship' ? {
+          relType: 'lookup',
+          lineStyle: 'elbow',
+          fromLabel: '',
+          toLabel: '',
+          description: '',
+        } : {}),
         content: '',
       },
     }
@@ -589,6 +596,18 @@ export const useMindMapStore = create((set, get) => ({
       isDirty: true,
     }))
     get().scheduleAutosave()
+  },
+
+  setRelationshipElbowWaypoints: (nodeId, waypoints, commit = false) => {
+    set((state) => ({
+      nodes: state.nodes.map((node) => (
+        node.id === nodeId
+          ? { ...node, data: { ...node.data, elbowWaypoints: Array.isArray(waypoints) ? waypoints : [] } }
+          : node
+      )),
+      isDirty: commit ? true : state.isDirty,
+    }))
+    if (commit) get().scheduleAutosave()
   },
 
   setDescendantsCollapsed: () => {
