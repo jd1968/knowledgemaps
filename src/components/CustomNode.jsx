@@ -38,7 +38,7 @@ const HANDLES = [
 
 const MIN_W = 60
 const MIN_H = 30
-const VIEW_MODE_PASSIVE_NODE_TYPES = new Set(['card', 'image', 'note', 'text'])
+const VIEW_MODE_PASSIVE_NODE_TYPES = new Set(['card', 'shape', 'image', 'note', 'text'])
 
 function ResizeHandles({ nodeId, visible }) {
   const { getNode } = useReactFlow()
@@ -193,9 +193,9 @@ const CustomNode = memo(({ id, data, selected }) => {
   const contentPreviewRef = useRef(null)
   const [isContentOverflowing, setIsContentOverflowing] = useState(false)
 
-  const { title, level, l1Color, hasChildren, hasNotes, isSubmap, submapId, nodeType, groupSize, content, objectType = 'Standard', backgroundMode = 'theme', isTodo = false, iconUrl = '', imageUrl = '', imageBorder = false, textSize = 'm', diagramSnapshot = '', dropTargetState = null } = data
+  const { title, level, l1Color, hasChildren, hasNotes, isSubmap, submapId, nodeType, groupSize, content, objectType = 'Standard', backgroundMode = 'theme', shapeBorderColor = '', shapeShadow = false, shapeTextAlign = 'center', isTodo = false, iconUrl = '', imageUrl = '', imageBorder = false, textSize = 'm', diagramSnapshot = '', dropTargetState = null } = data
   const isRelationshipNode = nodeType === 'relationship'
-  const shouldShowContents = !!content?.trim() && nodeType !== 'image' && nodeType !== 'note' && nodeType !== 'diagram' && nodeType !== 'text' && nodeType !== 'relationship' && nodeType !== 'or'
+  const shouldShowContents = !!content?.trim() && nodeType !== 'image' && nodeType !== 'note' && nodeType !== 'diagram' && nodeType !== 'text' && nodeType !== 'relationship' && nodeType !== 'or' && nodeType !== 'shape'
   const shouldTruncateContents = nodeType === 'card' && shouldShowContents
 
   const borderColor = l1Color ?? '#94a3b8'
@@ -205,6 +205,12 @@ const CustomNode = memo(({ id, data, selected }) => {
   const bgAlpha     = isParent ? 0.05 + Math.max(0, level - 1) * 0.04 : 0
   const width       = nodeType === 'text' ? 'auto' : (groupSize?.width ?? '100%')
   const height      = nodeType === 'text' ? null : (groupSize?.height ?? '100%')
+  const resolvedShapeTextAlign = (shapeTextAlign === 'left' || shapeTextAlign === 'right') ? shapeTextAlign : 'center'
+  const shapeTitleJustify = resolvedShapeTextAlign === 'left' ? 'flex-start' : (resolvedShapeTextAlign === 'right' ? 'flex-end' : 'center')
+  const shapeBorder = shapeBorderColor || '#d1d5db'
+  const shapeShadowBase = shapeShadow ? '0 8px 18px rgba(15,23,42,0.14)' : 'none'
+  const shapeShadowHover = shapeShadow ? ', 0 8px 18px rgba(15,23,42,0.14)' : ''
+  const shapeShadowSelected = shapeShadow ? ', 0 10px 20px rgba(15,23,42,0.16)' : ''
   const isReparentSource = reparentSourceNodeId === id
   const isCopySizeSource = copySizeSourceNodeId === id
   const startEditing = useCallback(() => {
@@ -383,6 +389,8 @@ const CustomNode = memo(({ id, data, selected }) => {
             ? 'transparent'
           : nodeType === 'or'
             ? 'transparent'
+          : nodeType === 'shape'
+            ? ((backgroundMode || 'theme') === 'canvas' ? '#ffffff' : blendWithWhite(borderColor, 0.14))
           : nodeType === 'image' || nodeType === 'text' || nodeType === 'object'
             ? 'transparent'
           : nodeType === 'note'
@@ -402,6 +410,8 @@ const CustomNode = memo(({ id, data, selected }) => {
             ? 'none'
           : nodeType === 'or'
             ? 'none'
+          : nodeType === 'shape'
+            ? `1.5px solid ${shapeBorder}`
           : nodeType === 'text'
             ? 'none'
           : nodeType === 'image' || nodeType === 'object'
@@ -422,6 +432,12 @@ const CustomNode = memo(({ id, data, selected }) => {
           ? 'none'
           : nodeType === 'or'
           ? 'none'
+          : nodeType === 'shape'
+          ? (selected
+            ? `0 0 0 3px ${borderColor}40${shapeShadowSelected}`
+            : hovered
+              ? `0 0 0 2px ${borderColor}70${shapeShadowHover}`
+              : shapeShadowBase)
           : nodeType === 'image' || nodeType === 'text'
           ? (selected ? `0 0 0 2px ${borderColor}60` : hovered ? `0 0 0 1.5px ${borderColor}40` : 'none')
           : selected
@@ -691,9 +707,15 @@ const CustomNode = memo(({ id, data, selected }) => {
             display: 'flex',
             flexDirection: 'row',
             alignItems: 'center',
-            justifyContent: (isParent || hasChildren || iconUrl || shouldShowContents) ? 'flex-start' : 'center',
-            padding: isParent ? '10px 14px' : shouldShowContents ? (iconUrl && !editing ? '10px 14px 4px 8px' : '10px 14px 4px') : (iconUrl && !editing ? '10px 14px 10px 8px' : '10px 14px'),
-            textAlign: (isParent || hasChildren || iconUrl || shouldShowContents) ? 'left' : 'center',
+            justifyContent: nodeType === 'shape'
+              ? shapeTitleJustify
+              : ((isParent || hasChildren || iconUrl || shouldShowContents) ? 'flex-start' : 'center'),
+            padding: nodeType === 'shape'
+              ? '10px 12px'
+              : (isParent ? '10px 14px' : shouldShowContents ? (iconUrl && !editing ? '10px 14px 4px 8px' : '10px 14px 4px') : (iconUrl && !editing ? '10px 14px 10px 8px' : '10px 14px')),
+            textAlign: nodeType === 'shape'
+              ? resolvedShapeTextAlign
+              : ((isParent || hasChildren || iconUrl || shouldShowContents) ? 'left' : 'center'),
             wordBreak: 'break-word',
             lineHeight: '1.35',
             position: 'relative',
@@ -721,7 +743,7 @@ const CustomNode = memo(({ id, data, selected }) => {
                   fontSize: 'inherit',
                   fontWeight: 'inherit',
                   color: 'inherit',
-                  textAlign: isParent ? 'left' : 'center',
+                  textAlign: nodeType === 'shape' ? resolvedShapeTextAlign : (isParent ? 'left' : 'center'),
                   fontFamily: 'inherit',
                   lineHeight: 'inherit',
                   padding: 0,

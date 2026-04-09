@@ -18,7 +18,7 @@ const DEFAULT_NODE_SIZE_BY_LEVEL = {
   2: { width: 150, height: 88 },
   3: { width: 130, height: 76 },
 }
-const RELATIONSHIP_ALLOWED_NODE_TYPES = new Set(['card', 'object', 'diagram', 'submap', 'note', 'image', 'text', 'or'])
+const RELATIONSHIP_ALLOWED_NODE_TYPES = new Set(['card', 'shape', 'object', 'diagram', 'submap', 'note', 'image', 'text', 'or'])
 const canConnectNodeTypes = (sourceType = 'card', targetType = 'card') => {
   if (sourceType === 'relationship') return RELATIONSHIP_ALLOWED_NODE_TYPES.has(targetType)
   if (targetType === 'relationship') return RELATIONSHIP_ALLOWED_NODE_TYPES.has(sourceType)
@@ -52,6 +52,7 @@ const normalizeLevel = (level = 1) => Math.min(Math.max(level, 0), 3)
 const getDefaultSizeForNode = (node) => {
   if (node?.data?.nodeType === 'relationship') return { width: 240, height: 40 }
   if (node?.data?.nodeType === 'or') return { width: 120, height: 54 }
+  if (node?.data?.nodeType === 'shape') return { width: 190, height: 80 }
   if (node?.data?.nodeType === 'object') return { width: 200, height: 90 }
   if (node?.data?.nodeType === 'image' || node?.data?.nodeType === 'note' || node?.data?.nodeType === 'diagram') return { width: 220, height: 180 }
   return DEFAULT_NODE_SIZE_BY_LEVEL[normalizeLevel(node?.data?.level ?? 1)]
@@ -583,6 +584,12 @@ export const useMindMapStore = create((set, get) => ({
             from: { x: 0, y: 0 },
             to: { x: 0, y: 0 },
           },
+        } : {}),
+        ...(nodeType === 'shape' ? {
+          backgroundMode: 'theme',
+          shapeBorderColor: '',
+          shapeShadow: false,
+          shapeTextAlign: 'center',
         } : {}),
         content: '',
       },
@@ -1232,7 +1239,20 @@ export const useMindMapStore = create((set, get) => ({
       position: snappedPosition,
       selected: true,
       style: nodeType === 'text' ? undefined : { width: size.width, height: size.height },
-      data: { title: defaultTitle, key: id, level: childLevel, nodeType, size, content: '' },
+      data: {
+        title: defaultTitle,
+        key: id,
+        level: childLevel,
+        nodeType,
+        size,
+        ...(nodeType === 'shape' ? {
+          backgroundMode: 'theme',
+          shapeBorderColor: '',
+          shapeShadow: false,
+          shapeTextAlign: 'center',
+        } : {}),
+        content: '',
+      },
     }
 
     const newEdge = {

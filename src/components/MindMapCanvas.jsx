@@ -24,7 +24,7 @@ import { STANDARD_THEME_COLORS } from '../lib/themePalette'
 const nodeTypes = { mindmap: CustomNode }
 const edgeTypes = { 'straight-center': StraightCenterEdge, 'relationship-edge': RelationshipEdge }
 const TOOLBOX_DRAG_MIME = 'application/x-knowledgemaps-node-type'
-const RELATIONSHIP_ALLOWED_NODE_TYPES = new Set(['card', 'object', 'diagram', 'submap', 'note', 'image', 'text', 'or'])
+const RELATIONSHIP_ALLOWED_NODE_TYPES = new Set(['card', 'shape', 'object', 'diagram', 'submap', 'note', 'image', 'text', 'or'])
 const canConnectNodeTypes = (sourceType = 'card', targetType = 'card') => {
   if (sourceType === 'relationship') return RELATIONSHIP_ALLOWED_NODE_TYPES.has(targetType)
   if (targetType === 'relationship') return RELATIONSHIP_ALLOWED_NODE_TYPES.has(sourceType)
@@ -223,7 +223,7 @@ const getStableNodeSize = (node) => {
 
 const LEVEL_ZOOM = { 0: 0.7, 1: 1.0, 2: 1.3, 3: 1.6 }
 const zoomForLevel = (level) => LEVEL_ZOOM[Math.min(level ?? 2, 3)] ?? 1.6
-const VIEW_MODE_PASSIVE_NODE_TYPES = new Set(['card', 'image', 'note', 'text'])
+const VIEW_MODE_PASSIVE_NODE_TYPES = new Set(['card', 'shape', 'image', 'note', 'text'])
 
 // Watches focusNodeId and flies the viewport to that node at a level-appropriate zoom
 const FocusNodeHandler = () => {
@@ -430,7 +430,7 @@ const MindMapCanvas = () => {
   const relationshipClickRef = useRef({ id: null, ts: 0, x: 0, y: 0 })
   const viewport = useViewport()
   const { screenToFlowPosition, getViewport, setViewport } = useReactFlow()
-  const CONVERT_LABELS = { card: 'Card', object: 'Object', relationship: 'Relationship', or: 'Or', diagram: 'Diagram', submap: 'Submap' }
+  const CONVERT_LABELS = { card: 'Card', shape: 'Shape', object: 'Object', relationship: 'Relationship', or: 'Or', diagram: 'Diagram', submap: 'Submap' }
   const hierarchyEdges = useMemo(() => edges.filter((e) => !isRelationshipEdge(e)), [edges])
   const relationshipEdges = useMemo(() => edges.filter((e) => isRelationshipEdge(e)), [edges])
 
@@ -1367,7 +1367,7 @@ const MindMapCanvas = () => {
                 Convert To <span aria-hidden="true">›</span>
               </button>
               <div className="map-context-menu__submenu-panel" role="menu">
-              {['card', 'object', 'relationship', 'or', 'diagram', 'submap'].map((type) => (
+              {['card', 'shape', 'object', 'relationship', 'or', 'diagram', 'submap'].map((type) => (
                 <button
                   key={type}
                   type="button"

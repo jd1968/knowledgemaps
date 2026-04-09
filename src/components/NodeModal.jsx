@@ -5,7 +5,8 @@ import MarkdownEditor from './MarkdownEditor'
 import SubmapChoiceModal from './SubmapChoiceModal'
 import { STANDARD_THEME_COLORS } from '../lib/themePalette'
 
-const TYPE_LABELS = { card: 'Card', object: 'Object', relationship: 'Relationship', or: 'Or', diagram: 'Diagram', submap: 'Submap' }
+const TYPE_LABELS = { card: 'Card', shape: 'Shape', object: 'Object', relationship: 'Relationship', or: 'Or', diagram: 'Diagram', submap: 'Submap' }
+const SHAPE_BORDER_COLOR_OPTIONS = ['#d1d5db', '#9ca3af', ...STANDARD_THEME_COLORS]
 
 const isTouch = typeof window !== 'undefined' && window.matchMedia('(hover: none) and (pointer: coarse)').matches
 
@@ -38,10 +39,13 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
     fromLabel = '',
     toLabel = '',
     backgroundMode = 'theme',
+    shapeBorderColor = '',
+    shapeShadow = false,
+    shapeTextAlign = 'center',
   } = node.data
   const isObjectNode = nodeType === 'object'
   const isRelationshipNode = nodeType === 'relationship'
-  const isPlainNode = nodeType === 'card'
+  const isPlainNode = nodeType === 'card' || nodeType === 'shape'
   const getNodeTitleById = useCallback((nodeId) => {
     if (!nodeId) return ''
     const found = allNodes.find((n) => n.id === nodeId)
@@ -59,7 +63,24 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
   }, [allEdges, getNodeTitleById, id, isRelationshipNode])
 
   const [isEditing, setIsEditing]         = useState(isEditMode)
-  const [draft, setDraft]                 = useState(isEditMode ? { title: title || '', content: content || '', isTodo: !!isTodo, nodeType, themeColor: themeColor || '', name: name || '', objectType: objectType || 'Standard', description: description || '', relType: relType || 'lookup', lineStyle: lineStyle || 'elbow', fromLabel: fromLabel || '', toLabel: toLabel || '', backgroundMode: backgroundMode || 'theme' } : null)
+  const [draft, setDraft]                 = useState(isEditMode ? {
+    title: title || '',
+    content: content || '',
+    isTodo: !!isTodo,
+    nodeType,
+    themeColor: themeColor || '',
+    name: name || '',
+    objectType: objectType || 'Standard',
+    description: description || '',
+    relType: relType || 'lookup',
+    lineStyle: lineStyle || 'elbow',
+    fromLabel: fromLabel || '',
+    toLabel: toLabel || '',
+    backgroundMode: backgroundMode || 'theme',
+    shapeBorderColor: shapeBorderColor || '',
+    shapeShadow: !!shapeShadow,
+    shapeTextAlign: shapeTextAlign || 'center',
+  } : null)
   const [showConvertMenu, setShowConvertMenu] = useState(false)
   const [converting, setConverting]       = useState(false)
   const [showSubmapChoice, setShowSubmapChoice] = useState(false)
@@ -103,7 +124,24 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
   }, [isEditing, editTab])
 
   const startEdit = () => {
-    setDraft({ title: title || '', content: content || '', isTodo: !!isTodo, nodeType, themeColor: themeColor || '', name: name || '', objectType: objectType || 'Standard', description: description || '', relType: relType || 'lookup', lineStyle: lineStyle || 'elbow', fromLabel: fromLabel || '', toLabel: toLabel || '', backgroundMode: backgroundMode || 'theme' })
+    setDraft({
+      title: title || '',
+      content: content || '',
+      isTodo: !!isTodo,
+      nodeType,
+      themeColor: themeColor || '',
+      name: name || '',
+      objectType: objectType || 'Standard',
+      description: description || '',
+      relType: relType || 'lookup',
+      lineStyle: lineStyle || 'elbow',
+      fromLabel: fromLabel || '',
+      toLabel: toLabel || '',
+      backgroundMode: backgroundMode || 'theme',
+      shapeBorderColor: shapeBorderColor || '',
+      shapeShadow: !!shapeShadow,
+      shapeTextAlign: shapeTextAlign || 'center',
+    })
     setEditTab('details')
     setIsEditing(true)
   }
@@ -139,8 +177,13 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
         toLabel: draft.toLabel || '',
         description: draft.description || '',
       } : {}),
-      ...(nextType === 'card' ? {
+      ...((nextType === 'card' || nextType === 'shape') ? {
         backgroundMode: draft.backgroundMode || 'theme',
+      } : {}),
+      ...(nextType === 'shape' ? {
+        shapeBorderColor: draft.shapeBorderColor || '',
+        shapeShadow: !!draft.shapeShadow,
+        shapeTextAlign: draft.shapeTextAlign || 'center',
       } : {}),
     })
     onClose()
@@ -317,6 +360,77 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
                   </div>
                 </div>
               )}
+              {editTab === 'style' && effectiveDraftType === 'shape' && (
+                <>
+                  <div className="field">
+                    <label className="field-label">Border Color</label>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                      <button
+                        type="button"
+                        className={`btn btn--sm${!draft.shapeBorderColor ? ' btn--primary' : ' btn--secondary'}`}
+                        onClick={() => setDraft((d) => ({ ...d, shapeBorderColor: '' }))}
+                      >
+                        Auto
+                      </button>
+                      {SHAPE_BORDER_COLOR_OPTIONS.map((color) => (
+                        <button
+                          key={color}
+                          type="button"
+                          aria-label={`Border ${color}`}
+                          title={color}
+                          onClick={() => setDraft((d) => ({ ...d, shapeBorderColor: color }))}
+                          style={{
+                            width: 22,
+                            height: 22,
+                            borderRadius: 999,
+                            border: draft.shapeBorderColor === color ? '2px solid #1f2937' : '1px solid #e5e7eb',
+                            background: color,
+                            cursor: 'pointer',
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                  <div className="field">
+                    <label className="field-label">Drop Shadow</label>
+                    <div className="node-create-type-row">
+                      <button
+                        type="button"
+                        className={`btn btn--sm${draft.shapeShadow ? ' btn--secondary' : ' btn--primary'}`}
+                        onClick={() => setDraft((d) => ({ ...d, shapeShadow: false }))}
+                      >
+                        Off
+                      </button>
+                      <button
+                        type="button"
+                        className={`btn btn--sm${draft.shapeShadow ? ' btn--primary' : ' btn--secondary'}`}
+                        onClick={() => setDraft((d) => ({ ...d, shapeShadow: true }))}
+                      >
+                        On
+                      </button>
+                    </div>
+                  </div>
+                  <div className="field">
+                    <label className="field-label">Text Alignment</label>
+                    <div className="node-create-type-row">
+                      {[
+                        { id: 'left', label: 'Left' },
+                        { id: 'center', label: 'Center' },
+                        { id: 'right', label: 'Right' },
+                      ].map((opt) => (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          className={`btn btn--sm${(draft.shapeTextAlign || 'center') === opt.id ? ' btn--primary' : ' btn--secondary'}`}
+                          onClick={() => setDraft((d) => ({ ...d, shapeTextAlign: opt.id }))}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
 
               {editTab === 'details' && isObjectNode ? (
                 <>
@@ -478,7 +592,7 @@ export default function NodeModal({ node, isNew, onDelete, onClose }) {
             showConvertMenu ? (
               <>
                 <span className="node-modal-convert-label">Convert to:</span>
-                {['card', 'object', 'relationship', 'or', 'diagram', 'submap'].map((t) => (
+                {['card', 'shape', 'object', 'relationship', 'or', 'diagram', 'submap'].map((t) => (
                   <button
                     key={t}
                     className={`btn btn--sm${nodeType === t ? ' btn--disabled' : ' btn--secondary'}`}

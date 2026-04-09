@@ -45,6 +45,12 @@ const ObjectIcon = () => (
   </svg>
 )
 
+const ShapeIcon = () => (
+  <svg width="24" height="18" viewBox="0 0 24 18" fill="none">
+    <rect x="2" y="2" width="20" height="14" rx="2" stroke="currentColor" strokeWidth="1.5" />
+  </svg>
+)
+
 const RelationshipIcon = () => (
   <svg width="24" height="18" viewBox="0 0 24 18" fill="none">
     <line x1="4" y1="9" x2="20" y2="9" stroke="currentColor" strokeWidth="1.5" />
@@ -62,6 +68,7 @@ const OrIcon = () => (
 
 const ITEMS = [
   { type: 'card',  label: 'Card',  Icon: NodeIcon },
+  { type: 'shape', label: 'Shape', Icon: ShapeIcon },
   { type: 'object', label: 'Object', Icon: ObjectIcon },
   { type: 'relationship', label: 'Relationship', Icon: RelationshipIcon },
   { type: 'or', label: 'or', Icon: OrIcon },
