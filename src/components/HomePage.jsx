@@ -38,6 +38,11 @@ export default function HomePage() {
   }, [user.id])
 
   const handleOpen = (mapId) => {
+    setOpening(mapId)
+    navigate(`/editor/${mapId}`)
+  }
+
+  const handleOpenLegacy = (mapId) => {
     navigate(`/map/${mapId}`)
   }
 
@@ -47,7 +52,7 @@ export default function HomePage() {
     const result = await saveMap()
     if (result.success) {
       const { currentMapId } = useMindMapStore.getState()
-      navigate(`/map/${currentMapId}`)
+      navigate(`/editor/${currentMapId}`)
     } else {
       setOpening(null)
       alert('Failed to create map')
@@ -92,15 +97,30 @@ export default function HomePage() {
           ) : (
             <div className="home-page__grid">
               {maps.map((map) => (
-                <button
+                <article
                   key={map.id}
                   className={`home-map-tile${opening === map.id ? ' home-map-tile--opening' : ''}`}
-                  onClick={() => handleOpen(map.id)}
-                  disabled={!!opening}
                 >
-                  <span className="home-map-tile__name">{map.name}</span>
-                  <span className="home-map-tile__date">{fmt(map.last_visited_at ?? map.updated_at)}</span>
-                </button>
+                  <button
+                    type="button"
+                    className="home-map-tile__main"
+                    onClick={() => handleOpen(map.id)}
+                    disabled={!!opening}
+                  >
+                    <span className="home-map-tile__name">{map.name}</span>
+                    <span className="home-map-tile__date">{fmt(map.last_visited_at ?? map.updated_at)}</span>
+                  </button>
+                  <div className="home-map-tile__actions">
+                    <button
+                      type="button"
+                      className="btn btn--secondary btn--sm home-map-tile__legacy-btn"
+                      onClick={() => handleOpenLegacy(map.id)}
+                      disabled={!!opening}
+                    >
+                      Legacy
+                    </button>
+                  </div>
+                </article>
               ))}
             </div>
           )}

@@ -12,6 +12,7 @@ import DiagramEditorView from './components/DiagramEditorView'
 import MapListModal from './components/MapListModal'
 import LoginPage from './components/LoginPage'
 import HomePage from './components/HomePage'
+import MapEditorPage from './components/MapEditorPage'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { useMindMapStore } from './store/useMindMapStore'
 import './App.css'
@@ -97,6 +98,7 @@ function AppInner() {
   return (
     <Routes>
       <Route path="/" element={<HomePage />} />
+      <Route path="/editor/:mapId" element={<MapEditorPage />} />
       <Route path="/map/:mapId" element={<MapPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
