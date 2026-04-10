@@ -18,7 +18,7 @@ import { useMindMapStore } from '../store/useMindMapStore'
 import CustomNode from './CustomNode'
 import StraightCenterEdge from './StraightCenterEdge'
 import RelationshipEdge from './RelationshipEdge'
-import { GRID, GRID_SIZE, snapPoint } from '../lib/grid'
+import { GRID, GRID_SIZE, MAP_GRID_SIZE, MAP_GRID_Y_SIZE, snapPoint } from '../lib/grid'
 import { STANDARD_THEME_COLORS } from '../lib/themePalette'
 
 const nodeTypes = { mindmap: CustomNode }
@@ -232,6 +232,7 @@ const CANVAS_POLICY = {
   panOnScrollMode: PanOnScrollMode.Vertical,
 }
 const DRAG_SNAP_GRID = [GRID_SIZE, GRID_SIZE]
+const BACKGROUND_GRID = [MAP_GRID_SIZE, MAP_GRID_Y_SIZE]
 
 // Watches focusNodeId and flies the viewport to that node.
 const FocusNodeHandler = () => {
@@ -387,6 +388,7 @@ const MindMapCanvas = () => {
     setRelationshipElbowWaypoints,
     reverseRelationshipConnector,
     moveNodePosition,
+    autoLayoutChildrenForCard,
     setReparentSourceNodeId,
     setCopySizeSourceNodeId,
     openDiagramEditor,
@@ -1369,6 +1371,23 @@ const MindMapCanvas = () => {
               {contextNode.data?.isTodo ? 'Unmark To Do' : 'Mark as To Do'}
             </button>
           )}
+          {contextNode && contextNode.data?.nodeType === 'card' && (() => {
+            const contextChildIds = childrenMap[contextNode.id] || []
+            const hasDirectChildren = contextChildIds.length > 0
+            const hasGrandchildren = contextChildIds.some((childId) => (childrenMap[childId]?.length ?? 0) > 0)
+            return hasDirectChildren && !hasGrandchildren
+          })() && (
+            <button
+              type="button"
+              className="map-context-menu__item"
+              onClick={() => {
+                closeContextMenus()
+                autoLayoutChildrenForCard(contextNode.id)
+              }}
+            >
+              Auto Layout Children
+            </button>
+          )}
           {contextNode && contextNode.data?.level > 0 && contextNode.data?.nodeType === 'diagram' && (
             <button
               type="button"
@@ -1602,7 +1621,7 @@ const MindMapCanvas = () => {
         {isEditMode && (
           <Background
             variant={BackgroundVariant.Lines}
-            gap={GRID}
+            gap={BACKGROUND_GRID}
             offset={[0, 0]}
             size={0.8}
             color="#d8cfc2"

@@ -4,6 +4,7 @@ export const GRID_SIZE = 10
 export const MAP_CLIENT_WIDTH = 1470
 export const MAP_GRID_COLUMNS = 6
 export const MAP_GRID_SIZE = MAP_CLIENT_WIDTH / MAP_GRID_COLUMNS
+export const MAP_GRID_Y_SIZE = MAP_GRID_SIZE / 2
 export const CARD_GAP = 30
 export const GRID = [MAP_GRID_SIZE, MAP_GRID_SIZE]
 

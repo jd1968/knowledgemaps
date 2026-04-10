@@ -7,7 +7,7 @@ import { NodeIconDisplay, NodeIconUpload } from './NodeIcon'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { markdownComponents, urlTransform } from './MarkdownEditor'
-import { GRID_SIZE, MAP_GRID_SIZE, snapCardSpanSize, snapValue } from '../lib/grid'
+import { GRID_SIZE, MAP_GRID_SIZE, MAP_GRID_Y_SIZE, NEST_PAD_BOTTOM, NEST_PAD_LEFT, NEST_PAD_RIGHT, NEST_PAD_TOP, snapCardSpanSize, snapValue } from '../lib/grid'
 
 
 // Blend a hex colour with white at the given opacity (0–1), returning an opaque rgb()
@@ -98,9 +98,9 @@ function ResizeHandles({ nodeId, nodeType, nodeLevel, visible }) {
     const isL1CardLike = (nodeType === 'card' || nodeType === 'diagram') && nodeLevel === 1
     const snapped = {
       width: isL1CardLike ? snapCardSpanSize(w, { min: MIN_W }) : Math.max(MIN_W, snapValue(w, GRID_SIZE)),
-      height: isL1CardLike ? snapCardSpanSize(h, { min: MIN_H }) : Math.max(MIN_H, snapValue(h, GRID_SIZE)),
+      height: isL1CardLike ? snapCardSpanSize(h, { min: MIN_H, cellSize: MAP_GRID_Y_SIZE }) : Math.max(MIN_H, snapValue(h, GRID_SIZE)),
       x: snapValue(x, isL1CardLike ? MAP_GRID_SIZE : GRID_SIZE),
-      y: snapValue(y, isL1CardLike ? MAP_GRID_SIZE : GRID_SIZE),
+      y: snapValue(y, isL1CardLike ? MAP_GRID_Y_SIZE : GRID_SIZE),
     }
     drag.last = snapped
     if (!drag.moved && (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5)) {
@@ -207,6 +207,13 @@ const CustomNode = memo(({ id, data, selected }) => {
   const bgAlpha     = isParent ? 0.05 + Math.max(0, level - 1) * 0.04 : 0
   const width       = nodeType === 'text' ? 'auto' : (groupSize?.width ?? '100%')
   const height      = nodeType === 'text' ? null : (groupSize?.height ?? '100%')
+  const numericHeight = typeof groupSize?.height === 'number'
+    ? groupSize.height
+    : (typeof data?.size?.height === 'number' ? data.size.height : null)
+  const childClientContentOffset = shouldShowContents && numericHeight
+    ? Math.min(Math.max(40, numericHeight * 0.2), 180)
+    : 0
+  const childClientAreaTop = NEST_PAD_TOP + childClientContentOffset
   const resolvedShapeTextAlign = (shapeTextAlign === 'left' || shapeTextAlign === 'right') ? shapeTextAlign : 'center'
   const shapeTitleJustify = resolvedShapeTextAlign === 'left' ? 'flex-start' : (resolvedShapeTextAlign === 'right' ? 'flex-end' : 'center')
   const shapeBorder = shapeBorderColor || '#d1d5db'
@@ -215,9 +222,11 @@ const CustomNode = memo(({ id, data, selected }) => {
   const shapeShadowSelected = shapeShadow ? ', 0 10px 20px rgba(15,23,42,0.16)' : ''
   const isReparentSource = reparentSourceNodeId === id
   const isCopySizeSource = copySizeSourceNodeId === id
-  const liveNodePosition = getNode(id)?.position
+  const liveNode = getNode(id)
+  const liveNodePosition = liveNode?.position
+  const liveNodeHeight = liveNode?.measured?.height ?? liveNode?.style?.height ?? data?.size?.height
   const hoverPositionTitle = liveNodePosition
-    ? `Position: x ${Math.round(liveNodePosition.x)}, y ${Math.round(liveNodePosition.y)}`
+    ? `Position: x ${Math.round(liveNodePosition.x)}, y ${Math.round(liveNodePosition.y)}${liveNodeHeight != null ? `, h ${Math.round(Number(liveNodeHeight))}` : ''}`
     : undefined
   const startEditing = useCallback(() => {
     setDraft(title || '')
@@ -474,6 +483,22 @@ const CustomNode = memo(({ id, data, selected }) => {
 
       {nodeType !== 'text' && (
         <ResizeHandles nodeId={id} nodeType={nodeType} nodeLevel={level} visible={isEditMode && selected && !isRelationshipNode} />
+      )}
+
+      {isEditMode && nodeType === 'card' && (level ?? 0) > 0 && hasChildren && (
+        <div
+          style={{
+            position: 'absolute',
+            left: NEST_PAD_LEFT,
+            right: NEST_PAD_RIGHT,
+            top: childClientAreaTop,
+            bottom: NEST_PAD_BOTTOM,
+            border: `1.5px dashed ${borderColor}88`,
+            borderRadius: 8,
+            pointerEvents: 'none',
+            zIndex: 1,
+          }}
+        />
       )}
 
       {!editing && isTodo && (
