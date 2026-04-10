@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { applyNodeChanges, applyEdgeChanges, addEdge } from '@xyflow/react'
 import { v4 as uuidv4 } from 'uuid'
 import { supabase } from '../lib/supabase'
-import { GRID_SIZE, NEST_PAD_LEFT, NEST_PAD_TOP, NEST_V_SPACING, snapPoint, snapSize, snapValue } from '../lib/grid'
+import { GRID_SIZE, MAP_GRID_SIZE, NEST_PAD_LEFT, NEST_PAD_TOP, NEST_V_SPACING, snapCardSpanSize, snapPoint, snapSize, snapValue } from '../lib/grid'
 import { buildSubtreePayload, parseSubtreePayload, remapSubtreeForPaste } from '../lib/subtreeClipboard'
 
 const HISTORY_LIMIT = 50
@@ -48,6 +48,24 @@ const normalizeRelationshipEdgeForNode = (edge, relationshipNodeId) => {
 const hierarchyEdgesOnly = (edges) => edges.filter((e) => !isRelationshipEdge(e))
 
 const normalizeLevel = (level = 1) => Math.min(Math.max(level, 0), 3)
+const FIXED_ORIGIN = { x: 0, y: 0 }
+
+const snapResizeDimensionsForNode = (node, dimensions, isResizing) => {
+  if (isResizing) return dimensions
+  const isL1Card = node?.data?.nodeType === 'card' && (node?.data?.level ?? 0) === 1
+  if (isL1Card) {
+    return {
+      width: snapCardSpanSize(dimensions.width, { min: 60 }),
+      height: snapCardSpanSize(dimensions.height, { min: 30 }),
+    }
+  }
+  return snapSize(dimensions, { gridSize: GRID_SIZE })
+}
+
+const getMoveSnapGridForNode = (node) => {
+  const isL1Card = node?.data?.nodeType === 'card' && (node?.data?.level ?? 0) === 1
+  return isL1Card ? MAP_GRID_SIZE : GRID_SIZE
+}
 
 const getDefaultSizeForNode = (node) => {
   if (node?.data?.nodeType === 'relationship') return { width: 240, height: 40 }
@@ -70,12 +88,12 @@ const styleDim = (v) => {
 const resolveNodePixelSize = (node) => {
   const fromData = node?.data?.size
   if (fromData?.width != null && fromData?.height != null) {
-    return snapSize({ width: fromData.width, height: fromData.height }, { gridSize: GRID_SIZE })
+    return snapResizeDimensionsForNode(node, { width: fromData.width, height: fromData.height }, false)
   }
   const w = styleDim(node?.style?.width)
   const h = styleDim(node?.style?.height)
-  if (w != null && h != null) return snapSize({ width: w, height: h }, { gridSize: GRID_SIZE })
-  return snapSize(getDefaultSizeForNode(node), { gridSize: GRID_SIZE })
+  if (w != null && h != null) return snapResizeDimensionsForNode(node, { width: w, height: h }, false)
+  return snapResizeDimensionsForNode(node, getDefaultSizeForNode(node), false)
 }
 
 const shiftPoint = (point, dx, dy) => {
@@ -97,6 +115,55 @@ const shiftRelationshipNodeData = (nodeData, dx, dy) => {
     ...nodeData,
     ...(hasShiftedFree ? { relationshipFreeEnds: shiftedFree } : {}),
     ...(Array.isArray(waypoints) ? { elbowWaypoints: waypoints } : {}),
+  }
+}
+
+const getNodeBounds = (node) => {
+  const { width, height } = resolveNodePixelSize(node)
+  const x = node?.position?.x ?? 0
+  const y = node?.position?.y ?? 0
+  return {
+    minX: x,
+    minY: y,
+    maxX: x + width,
+    maxY: y + height,
+  }
+}
+
+const computeMapBounds = (nodes) => {
+  if (!Array.isArray(nodes) || nodes.length === 0) {
+    return { minX: 0, minY: 0, maxX: 0, maxY: 0, width: 0, height: 0 }
+  }
+  const bounds = nodes.reduce((acc, node) => {
+    const b = getNodeBounds(node)
+    return {
+      minX: Math.min(acc.minX, b.minX),
+      minY: Math.min(acc.minY, b.minY),
+      maxX: Math.max(acc.maxX, b.maxX),
+      maxY: Math.max(acc.maxY, b.maxY),
+    }
+  }, {
+    minX: Number.POSITIVE_INFINITY,
+    minY: Number.POSITIVE_INFINITY,
+    maxX: Number.NEGATIVE_INFINITY,
+    maxY: Number.NEGATIVE_INFINITY,
+  })
+  return {
+    ...bounds,
+    width: Math.max(0, bounds.maxX - bounds.minX),
+    height: Math.max(0, bounds.maxY - bounds.minY),
+  }
+}
+
+const computeNormalizationDelta = (nodes, origin = FIXED_ORIGIN) => {
+  const bounds = computeMapBounds(nodes)
+  const shiftX = bounds.minX < origin.x ? origin.x - bounds.minX : 0
+  const shiftY = bounds.minY < origin.y ? origin.y - bounds.minY : 0
+  return {
+    shiftX,
+    shiftY,
+    requiresShift: !!(shiftX || shiftY),
+    bounds,
   }
 }
 
@@ -123,9 +190,7 @@ const applyResizeChanges = (changes, nodes, _edges) => {
     const change = changeById.get(node.id)
     if (!change) return node
     // During active drag keep raw dimensions for smooth tracking; snap only on release
-    const dims = change.resizing
-      ? change.dimensions
-      : snapSize(change.dimensions, { gridSize: GRID_SIZE })
+    const dims = snapResizeDimensionsForNode(node, change.dimensions, !!change.resizing)
     return {
       ...node,
       style: {
@@ -242,6 +307,57 @@ export const useMindMapStore = create((set, get) => ({
 
   focusNode: (nodeId) => set({ focusNodeId: nodeId }),
   clearFocusNode: () => set({ focusNodeId: null }),
+
+  getMapBounds: () => {
+    const { nodes } = get()
+    return computeMapBounds(nodes.filter((n) => (n.data?.level ?? 0) > 0))
+  },
+
+  previewNormalizationDelta: () => {
+    const { nodes } = get()
+    return computeNormalizationDelta(nodes.filter((n) => (n.data?.level ?? 0) > 0))
+  },
+
+  normalizeMapCoordinates: async ({ persist = true } = {}) => {
+    const state = get()
+    const candidateNodes = state.nodes.filter((n) => (n.data?.level ?? 0) > 0)
+    const { shiftX, shiftY, requiresShift, bounds } = computeNormalizationDelta(candidateNodes)
+    if (!requiresShift) {
+      return { success: true, changed: false, shiftX: 0, shiftY: 0, bounds }
+    }
+
+    get().pushHistory()
+    set((curr) => ({
+      nodes: curr.nodes.map((node) => {
+        if ((node.data?.level ?? 0) <= 0) return node
+        return {
+          ...node,
+          position: {
+            x: (node?.position?.x ?? 0) + shiftX,
+            y: (node?.position?.y ?? 0) + shiftY,
+          },
+          data: shiftRelationshipNodeData(node.data, shiftX, shiftY),
+        }
+      }),
+      isDirty: true,
+    }))
+
+    const currentMapId = get().currentMapId
+    if (persist && currentMapId) {
+      const saveResult = await get().saveMap()
+      if (!saveResult?.success) {
+        return { success: false, changed: true, shiftX, shiftY, bounds, error: saveResult?.error }
+      }
+      return { success: true, changed: true, persisted: true, shiftX, shiftY, bounds }
+    }
+
+    if (persist && !currentMapId) {
+      return { success: true, changed: true, persisted: false, shiftX, shiftY, bounds }
+    }
+
+    get().scheduleAutosave()
+    return { success: true, changed: true, persisted: false, shiftX, shiftY, bounds }
+  },
 
   // ── Submap navigation ─────────────────────────────────────────
   // Each entry: { mapId, mapName }  — the trail of maps above the current one
@@ -606,16 +722,17 @@ export const useMindMapStore = create((set, get) => ({
   },
 
   resizeNode: (nodeId, { width, height, x, y }, isResizing = false) => {
-    const size = isResizing
-      ? { width, height }
-      : snapSize({ width, height }, { gridSize: GRID_SIZE })
+    const node = get().nodes.find((n) => n.id === nodeId)
+    const size = snapResizeDimensionsForNode(node, { width, height }, isResizing)
+    const isL1Card = node?.data?.nodeType === 'card' && (node?.data?.level ?? 0) === 1
+    const positionSnapGrid = isL1Card ? MAP_GRID_SIZE : GRID_SIZE
     set((state) => ({
       nodes: state.nodes.map((node) => {
         if (node.id !== nodeId) return node
         return {
           ...node,
           position: (x != null && y != null)
-            ? { x: isResizing ? x : snapValue(x, GRID_SIZE), y: isResizing ? y : snapValue(y, GRID_SIZE) }
+            ? { x: isResizing ? x : snapValue(x, positionSnapGrid), y: isResizing ? y : snapValue(y, positionSnapGrid) }
             : node.position,
           style: { ...(node.style || {}), width: size.width, height: size.height },
           // Mark explicit user resizes as manual so layout defaults don't override them.
@@ -1401,7 +1518,7 @@ export const useMindMapStore = create((set, get) => ({
   moveSubtreeBy: (rootId, dx, dy, shouldScheduleAutosave = true) => {
     if (!get().isEditMode) return
     if (!dx && !dy) return
-    const { edges } = get()
+    const { edges, nodes } = get()
     const hierarchyEdges = hierarchyEdgesOnly(edges)
     const descendants = new Set()
     const stack = [rootId]
@@ -1416,13 +1533,24 @@ export const useMindMapStore = create((set, get) => ({
     }
     if (descendants.size === 0) return
 
+    let minDescendantX = Number.POSITIVE_INFINITY
+    let minDescendantY = Number.POSITIVE_INFINITY
+    nodes.forEach((node) => {
+      if (!descendants.has(node.id)) return
+      minDescendantX = Math.min(minDescendantX, node.position?.x ?? 0)
+      minDescendantY = Math.min(minDescendantY, node.position?.y ?? 0)
+    })
+    const boundedDx = Math.max(dx, FIXED_ORIGIN.x - minDescendantX)
+    const boundedDy = Math.max(dy, FIXED_ORIGIN.y - minDescendantY)
+    if (!boundedDx && !boundedDy) return
+
     set((state) => ({
       nodes: state.nodes.map((n) =>
         descendants.has(n.id)
           ? {
               ...n,
-              position: { x: n.position.x + dx, y: n.position.y + dy },
-              data: shiftRelationshipNodeData(n.data, dx, dy),
+              position: { x: n.position.x + boundedDx, y: n.position.y + boundedDy },
+              data: shiftRelationshipNodeData(n.data, boundedDx, boundedDy),
             }
           : n
       ),
@@ -1448,7 +1576,8 @@ export const useMindMapStore = create((set, get) => ({
     set((state) => ({
       nodes: state.nodes.map((n) => {
         if (!ids.has(n.id)) return n
-        const snappedPosition = snapPoint(n.position)
+        const snapGrid = getMoveSnapGridForNode(n)
+        const snappedPosition = snapPoint(n.position, snapGrid)
         const dx = snappedPosition.x - n.position.x
         const dy = snappedPosition.y - n.position.y
         if (!dx && !dy) return n

@@ -7,7 +7,7 @@ import { NodeIconDisplay, NodeIconUpload } from './NodeIcon'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { markdownComponents, urlTransform } from './MarkdownEditor'
-import { GRID_SIZE, snapValue } from '../lib/grid'
+import { GRID_SIZE, MAP_GRID_SIZE, snapCardSpanSize, snapValue } from '../lib/grid'
 
 
 // Blend a hex colour with white at the given opacity (0–1), returning an opaque rgb()
@@ -40,7 +40,7 @@ const MIN_W = 60
 const MIN_H = 30
 const VIEW_MODE_PASSIVE_NODE_TYPES = new Set(['card', 'shape', 'image', 'note', 'text'])
 
-function ResizeHandles({ nodeId, visible }) {
+function ResizeHandles({ nodeId, nodeType, nodeLevel, visible }) {
   const { getNode } = useReactFlow()
   const { zoom } = useViewport()
   const resizeNode = useMindMapStore((state) => state.resizeNode)
@@ -95,11 +95,12 @@ function ResizeHandles({ nodeId, visible }) {
     if (dir.includes('n')) { h = Math.max(MIN_H, startH - dy); y = startPY + (startH - h) }
 
     // Match data-model feel: resize snaps continuously while dragging.
+    const isL1Card = nodeType === 'card' && nodeLevel === 1
     const snapped = {
-      width: Math.max(MIN_W, snapValue(w, GRID_SIZE)),
-      height: Math.max(MIN_H, snapValue(h, GRID_SIZE)),
-      x: snapValue(x, GRID_SIZE),
-      y: snapValue(y, GRID_SIZE),
+      width: isL1Card ? snapCardSpanSize(w, { min: MIN_W }) : Math.max(MIN_W, snapValue(w, GRID_SIZE)),
+      height: isL1Card ? snapCardSpanSize(h, { min: MIN_H }) : Math.max(MIN_H, snapValue(h, GRID_SIZE)),
+      x: snapValue(x, isL1Card ? MAP_GRID_SIZE : GRID_SIZE),
+      y: snapValue(y, isL1Card ? MAP_GRID_SIZE : GRID_SIZE),
     }
     drag.last = snapped
     if (!drag.moved && (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5)) {
@@ -107,7 +108,7 @@ function ResizeHandles({ nodeId, visible }) {
       drag.moved = true
     }
     resizeNode(nodeId, snapped, true)
-  }, [nodeId, zoom, resizeNode, pushHistory])
+  }, [nodeId, nodeType, nodeLevel, zoom, resizeNode, pushHistory])
 
   const onPointerUp = useCallback((e) => {
     const drag = dragRef.current
@@ -180,6 +181,7 @@ const CustomNode = memo(({ id, data, selected }) => {
 
   const openDiagramEditor      = useMindMapStore((state) => state.openDiagramEditor)
   const navigate              = useNavigate()
+  const { getNode }           = useReactFlow()
 
   const { zoom: viewportZoom } = useViewport()
   const zoom = Math.max(viewportZoom, 0.05)
@@ -213,6 +215,10 @@ const CustomNode = memo(({ id, data, selected }) => {
   const shapeShadowSelected = shapeShadow ? ', 0 10px 20px rgba(15,23,42,0.16)' : ''
   const isReparentSource = reparentSourceNodeId === id
   const isCopySizeSource = copySizeSourceNodeId === id
+  const liveNodePosition = getNode(id)?.position
+  const hoverPositionTitle = liveNodePosition
+    ? `Position: x ${Math.round(liveNodePosition.x)}, y ${Math.round(liveNodePosition.y)}`
+    : undefined
   const startEditing = useCallback(() => {
     setDraft(title || '')
     setEditing(true)
@@ -341,6 +347,7 @@ const CustomNode = memo(({ id, data, selected }) => {
   return (
     <div
       ref={nodeRef}
+      title={hoverPositionTitle}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
 
@@ -466,7 +473,7 @@ const CustomNode = memo(({ id, data, selected }) => {
       )}
 
       {nodeType !== 'text' && (
-        <ResizeHandles nodeId={id} visible={isEditMode && selected && !isRelationshipNode} />
+        <ResizeHandles nodeId={id} nodeType={nodeType} nodeLevel={level} visible={isEditMode && selected && !isRelationshipNode} />
       )}
 
       {!editing && isTodo && (

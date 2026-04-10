@@ -23,9 +23,23 @@
 
 .canvas-wrapper {
   flex: 1;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: hidden;
   position: relative;
   background: var(--ink);
+  display: flex;
+  justify-content: center;
+}
+
+.canvas-client-area {
+  width: 1470px;
+  max-width: 100%;
+  height: 100%;
+  background: #fff;
+  margin: 0 auto;
+  padding: 0 30px;
+  box-sizing: border-box;
+  flex: 0 0 auto;
 }
 
 /* Map canvas context menu (copy / paste subtree) */

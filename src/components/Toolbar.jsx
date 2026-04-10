@@ -120,6 +120,8 @@ const Toolbar = () => {
     toggleEditMode,
     viewMode,
     breadcrumbs,
+    previewNormalizationDelta,
+    normalizeMapCoordinates,
   } = useMindMapStore()
   const { user, signOut } = useAuth()
   const navigate = useNavigate()
@@ -188,6 +190,30 @@ const Toolbar = () => {
       name = prompted.trim() || currentMapName
     }
     await saveMap(name)
+  }
+
+  const handleNormalizeCoordinates = async () => {
+    const preview = previewNormalizationDelta()
+    if (!preview?.requiresShift) {
+      alert('This map is already within the top-left origin bounds.')
+      return
+    }
+    const ok = confirm(
+      `Normalize coordinates for this map?\n\n` +
+      `Shift right: ${Math.round(preview.shiftX)}px\n` +
+      `Shift down: ${Math.round(preview.shiftY)}px\n\n` +
+      'This keeps relative layout the same and makes all nodes movable from origin.'
+    )
+    if (!ok) return
+    const result = await normalizeMapCoordinates({ persist: true })
+    if (!result?.success) {
+      alert('Failed to normalize coordinates. Please try again.')
+      return
+    }
+    if (result.changed) {
+      if (result.persisted) alert('Coordinates normalized and saved.')
+      else alert('Coordinates normalized in memory. Save the map to persist.')
+    }
   }
 
   const isInSubmap = breadcrumbs.length > 0
@@ -320,6 +346,14 @@ const Toolbar = () => {
           <OpenIcon />
           <span className="btn-label">Open</span>
         </button>
+        <button
+          className="btn btn--ghost btn--sm toolbar-desktop-only"
+          onClick={handleNormalizeCoordinates}
+          title="Normalize map coordinates to origin"
+          aria-label="Normalize map coordinates"
+        >
+          <span className="btn-label">Normalize</span>
+        </button>
 
         {/* Save — always visible */}
         <button
@@ -388,6 +422,13 @@ const Toolbar = () => {
                 onClick={() => { openMapList(); setMenuOpen(false) }}
               >
                 <OpenIcon /> Open
+              </button>
+              <button
+                className="toolbar-menu-item"
+                role="menuitem"
+                onClick={() => { handleNormalizeCoordinates(); setMenuOpen(false) }}
+              >
+                Normalize
               </button>
               <div className="toolbar-menu-sep" />
               <button

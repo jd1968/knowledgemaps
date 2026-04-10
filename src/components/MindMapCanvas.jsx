@@ -6,6 +6,7 @@ import {
   ControlButton,
   MiniMap,
   BackgroundVariant,
+  PanOnScrollMode,
   SelectionMode,
   Panel,
   useReactFlow,
@@ -17,8 +18,7 @@ import { useMindMapStore } from '../store/useMindMapStore'
 import CustomNode from './CustomNode'
 import StraightCenterEdge from './StraightCenterEdge'
 import RelationshipEdge from './RelationshipEdge'
-import { GRID, NEST_PAD_BOTTOM, NEST_PAD_LEFT, NEST_PAD_RIGHT, NEST_PAD_TOP, snapPoint } from '../lib/grid'
-import { computeNodeLayouts } from '../lib/layout/computeNodeLayouts'
+import { GRID, GRID_SIZE, snapPoint } from '../lib/grid'
 import { STANDARD_THEME_COLORS } from '../lib/themePalette'
 
 const nodeTypes = { mindmap: CustomNode }
@@ -221,11 +221,19 @@ const getStableNodeSize = (node) => {
   return DEFAULT_NODE_SIZE[level]
 }
 
-const LEVEL_ZOOM = { 0: 0.7, 1: 1.0, 2: 1.3, 3: 1.6 }
-const zoomForLevel = (level) => LEVEL_ZOOM[Math.min(level ?? 2, 3)] ?? 1.6
 const VIEW_MODE_PASSIVE_NODE_TYPES = new Set(['card', 'shape', 'image', 'note', 'text'])
+// Canonical map interaction contract: fixed zoom, fixed left origin, vertical-only panning.
+const CANVAS_POLICY = {
+  zoom: 1,
+  origin: { x: 0, y: 0 },
+  maxPanDown: 100000,
+  nodeExtent: [[0, 0], [100000, 100000]],
+  translateExtent: [[0, -100000], [0, 0]],
+  panOnScrollMode: PanOnScrollMode.Vertical,
+}
+const DRAG_SNAP_GRID = [GRID_SIZE, GRID_SIZE]
 
-// Watches focusNodeId and flies the viewport to that node at a level-appropriate zoom
+// Watches focusNodeId and flies the viewport to that node.
 const FocusNodeHandler = () => {
   const focusNodeId = useMindMapStore(s => s.focusNodeId)
   const clearFocusNode = useMindMapStore(s => s.clearFocusNode)
@@ -240,7 +248,7 @@ const FocusNodeHandler = () => {
       if (node) {
         const cx = node.position.x + (node.measured?.width ?? 160) / 2
         const cy = node.position.y + (node.measured?.height ?? 60) / 2
-        setCenter(cx, cy, { zoom: zoomForLevel(node.data?.level), duration: 600 })
+        setCenter(cx, cy, { zoom: CANVAS_POLICY.zoom, duration: 600 })
       }
       clearFocusNode()
     }, 50)
@@ -251,29 +259,17 @@ const FocusNodeHandler = () => {
 }
 
 // Must live inside the ReactFlow tree to access the ReactFlow context
-const FitViewOnLoad = () => {
+const ResetViewportOnLoad = () => {
   const fitViewTrigger = useMindMapStore((s) => s.fitViewTrigger)
-  const nodes = useMindMapStore((s) => s.nodes)
-  const initialZoom = useMindMapStore((s) => s.settings.initialZoom)
-  const { fitView } = useReactFlow()
-
-  // Keep refs so the effect can read latest values without re-triggering on every node change
-  const nodesRef = useRef(nodes)
-  nodesRef.current = nodes
-  const initialZoomRef = useRef(initialZoom)
-  initialZoomRef.current = initialZoom
+  const { setViewport } = useReactFlow()
 
   useEffect(() => {
     if (fitViewTrigger === 0) return
-    const topNodes = nodesRef.current
-      .filter((n) => (n.data?.level ?? 0) === 1)
-      .map((n) => ({ id: n.id }))
-    const targets = topNodes.length > 0 ? topNodes : undefined
-    const id = requestAnimationFrame(() =>
-      fitView({ nodes: targets, padding: 0.3, duration: 400 })
-    )
+    const id = requestAnimationFrame(() => {
+      setViewport({ x: 0, y: 0, zoom: CANVAS_POLICY.zoom }, { duration: 0 })
+    })
     return () => cancelAnimationFrame(id)
-  }, [fitViewTrigger, fitView]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fitViewTrigger, setViewport])
 
   return null
 }
@@ -281,8 +277,6 @@ const FitViewOnLoad = () => {
 // Handles pinch-to-zoom for touch devices — attached to the outer container in
 // capture phase so it intercepts before ReactFlow's node/pane handlers see the events.
 const PinchZoomHandler = ({ containerRef }) => {
-  const { getViewport, setViewport } = useReactFlow()
-
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
@@ -290,7 +284,6 @@ const PinchZoomHandler = ({ containerRef }) => {
     let prevDist = null
 
     const getDist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY)
-    const getMid  = (t) => ({ x: (t[0].clientX + t[1].clientX) / 2, y: (t[0].clientY + t[1].clientY) / 2 })
 
     const onTouchStart = (e) => {
       if (e.touches.length === 2) {
@@ -305,22 +298,8 @@ const PinchZoomHandler = ({ containerRef }) => {
       e.stopPropagation()
 
       const currDist = getDist(e.touches)
-      const scale = currDist / prevDist
       prevDist = currDist
-
-      const { x, y, zoom } = getViewport()
-      const newZoom = Math.min(Math.max(zoom * scale, 0.2), 2)
-
-      const mid  = getMid(e.touches)
-      const rect = el.getBoundingClientRect()
-      const px   = mid.x - rect.left
-      const py   = mid.y - rect.top
-
-      setViewport({
-        x: px - (px - x) * (newZoom / zoom),
-        y: py - (py - y) * (newZoom / zoom),
-        zoom: newZoom,
-      })
+      // Zoom is fixed at 100%, so swallow pinch gestures.
     }
 
     const onTouchEnd = (e) => { if (e.touches.length < 2) prevDist = null }
@@ -334,7 +313,7 @@ const PinchZoomHandler = ({ containerRef }) => {
       el.removeEventListener('touchmove',  onTouchMove,  { capture: true })
       el.removeEventListener('touchend',   onTouchEnd,   { capture: true })
     }
-  }, [containerRef, getViewport, setViewport])
+  }, [containerRef])
 
   return null
 }
@@ -503,24 +482,6 @@ const MindMapCanvas = () => {
     return null
   }, [parentMap, rootId, nodeById])
 
-  // Compute nested layout in a pure helper and keep projection logic separate.
-  const { layouts } = useMemo(() => computeNodeLayouts({
-    nodes,
-    edges: hierarchyEdges,
-    rootId,
-    getNodeSize: (node) => {
-      const hasChildren = !!(childrenMap[node.id]?.length)
-      const hasExpandedContents = !!node.data?.content?.trim() || node.data?.nodeType === 'note' || node.data?.nodeType === 'image' || node.data?.nodeType === 'diagram' || node.data?.nodeType === 'object' || node.data?.nodeType === 'relationship' || node.data?.nodeType === 'or'
-      return (!hasChildren && !hasExpandedContents) ? LEAF_NODE_SIZE : getStableNodeSize(node)
-    },
-    padding: {
-      left: NEST_PAD_LEFT,
-      right: NEST_PAD_RIGHT,
-      top: NEST_PAD_TOP,
-      bottom: NEST_PAD_BOTTOM,
-    },
-  }), [nodes, hierarchyEdges, rootId])
-
   const nodesWithColor = useMemo(() => {
     return nodes.map(node => {
       const level = node.data?.level ?? 0
@@ -531,7 +492,6 @@ const MindMapCanvas = () => {
       const hasExpandedContents = !!node.data?.content?.trim() || node.data?.nodeType === 'note' || node.data?.nodeType === 'image' || node.data?.nodeType === 'diagram' || node.data?.nodeType === 'object' || node.data?.nodeType === 'relationship' || node.data?.nodeType === 'or'
       const useFixedLeafSize = !hasChildren && !hasExpandedContents && node.data?.sizeMode !== 'manual'
       const hasNotes = !!(node.data.content && node.data.content !== '<p></p>' && node.data.content !== '')
-      const layout = layouts[node.id]
       const persistedSize = node.data?.size
       const fixedGroupSize = hasChildren
         ? (persistedSize ?? {
@@ -545,7 +505,6 @@ const MindMapCanvas = () => {
           : null
       return {
         ...node,
-        ...(!hasChildren && layout ? { position: { x: layout.x, y: layout.y } } : {}),
         ...(node.data?.nodeType === 'relationship' ? { draggable: false } : {}),
         ...(useFixedLeafSize ? { style: { ...node.style, width: LEAF_NODE_SIZE.width, height: LEAF_NODE_SIZE.height } } : {}),
         zIndex: node.id === openMenuNodeId || node.id === glyphMenuNodeId ? 9999 : level * 10,
@@ -567,14 +526,52 @@ const MindMapCanvas = () => {
       if (b.id === glyphMenuNodeId) return -1
       return (a.data?.level ?? 0) - (b.data?.level ?? 0)
     })
-  }, [nodes, l1ColorMap, getL1Id, childrenMap, openMenuNodeId, glyphMenuNodeId, layouts, dragDropTargetNodeId, dragDropNodeType])
+  }, [nodes, l1ColorMap, getL1Id, childrenMap, openMenuNodeId, glyphMenuNodeId, dragDropTargetNodeId, dragDropNodeType])
 
-  // Relationship lines are rendered as single-segment overlays, not per-end RF edges.
-  const displayEdges = useMemo(() => [], [])
+  const clampViewportToExtent = useCallback((nextViewport) => {
+    const minY = -CANVAS_POLICY.maxPanDown
+    const maxY = CANVAS_POLICY.origin.y
+    const lockedX = CANVAS_POLICY.origin.x
+    return {
+      x: lockedX,
+      y: Math.min(maxY, Math.max(minY, nextViewport.y)),
+      zoom: CANVAS_POLICY.zoom,
+    }
+  }, [])
+
+  const clampToOrigin = useCallback((point) => ({
+    x: Math.max(CANVAS_POLICY.origin.x, point?.x ?? CANVAS_POLICY.origin.x),
+    y: Math.max(CANVAS_POLICY.origin.y, point?.y ?? CANVAS_POLICY.origin.y),
+  }), [])
+
+  const getBoundedFlowPosition = useCallback((clientX, clientY) => {
+    const pos = screenToFlowPosition(
+      { x: clientX, y: clientY },
+      { snapToGrid: true, snapGrid: GRID }
+    )
+    return clampToOrigin(pos)
+  }, [screenToFlowPosition, clampToOrigin])
 
   const [isTouch] = useState(
     () => typeof window !== 'undefined' && window.matchMedia('(hover: none) and (pointer: coarse)').matches
   )
+
+  const onVerticalWheelPan = useCallback((event) => {
+    if (isTouch) return
+    if (Math.abs(event.deltaY) < 0.01) return
+    event.preventDefault()
+    event.stopPropagation()
+    const vp = getViewport()
+    const nextViewport = {
+      x: vp.x,
+      y: vp.y - event.deltaY,
+      zoom: CANVAS_POLICY.zoom,
+    }
+    setViewport(clampViewportToExtent(nextViewport), { duration: 0 })
+  }, [isTouch, getViewport, setViewport, clampViewportToExtent])
+
+  // Relationship lines are rendered as single-segment overlays, not per-end RF edges.
+  const displayEdges = useMemo(() => [], [])
 
   const containerRef = useRef(null)
   const dragStartRef = useRef({})
@@ -586,6 +583,24 @@ const MindMapCanvas = () => {
       document.body.style.cursor = ''
     }
   }, [reparentSourceNodeId, copySizeSourceNodeId])
+
+  useEffect(() => {
+    const wrapper = containerRef.current?.closest('.canvas-wrapper')
+    if (!wrapper) return
+    wrapper.scrollLeft = 0
+  }, [currentMapId])
+
+  const onViewportMove = useCallback((_, nextViewport) => {
+    const clamped = clampViewportToExtent(nextViewport)
+    if (
+      Math.abs(clamped.x - nextViewport.x) < 0.1 &&
+      Math.abs(clamped.y - nextViewport.y) < 0.1 &&
+      Math.abs(clamped.zoom - nextViewport.zoom) < 0.0001
+    ) {
+      return
+    }
+    setViewport(clamped, { duration: 0 })
+  }, [clampViewportToExtent, setViewport])
 
   const onNodeDragStart = useCallback((_, node) => {
     if (!isEditMode) return
@@ -628,12 +643,12 @@ const MindMapCanvas = () => {
     const prev = containerRectRef.current
     containerRectRef.current = next
     if (!prev) return
-    const dx = next.left - prev.left
     const dy = next.top - prev.top
-    if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) return
+    if (Math.abs(dy) < 0.5) return
     const vp = getViewport()
-    setViewport({ x: vp.x - dx, y: vp.y - dy, zoom: vp.zoom }, { duration: 0 })
-  }, [isEditMode, getViewport, setViewport])
+    const nextViewport = { x: vp.x, y: vp.y - dy, zoom: vp.zoom }
+    setViewport(clampViewportToExtent(nextViewport), { duration: 0 })
+  }, [isEditMode, getViewport, setViewport, clampViewportToExtent])
 
   const clientToWorld = useCallback((clientX, clientY) => {
     const rect = containerRef.current?.getBoundingClientRect()
@@ -790,10 +805,7 @@ const MindMapCanvas = () => {
       e.preventDefault()
       const rect = containerRef.current?.getBoundingClientRect()
       if (!rect) return
-      const pos = screenToFlowPosition(
-        { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },
-        { snapToGrid: true, snapGrid: GRID }
-      )
+      const pos = getBoundedFlowPosition(rect.left + rect.width / 2, rect.top + rect.height / 2)
       const result = await pasteSubtreeFromClipboard(pos)
       if (!result?.success && result?.error === 'invalid') {
         // Clipboard wasn't a subtree payload — let user know only when they used the shortcut
@@ -802,7 +814,7 @@ const MindMapCanvas = () => {
     }
     window.addEventListener('keydown', onPasteKey)
     return () => window.removeEventListener('keydown', onPasteKey)
-  }, [isEditMode, screenToFlowPosition, pasteSubtreeFromClipboard])
+  }, [isEditMode, getBoundedFlowPosition, pasteSubtreeFromClipboard])
 
   // Cancel toolbox placement on Escape
   useEffect(() => {
@@ -1196,10 +1208,7 @@ const MindMapCanvas = () => {
     const parentId = targetEl?.getAttribute?.('data-id') || dragDropTargetNodeId
 
     if (droppedType === 'relationship') {
-      const position = screenToFlowPosition(
-        { x: e.clientX, y: e.clientY },
-        { snapToGrid: true, snapGrid: GRID }
-      )
+      const position = getBoundedFlowPosition(e.clientX, e.clientY)
       let createdId = null
       if (parentId && nodes.some((n) => n.id === parentId)) {
         createdId = addChildNode(parentId, 'relationship', { position })
@@ -1215,10 +1224,7 @@ const MindMapCanvas = () => {
     }
 
     if (parentId && nodes.some((n) => n.id === parentId)) {
-      const flowPos = screenToFlowPosition(
-        { x: e.clientX, y: e.clientY },
-        { snapToGrid: true, snapGrid: GRID }
-      )
+      const flowPos = getBoundedFlowPosition(e.clientX, e.clientY)
       const newId = addChildNode(parentId, droppedType, { position: flowPos })
       if (newId) openNodeModal(newId)
       clearPendingToolboxType()
@@ -1227,16 +1233,13 @@ const MindMapCanvas = () => {
       return
     }
 
-    const position = screenToFlowPosition(
-      { x: e.clientX, y: e.clientY },
-      { snapToGrid: true, snapGrid: GRID }
-    )
+    const position = getBoundedFlowPosition(e.clientX, e.clientY)
     const created = addNode({ position, level: 1, nodeType: droppedType })
     clearPendingToolboxType()
     setDragDropTargetNodeId(null)
     setDragDropNodeType(null)
     if (created?.id) openNodeModal(created.id)
-  }, [isEditMode, pendingToolboxType, dragDropTargetNodeId, nodes, addChildNode, openNodeModal, clearPendingToolboxType, screenToFlowPosition, addNode])
+  }, [isEditMode, pendingToolboxType, dragDropTargetNodeId, nodes, addChildNode, openNodeModal, clearPendingToolboxType, getBoundedFlowPosition, addNode])
 
   // Plain click: only this node selected (sidebar + rings). Shift/Cmd/Ctrl = additive (multi-select).
   const onNodeClick = useCallback(
@@ -1264,6 +1267,7 @@ const MindMapCanvas = () => {
   return (
     <div
       ref={containerRef}
+      onWheelCapture={onVerticalWheelPan}
       style={{ width: '100%', height: '100%', position: 'relative', cursor: pendingToolboxType ? 'crosshair' : undefined }}
     >
       {isEditMode && nodeContextMenu && (
@@ -1424,10 +1428,7 @@ const MindMapCanvas = () => {
             type="button"
             className="map-context-menu__item"
             onClick={async () => {
-              const pos = screenToFlowPosition(
-                { x: paneContextMenu.x, y: paneContextMenu.y },
-                { snapToGrid: true, snapGrid: GRID }
-              )
+              const pos = getBoundedFlowPosition(paneContextMenu.x, paneContextMenu.y)
               closeContextMenus()
               const r = await pasteSubtreeFromClipboard(pos)
               if (!r?.success) {
@@ -1510,10 +1511,7 @@ const MindMapCanvas = () => {
           setHoveredRelationshipEnd(null)
           setRelationshipLabelDrag(null)
           if (pendingToolboxType && isEditMode) {
-            const position = screenToFlowPosition(
-              { x: event.clientX, y: event.clientY },
-              { snapToGrid: true, snapGrid: GRID }
-            )
+            const position = getBoundedFlowPosition(event.clientX, event.clientY)
             const created = addNode({ position, level: 1, nodeType: pendingToolboxType })
             clearPendingToolboxType()
             if (created?.id) openNodeModal(created.id)
@@ -1534,6 +1532,7 @@ const MindMapCanvas = () => {
         onPaneContextMenu={onPaneContextMenu}
         onDragOver={onCanvasDragOver}
         onDrop={onCanvasDrop}
+        onMove={onViewportMove}
         onNodeClick={(event, node) => {
           setSelectedRelationshipId(null)
           setRelationshipContextMenu(null)
@@ -1541,9 +1540,10 @@ const MindMapCanvas = () => {
           setHoveredRelationshipEnd(null)
           setRelationshipLabelDrag(null)
           if (pendingToolboxType && isEditMode) {
-            const newId = addChildNode(node.id, pendingToolboxType)
+            const position = getBoundedFlowPosition(event.clientX, event.clientY)
+            const created = addNode({ position, level: 1, nodeType: pendingToolboxType })
             clearPendingToolboxType()
-            if (newId) openNodeModal(newId)
+            if (created?.id) openNodeModal(created.id)
             return
           }
           onNodeClick(event, node)
@@ -1560,7 +1560,8 @@ const MindMapCanvas = () => {
         nodesConnectable={isEditMode}
         elementsSelectable
         elevateNodesOnSelect={false}
-        panOnScroll={!isTouch}
+        panOnScroll={false}
+        panOnScrollMode={CANVAS_POLICY.panOnScrollMode}
         panOnDrag={isTouch ? true : [1, 2]}
         selectionOnDrag={!isTouch}
         selectionMode={SelectionMode.Partial}
@@ -1568,11 +1569,14 @@ const MindMapCanvas = () => {
         zoomOnScroll={false}
         // Enable native pinch zoom for trackpads/fine pointers; coarse touch pinch is handled
         // by PinchZoomHandler to keep behavior consistent on touch devices.
-        zoomOnPinch={!isTouch}
+        zoomOnPinch={false}
+        preventScrolling={false}
         snapToGrid={isEditMode}
-        snapGrid={GRID}
-        minZoom={0.2}
-        maxZoom={2}
+        snapGrid={DRAG_SNAP_GRID}
+        minZoom={CANVAS_POLICY.zoom}
+        maxZoom={CANVAS_POLICY.zoom}
+        nodeExtent={CANVAS_POLICY.nodeExtent}
+        translateExtent={CANVAS_POLICY.translateExtent}
         defaultEdgeOptions={{
           type: 'straight-center',
           style: { stroke: '#363b56', strokeWidth: 1.5 },
@@ -1588,7 +1592,7 @@ const MindMapCanvas = () => {
             color="#d8cfc2"
           />
         )}
-        {!isTouch && <Controls showInteractive={false}>
+        {!isTouch && <Controls showInteractive={false} showZoom={false}>
           <ZoomDisplay />
           <ControlButton
             onClick={toggleFullscreen}
@@ -1615,8 +1619,8 @@ const MindMapCanvas = () => {
                     ? 'Click a new parent node to reparent · Escape, source node, or canvas to cancel'
                     : copySizeSourceNodeId
                       ? 'Click a shape to copy size from the source · Escape, source node, or canvas to cancel'
-                      : 'Right-click a node for actions · Drag to lasso-select · Trackpad to pan & zoom'
-                : 'Edit Mode is off · Drag to lasso-select · Trackpad to pan & zoom'}
+                      : 'Right-click a node for actions · Drag with mouse to pan · Trackpad scroll to pan vertically'
+                : 'Edit Mode is off · Drag with mouse to pan · Trackpad scroll to pan vertically'}
           </div>
         </Panel>
         {relationshipSegments.length > 0 && (
@@ -2038,7 +2042,7 @@ const MindMapCanvas = () => {
             </svg>
           </div>
         )}
-        <FitViewOnLoad />
+        <ResetViewportOnLoad />
         <FocusNodeHandler />
         <PinchZoomHandler containerRef={containerRef} />
       </ReactFlow>

@@ -53,7 +53,9 @@ function MapPage() {
           <DiagramEditorView />
         ) : (
           <div className="canvas-wrapper">
-            <MindMapCanvas />
+            <div className="canvas-client-area">
+              <MindMapCanvas />
+            </div>
           </div>
         )}
       </div>
