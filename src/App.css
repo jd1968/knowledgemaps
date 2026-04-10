@@ -432,6 +432,13 @@
   margin-bottom: 14px;
 }
 
+.map-editor-region__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
 .map-editor-region__title-wrap {
   display: flex;
   align-items: flex-start;
@@ -515,6 +522,97 @@
   max-width: 100%;
   height: auto;
   border-radius: 8px;
+}
+
+.map-editor-region-cards {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 16px;
+  margin-top: 22px;
+}
+
+.map-editor-region-card {
+  width: 300px;
+  position: relative;
+  padding: 14px 16px;
+  border: 1px solid #eadfce;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 6px 18px rgba(44, 29, 14, 0.06);
+  overflow: hidden;
+}
+
+.map-editor-region-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.map-editor-region-card__title {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.15;
+  color: var(--text);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.map-editor-region-card__content {
+  position: relative;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-2);
+  overflow: hidden;
+  max-height: calc(100% - 76px);
+  margin-bottom: 28px;
+}
+
+.map-editor-region-card__content p {
+  margin: 0;
+}
+
+.map-editor-region-card__content--truncated::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 28px;
+  background: linear-gradient(180deg, rgba(255,255,255,0), #fff 85%);
+  pointer-events: none;
+}
+
+.map-editor-region-card__content--expanded {
+  max-height: none;
+  padding-bottom: 0;
+}
+
+.map-editor-region-card__show-more {
+  position: absolute;
+  left: 16px;
+  bottom: 10px;
+  border: none;
+  background: #fff;
+  color: var(--amber);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 0;
+  cursor: pointer;
+}
+
+.map-editor-region-card__show-more:hover {
+  color: #9a4508;
+  text-decoration: underline;
+}
+
+.map-editor-region-card--expanded {
+  min-height: 120px;
 }
 
 .map-editor-region-modal {

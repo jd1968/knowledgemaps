@@ -6,6 +6,13 @@ import { CARD_GAP, GRID_SIZE, MAP_CLIENT_WIDTH, MAP_GRID_SIZE, MAP_GRID_Y_SIZE, 
 import { buildSubtreePayload, parseSubtreePayload, remapSubtreeForPaste } from '../lib/subtreeClipboard'
 
 const HISTORY_LIMIT = 50
+const normalizeRegionCard = (card = {}, index = 0) => ({
+  id: card.id || `region-card-${uuidv4().slice(0, 8)}`,
+  title: typeof card.title === 'string' && card.title.trim()
+    ? card.title
+    : `Untitled Card ${index + 1}`,
+  content: typeof card.content === 'string' ? card.content : '',
+})
 const normalizeRegion = (region = {}, index = 0) => ({
   id: region.id || `region-${uuidv4().slice(0, 8)}`,
   type: ['card', 'image', 'diagram'].includes(region.type) ? region.type : 'card',
@@ -14,6 +21,8 @@ const normalizeRegion = (region = {}, index = 0) => ({
     : `Untitled Region ${index + 1}`,
   iconUrl: typeof region.iconUrl === 'string' ? region.iconUrl : '',
   content: typeof region.content === 'string' ? region.content : '',
+  cardSize: ['XS', 'S', 'M', 'L', 'XL'].includes(region.cardSize) ? region.cardSize : 'S',
+  cards: Array.isArray(region.cards) ? region.cards.map((card, cardIndex) => normalizeRegionCard(card, cardIndex)) : [],
 })
 const normalizeNodeType = (nodeType, isSubmap = false) => {
   if (isSubmap) return 'submap'

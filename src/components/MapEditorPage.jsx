@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
+import { v4 as uuidv4 } from 'uuid'
 import { useMindMapStore } from '../store/useMindMapStore'
 import MapHeaderBlock from './MapHeaderBlock'
 import MapPropertiesModal from './MapPropertiesModal'
@@ -25,6 +26,77 @@ const REGION_TYPE_LABELS = {
   card: 'Card',
   image: 'Image',
   diagram: 'Diagram',
+}
+
+const CARD_SIZE_OPTIONS = ['XS', 'S', 'M', 'L', 'XL']
+const CARD_SIZE_HEIGHTS = {
+  XS: 80,
+  S: 180,
+  M: 200,
+  L: 300,
+  XL: 400,
+}
+
+function RegionCardItem({ card, cardSize, isEditMode, onEdit }) {
+  const [expanded, setExpanded] = useState(false)
+  const [isOverflowing, setIsOverflowing] = useState(false)
+  const contentRef = useRef(null)
+  const showContent = cardSize !== 'XS' && !!card.content
+
+  useEffect(() => {
+    if (!showContent || expanded) {
+      setIsOverflowing(false)
+      return
+    }
+    const el = contentRef.current
+    if (!el) return
+    setIsOverflowing(el.scrollHeight > el.clientHeight + 1)
+  }, [card.content, cardSize, expanded, showContent])
+
+  return (
+    <article
+      className={`map-editor-region-card${expanded ? ' map-editor-region-card--expanded' : ''}`}
+      style={{ height: expanded ? 'auto' : `${CARD_SIZE_HEIGHTS[cardSize] || CARD_SIZE_HEIGHTS.S}px` }}
+    >
+      <div className="map-editor-region-card__header">
+        <h3 className="map-editor-region-card__title">{card.title}</h3>
+        {isEditMode && (
+          <button
+            type="button"
+            className="btn btn--ghost btn--sm"
+            onClick={onEdit}
+          >
+            Properties
+          </button>
+        )}
+      </div>
+      {showContent ? (
+        <>
+          <div
+            ref={contentRef}
+            className={`map-editor-region-card__content${expanded ? ' map-editor-region-card__content--expanded' : ''}${!expanded && isOverflowing ? ' map-editor-region-card__content--truncated' : ''}`}
+          >
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={markdownComponents}
+              urlTransform={urlTransform}
+            >
+              {card.content}
+            </ReactMarkdown>
+          </div>
+          {!expanded && isOverflowing && (
+            <button
+              type="button"
+              className="map-editor-region-card__show-more"
+              onClick={() => setExpanded(true)}
+            >
+              show more...
+            </button>
+          )}
+        </>
+      ) : null}
+    </article>
+  )
 }
 
 function RegionInsertControls({ onInsert }) {
@@ -55,6 +127,11 @@ export default function MapEditorPage() {
   const [editingRegionId, setEditingRegionId] = useState(null)
   const [regionDraftTitle, setRegionDraftTitle] = useState('')
   const [regionDraftContent, setRegionDraftContent] = useState('')
+  const [regionDraftCardSize, setRegionDraftCardSize] = useState('S')
+  const [editingCardRegionId, setEditingCardRegionId] = useState(null)
+  const [editingCardId, setEditingCardId] = useState(null)
+  const [cardDraftTitle, setCardDraftTitle] = useState('')
+  const [cardDraftContent, setCardDraftContent] = useState('')
 
   useEffect(() => {
     const nextBreadcrumbs = location.state?.breadcrumbs ?? []
@@ -77,11 +154,25 @@ export default function MapEditorPage() {
     setEditingRegionId(region.id)
     setRegionDraftTitle(region.title || '')
     setRegionDraftContent(region.content || '')
+    setRegionDraftCardSize(region.cardSize || 'S')
   }
   const closeRegionProperties = () => {
     setEditingRegionId(null)
     setRegionDraftTitle('')
     setRegionDraftContent('')
+    setRegionDraftCardSize('S')
+  }
+  const openCardProperties = (regionId, card = null) => {
+    setEditingCardRegionId(regionId)
+    setEditingCardId(card?.id || null)
+    setCardDraftTitle(card?.title || '')
+    setCardDraftContent(card?.content || '')
+  }
+  const closeCardProperties = () => {
+    setEditingCardRegionId(null)
+    setEditingCardId(null)
+    setCardDraftTitle('')
+    setCardDraftContent('')
   }
   const saveRegionProperties = () => {
     if (!editingRegionId) return
@@ -91,10 +182,30 @@ export default function MapEditorPage() {
             ...region,
             title: regionDraftTitle.trim() || 'Untitled Region',
             content: regionDraftContent,
+            cardSize: region.type === 'card' ? regionDraftCardSize : region.cardSize,
           }
         : region
     )))
     closeRegionProperties()
+  }
+  const saveCardProperties = () => {
+    if (!editingCardRegionId) return
+    setMapRegions(regions.map((region) => {
+      if (region.id !== editingCardRegionId) return region
+      const nextCard = {
+        id: editingCardId || `region-card-${uuidv4().slice(0, 8)}`,
+        title: cardDraftTitle.trim() || 'Untitled Card',
+        content: cardDraftContent,
+      }
+      const existingCards = Array.isArray(region.cards) ? region.cards : []
+      return {
+        ...region,
+        cards: editingCardId
+          ? existingCards.map((card) => (card.id === editingCardId ? { ...card, ...nextCard } : card))
+          : [...existingCards, nextCard],
+      }
+    }))
+    closeCardProperties()
   }
 
   return (
@@ -138,6 +249,7 @@ export default function MapEditorPage() {
                   if (!next) {
                     setMapPropertiesOpen(false)
                     closeRegionProperties()
+                    closeCardProperties()
                   }
                   return next
                 })
@@ -195,13 +307,24 @@ export default function MapEditorPage() {
                             </div>
                           </div>
                           {isEditMode && (
-                            <button
-                              type="button"
-                              className="btn btn--ghost btn--sm"
-                              onClick={() => openRegionProperties(region)}
-                            >
-                              Properties
-                            </button>
+                            <div className="map-editor-region__actions">
+                              {region.type === 'card' && (
+                                <button
+                                  type="button"
+                                  className="btn btn--ghost btn--sm"
+                                  onClick={() => openCardProperties(region.id)}
+                                >
+                                  Add card
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                className="btn btn--ghost btn--sm"
+                                onClick={() => openRegionProperties(region)}
+                              >
+                                Properties
+                              </button>
+                            </div>
                           )}
                         </div>
                         {region.content ? (
@@ -215,6 +338,19 @@ export default function MapEditorPage() {
                             </ReactMarkdown>
                           </div>
                         ) : null}
+                        {region.type === 'card' && Array.isArray(region.cards) && region.cards.length > 0 && (
+                          <div className="map-editor-region-cards">
+                            {region.cards.map((card) => (
+                              <RegionCardItem
+                                key={card.id}
+                                card={card}
+                                cardSize={region.cardSize || 'S'}
+                                isEditMode={isEditMode}
+                                onEdit={() => openCardProperties(region.id, card)}
+                              />
+                            ))}
+                          </div>
+                        )}
                       </section>
                     </div>
                   ))
@@ -267,6 +403,21 @@ export default function MapEditorPage() {
                   />
                 </div>
               </div>
+
+              {regions.find((region) => region.id === editingRegionId)?.type === 'card' && (
+                <div className="field">
+                  <label className="field-label">Card Size</label>
+                  <select
+                    className="field-input"
+                    value={regionDraftCardSize}
+                    onChange={(event) => setRegionDraftCardSize(event.target.value)}
+                  >
+                    {CARD_SIZE_OPTIONS.map((option) => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
 
             <div className="node-modal-footer">
@@ -274,6 +425,56 @@ export default function MapEditorPage() {
                 Cancel
               </button>
               <button className="btn btn--primary btn--sm" onClick={saveRegionProperties}>
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {isEditMode && editingCardRegionId && (
+        <div
+          className="node-modal-overlay"
+          onPointerDown={(event) => {
+            if (event.target === event.currentTarget) closeCardProperties()
+          }}
+        >
+          <div className="node-modal map-editor-region-modal" onPointerDown={(event) => event.stopPropagation()}>
+            <div className="node-modal-header">
+              <div className="node-modal-header-left">
+                <span className="node-modal-header-title">{editingCardId ? 'Card Properties' : 'New Card'}</span>
+              </div>
+              <button className="icon-btn" onClick={closeCardProperties} aria-label="Close">x</button>
+            </div>
+
+            <div className="node-modal-body">
+              <div className="field">
+                <label className="field-label">Title</label>
+                <input
+                  className="field-input"
+                  value={cardDraftTitle}
+                  onChange={(event) => setCardDraftTitle(event.target.value)}
+                  placeholder="Card title..."
+                  autoFocus
+                />
+              </div>
+
+              <div className="field field--grow">
+                <label className="field-label">Content</label>
+                <div className="map-editor-region-modal__markdown">
+                  <MarkdownEditor
+                    content={cardDraftContent}
+                    onChange={(next) => setCardDraftContent(next)}
+                    editable={true}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="node-modal-footer">
+              <button className="btn btn--secondary btn--sm" onClick={closeCardProperties}>
+                Cancel
+              </button>
+              <button className="btn btn--primary btn--sm" onClick={saveCardProperties}>
                 Save
               </button>
             </div>
