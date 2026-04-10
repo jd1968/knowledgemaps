@@ -6,6 +6,15 @@ import { CARD_GAP, GRID_SIZE, MAP_CLIENT_WIDTH, MAP_GRID_SIZE, MAP_GRID_Y_SIZE, 
 import { buildSubtreePayload, parseSubtreePayload, remapSubtreeForPaste } from '../lib/subtreeClipboard'
 
 const HISTORY_LIMIT = 50
+const normalizeRegion = (region = {}, index = 0) => ({
+  id: region.id || `region-${uuidv4().slice(0, 8)}`,
+  type: ['card', 'image', 'diagram'].includes(region.type) ? region.type : 'card',
+  title: typeof region.title === 'string' && region.title.trim()
+    ? region.title
+    : `Untitled Region ${index + 1}`,
+  iconUrl: typeof region.iconUrl === 'string' ? region.iconUrl : '',
+  content: typeof region.content === 'string' ? region.content : '',
+})
 const normalizeNodeType = (nodeType, isSubmap = false) => {
   if (isSubmap) return 'submap'
   if (!nodeType || nodeType === 'pointer') return 'card'
@@ -427,6 +436,7 @@ export const useMindMapStore = create((set, get) => ({
   currentMapName: 'Untitled Map',
   currentMapIconUrl: '',
   currentMapContent: '',
+  currentMapRegions: [],
   isDirty: false,
   saveStatus: 'idle', // 'idle' | 'saving' | 'saved' | 'error'
 
@@ -1326,7 +1336,7 @@ export const useMindMapStore = create((set, get) => ({
   // ── Save / Load ───────────────────────────────────────────────
 
   saveMap: async (nameOverride) => {
-    const { nodes, edges, currentMapId, currentMapName } = get()
+    const { nodes, edges, currentMapId, currentMapName, currentMapRegions } = get()
     const name = nameOverride || currentMapName
 
     // Strip content from diagram JSON — content lives in the nodes table
@@ -1335,6 +1345,7 @@ export const useMindMapStore = create((set, get) => ({
         iconUrl: get().currentMapIconUrl || '',
         content: get().currentMapContent || '',
       },
+      regions: currentMapRegions.map((region, index) => normalizeRegion(region, index)),
       nodes: nodes.map((rawNode) => {
         const {
           data: { content: _c, ...restData },
@@ -1439,6 +1450,7 @@ export const useMindMapStore = create((set, get) => ({
         currentMapName: mapResult.data.name,
         currentMapIconUrl: mapResult.data.data?.meta?.iconUrl || '',
         currentMapContent: mapResult.data.data?.meta?.content || '',
+        currentMapRegions: (mapResult.data.data?.regions || []).map((region, index) => normalizeRegion(region, index)),
         isDirty: false,
         past: [],
         future: [],
@@ -1633,6 +1645,7 @@ export const useMindMapStore = create((set, get) => ({
       currentMapName: name,
       currentMapIconUrl: '',
       currentMapContent: '',
+      currentMapRegions: [],
       isDirty: false,
       past: [],
       future: [],
@@ -1655,6 +1668,28 @@ export const useMindMapStore = create((set, get) => ({
       currentMapContent: typeof content === 'string' ? content : state.currentMapContent,
       isDirty: true,
     }))
+    get().scheduleAutosave()
+  },
+
+  setMapRegions: (regions) => {
+    set({
+      currentMapRegions: Array.isArray(regions) ? regions.map((region, index) => normalizeRegion(region, index)) : [],
+      isDirty: true,
+    })
+    get().scheduleAutosave()
+  },
+
+  insertMapRegion: (index, region = {}) => {
+    set((state) => {
+      const nextRegion = normalizeRegion(region, state.currentMapRegions.length)
+      const insertAt = Math.max(0, Math.min(index, state.currentMapRegions.length))
+      const nextRegions = [...state.currentMapRegions]
+      nextRegions.splice(insertAt, 0, nextRegion)
+      return {
+        currentMapRegions: nextRegions,
+        isDirty: true,
+      }
+    })
     get().scheduleAutosave()
   },
 

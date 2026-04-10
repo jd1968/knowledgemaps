@@ -340,41 +340,184 @@
   padding: 40px;
 }
 
-.map-editor-page__eyebrow {
-  display: inline-block;
-  margin-bottom: 12px;
+.map-editor-page__meta {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-3);
+}
+
+.map-editor-regions {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.map-editor-region-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.map-editor-regions__empty {
+  padding: 36px 28px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 14px;
+  background: #fcfaf6;
+}
+
+.map-editor-regions__empty-title {
+  margin: 0 0 10px;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 26px;
+  color: var(--text);
+}
+
+.map-editor-regions__empty-body {
+  margin: 0 0 12px;
+  color: var(--text-2);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.map-editor-region-insert {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 12px;
+  background: #fcfaf6;
+}
+
+.map-editor-region-insert__label {
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-3);
 }
 
-.map-editor-page__title {
-  margin: 0 0 12px;
-  font-family: var(--font-display);
-  font-size: clamp(34px, 5vw, 52px);
-  line-height: 0.98;
-  font-style: italic;
+.map-editor-region-insert__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.map-editor-region {
+  width: 100%;
+  padding: 22px 24px;
+  border: 1px solid #e7dfd4;
+  border-radius: 16px;
+  background: #fffdfa;
+  box-shadow: 0 8px 24px rgba(44, 29, 14, 0.05);
+}
+
+.map-editor-region__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.map-editor-region__title-wrap {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.map-editor-region__icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.map-editor-region__title-block {
+  min-width: 0;
+}
+
+.map-editor-region__title {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.2;
   color: var(--text);
 }
 
-.map-editor-page__body,
-.map-editor-page__meta {
-  margin: 0;
+.map-editor-region__content {
   color: var(--text-2);
+  font-size: 15px;
+  line-height: 1.7;
 }
 
-.map-editor-page__meta {
-  margin-top: 10px;
-  font-size: 13px;
+.map-editor-region__content p {
+  margin: 0 0 0.7em;
 }
 
-.map-editor-page__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 28px;
+.map-editor-region__content p:last-child {
+  margin-bottom: 0;
+}
+
+.map-editor-region__content h1,
+.map-editor-region__content h2,
+.map-editor-region__content h3 {
+  color: var(--text);
+  margin: 0.8em 0 0.35em;
+}
+
+.map-editor-region__content ul,
+.map-editor-region__content ol {
+  margin: 0.4em 0 0.7em;
+  padding-left: 1.35em;
+}
+
+.map-editor-region__content blockquote {
+  margin: 0.7em 0;
+  padding-left: 14px;
+  border-left: 3px solid var(--border-strong);
+  color: var(--text-2);
+  font-style: italic;
+}
+
+.map-editor-region__content code {
+  background: var(--bg-elevated);
+  border-radius: 4px;
+  padding: 1px 4px;
+}
+
+.map-editor-region__content pre {
+  background: #1e293b;
+  color: #e2e8f0;
+  border-radius: 8px;
+  padding: 12px 16px;
+  overflow-x: auto;
+}
+
+.map-editor-region__content pre code {
+  background: none;
+  padding: 0;
+}
+
+.map-editor-region__content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+}
+
+.map-editor-region-modal {
+  width: min(760px, 96vw);
+  max-height: min(760px, calc(100vh - 40px));
+}
+
+.map-editor-region-modal__markdown {
+  min-height: 280px;
+}
+
+.map-editor-region-modal__markdown .markdown-editor {
+  min-height: 280px;
 }
 
 @media (max-width: 640px) {
@@ -389,6 +532,19 @@
 
   .map-editor-page__client-inner {
     padding: 28px 20px;
+  }
+
+  .map-editor-region-insert {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .map-editor-region {
+    padding: 18px;
+  }
+
+  .map-editor-region__header {
+    flex-direction: column;
   }
 }
 
