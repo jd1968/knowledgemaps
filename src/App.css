@@ -77,6 +77,12 @@
   height: 100%;
 }
 
+/* Let d3-zoom / pointer handlers own one- and two-finger gestures; avoids the browser scrolling
+   .canvas-wrapper (overflow-x) or stealing vertical moves before React Flow sees them. */
+.map-flow-client .react-flow__renderer {
+  touch-action: none;
+}
+
 .map-header-block {
   margin-top: 0;
   margin-bottom: 0;

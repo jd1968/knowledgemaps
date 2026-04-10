@@ -293,18 +293,17 @@ const PinchZoomHandler = ({ containerRef }) => {
     const onTouchStart = (e) => {
       if (e.touches.length === 2) {
         prevDist = getDist(e.touches)
-        e.stopPropagation()
+        // Do not stopPropagation — React Flow's zoom layer must receive the gesture for pan/zoom.
       }
     }
 
     const onTouchMove = (e) => {
       if (e.touches.length !== 2 || prevDist === null) return
+      // Block native page zoom only; let the event reach @xyflow so two-finger pan works at fixed zoom.
       e.preventDefault()
-      e.stopPropagation()
 
       const currDist = getDist(e.touches)
       prevDist = currDist
-      // Zoom is fixed at 100%, so swallow pinch gestures.
     }
 
     const onTouchEnd = (e) => { if (e.touches.length < 2) prevDist = null }
@@ -565,9 +564,14 @@ const MindMapCanvas = () => {
     return clampToOrigin(pos)
   }, [screenToFlowPosition, clampToOrigin])
 
-  const [isTouch] = useState(
-    () => typeof window !== 'undefined' && window.matchMedia('(hover: none) and (pointer: coarse)').matches
-  )
+  // Coarse pointers (phones) and many tablets (e.g. iPad: fine pointer + touch) need primary-button pan.
+  const [isTouch] = useState(() => {
+    if (typeof window === 'undefined') return false
+    const coarse = window.matchMedia('(hover: none) and (pointer: coarse)').matches
+    const touchFirst =
+      window.matchMedia('(hover: none)').matches && (navigator.maxTouchPoints ?? 0) > 0
+    return coarse || touchFirst
+  })
 
   const onVerticalWheelPan = useCallback((event) => {
     if (isTouch) return
@@ -1633,10 +1637,10 @@ const MindMapCanvas = () => {
         selectionMode={SelectionMode.Partial}
         multiSelectionKeyCode={['Shift', 'Meta', 'Control']}
         zoomOnScroll={false}
-        // Enable native pinch zoom for trackpads/fine pointers; coarse touch pinch is handled
-        // by PinchZoomHandler to keep behavior consistent on touch devices.
-        zoomOnPinch={false}
-        preventScrolling={false}
+        // Pinch must stay enabled in the filter so two-finger gestures reach the zoom layer; zoom
+        // is locked via min/max zoom. PinchZoomHandler only preventDefault()s to block native page zoom.
+        zoomOnPinch
+        preventScrolling
         snapToGrid={false}
         snapGrid={DRAG_SNAP_GRID}
         minZoom={CANVAS_POLICY.zoom}
@@ -1677,7 +1681,9 @@ const MindMapCanvas = () => {
         <Panel position="bottom-center">
           <div className="canvas-hint">
             {isTouch
-              ? 'Tap a node to select · Drag to pan · Pinch to zoom'
+              ? isEditMode
+                ? 'Tap a node to select · Two fingers to pan the map · One finger drags nodes'
+                : 'Tap a node to select · Drag to pan'
               : isEditMode
                 ? pendingToolboxType
                   ? `Click to place ${pendingToolboxType} · Press Escape to cancel`
