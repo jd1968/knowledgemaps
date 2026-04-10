@@ -23,21 +23,23 @@
 
 .canvas-wrapper {
   flex: 1;
-  overflow-x: hidden;
+  overflow-x: auto;
   overflow-y: hidden;
   position: relative;
   background: var(--ink);
   display: flex;
-  justify-content: center;
+  justify-content: flex-start;
 }
 
 .canvas-client-area {
-  width: 1470px;
-  max-width: 100%;
+  width: 1530px;
+  min-width: 1530px;
   height: 100%;
   background: #fff;
   margin: 0 auto;
   padding: 0 30px;
+  border-left: 1px solid #d8cfc2;
+  border-right: 1px solid #d8cfc2;
   box-sizing: border-box;
   flex: 0 0 auto;
 }

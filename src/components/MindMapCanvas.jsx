@@ -558,16 +558,32 @@ const MindMapCanvas = () => {
 
   const onVerticalWheelPan = useCallback((event) => {
     if (isTouch) return
-    if (Math.abs(event.deltaY) < 0.01) return
+    let handled = false
+
+    // Route horizontal trackpad scroll to the outer shell so users can
+    // navigate back to either side on smaller viewports.
+    if (Math.abs(event.deltaX) > 0.01) {
+      const wrapper = event.currentTarget?.closest?.('.canvas-wrapper')
+      if (wrapper) {
+        wrapper.scrollLeft += event.deltaX
+        handled = true
+      }
+    }
+
+    if (Math.abs(event.deltaY) > 0.01) {
+      const vp = getViewport()
+      const nextViewport = {
+        x: vp.x,
+        y: vp.y - event.deltaY,
+        zoom: CANVAS_POLICY.zoom,
+      }
+      setViewport(clampViewportToExtent(nextViewport), { duration: 0 })
+      handled = true
+    }
+
+    if (!handled) return
     event.preventDefault()
     event.stopPropagation()
-    const vp = getViewport()
-    const nextViewport = {
-      x: vp.x,
-      y: vp.y - event.deltaY,
-      zoom: CANVAS_POLICY.zoom,
-    }
-    setViewport(clampViewportToExtent(nextViewport), { duration: 0 })
   }, [isTouch, getViewport, setViewport, clampViewportToExtent])
 
   // Relationship lines are rendered as single-segment overlays, not per-end RF edges.

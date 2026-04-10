@@ -52,8 +52,8 @@ const FIXED_ORIGIN = { x: 0, y: 0 }
 
 const snapResizeDimensionsForNode = (node, dimensions, isResizing) => {
   if (isResizing) return dimensions
-  const isL1Card = node?.data?.nodeType === 'card' && (node?.data?.level ?? 0) === 1
-  if (isL1Card) {
+  const isL1CardLike = (node?.data?.nodeType === 'card' || node?.data?.nodeType === 'diagram') && (node?.data?.level ?? 0) === 1
+  if (isL1CardLike) {
     return {
       width: snapCardSpanSize(dimensions.width, { min: 60 }),
       height: snapCardSpanSize(dimensions.height, { min: 30 }),
@@ -63,8 +63,8 @@ const snapResizeDimensionsForNode = (node, dimensions, isResizing) => {
 }
 
 const getMoveSnapGridForNode = (node) => {
-  const isL1Card = node?.data?.nodeType === 'card' && (node?.data?.level ?? 0) === 1
-  return isL1Card ? MAP_GRID_SIZE : GRID_SIZE
+  const isL1Node = (node?.data?.level ?? 0) === 1
+  return isL1Node ? MAP_GRID_SIZE : GRID_SIZE
 }
 
 const getDefaultSizeForNode = (node) => {
@@ -724,8 +724,8 @@ export const useMindMapStore = create((set, get) => ({
   resizeNode: (nodeId, { width, height, x, y }, isResizing = false) => {
     const node = get().nodes.find((n) => n.id === nodeId)
     const size = snapResizeDimensionsForNode(node, { width, height }, isResizing)
-    const isL1Card = node?.data?.nodeType === 'card' && (node?.data?.level ?? 0) === 1
-    const positionSnapGrid = isL1Card ? MAP_GRID_SIZE : GRID_SIZE
+    const isL1CardLike = (node?.data?.nodeType === 'card' || node?.data?.nodeType === 'diagram') && (node?.data?.level ?? 0) === 1
+    const positionSnapGrid = isL1CardLike ? MAP_GRID_SIZE : GRID_SIZE
     set((state) => ({
       nodes: state.nodes.map((node) => {
         if (node.id !== nodeId) return node

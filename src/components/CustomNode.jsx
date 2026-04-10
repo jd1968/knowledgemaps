@@ -95,12 +95,12 @@ function ResizeHandles({ nodeId, nodeType, nodeLevel, visible }) {
     if (dir.includes('n')) { h = Math.max(MIN_H, startH - dy); y = startPY + (startH - h) }
 
     // Match data-model feel: resize snaps continuously while dragging.
-    const isL1Card = nodeType === 'card' && nodeLevel === 1
+    const isL1CardLike = (nodeType === 'card' || nodeType === 'diagram') && nodeLevel === 1
     const snapped = {
-      width: isL1Card ? snapCardSpanSize(w, { min: MIN_W }) : Math.max(MIN_W, snapValue(w, GRID_SIZE)),
-      height: isL1Card ? snapCardSpanSize(h, { min: MIN_H }) : Math.max(MIN_H, snapValue(h, GRID_SIZE)),
-      x: snapValue(x, isL1Card ? MAP_GRID_SIZE : GRID_SIZE),
-      y: snapValue(y, isL1Card ? MAP_GRID_SIZE : GRID_SIZE),
+      width: isL1CardLike ? snapCardSpanSize(w, { min: MIN_W }) : Math.max(MIN_W, snapValue(w, GRID_SIZE)),
+      height: isL1CardLike ? snapCardSpanSize(h, { min: MIN_H }) : Math.max(MIN_H, snapValue(h, GRID_SIZE)),
+      x: snapValue(x, isL1CardLike ? MAP_GRID_SIZE : GRID_SIZE),
+      y: snapValue(y, isL1CardLike ? MAP_GRID_SIZE : GRID_SIZE),
     }
     drag.last = snapped
     if (!drag.moved && (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5)) {
