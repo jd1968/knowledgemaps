@@ -70,6 +70,9 @@
   flex: 1;
   min-height: 0;
   position: relative;
+  /* Claim all touch gestures in the canvas area — prevents the browser from
+     intercepting gestures on wrapper elements between here and .react-flow__renderer. */
+  touch-action: none;
 }
 
 .map-flow-client .react-flow {
@@ -77,8 +80,8 @@
   height: 100%;
 }
 
-/* Let d3-zoom / pointer handlers own one- and two-finger gestures; avoids the browser scrolling
-   .canvas-wrapper (overflow-x) or stealing vertical moves before React Flow sees them. */
+/* Belt-and-suspenders: also set on the renderer so @xyflow's own touch-action
+   accounting isn't surprised. */
 .map-flow-client .react-flow__renderer {
   touch-action: none;
 }

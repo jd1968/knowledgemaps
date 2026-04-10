@@ -279,36 +279,54 @@ const ResetViewportOnLoad = () => {
   return null
 }
 
-// Handles pinch-to-zoom for touch devices — attached to the outer container in
+// Handles two-finger pan for touch devices — attached to the outer container in
 // capture phase so it intercepts before ReactFlow's node/pane handlers see the events.
+// d3-drag (node drag) calls stopPropagation in bubble phase, which means d3-zoom
+// never reliably sees both fingers when one lands on a node. We own the 2-finger
+// gesture entirely: preventDefault on touchstart blocks native page zoom, and
+// stopPropagation on touchmove prevents d3-zoom from double-panning.
 const PinchZoomHandler = ({ containerRef }) => {
+  const { getViewport, setViewport } = useReactFlow()
+
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
 
-    let prevDist = null
+    let prevCentroid = null
 
-    const getDist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY)
+    const getCentroid = (t) => ({
+      x: (t[0].clientX + t[1].clientX) / 2,
+      y: (t[0].clientY + t[1].clientY) / 2,
+    })
 
     const onTouchStart = (e) => {
       if (e.touches.length === 2) {
-        prevDist = getDist(e.touches)
-        // Do not stopPropagation — React Flow's zoom layer must receive the gesture for pan/zoom.
+        e.preventDefault()  // block native page zoom
+        prevCentroid = getCentroid(e.touches)
       }
     }
 
     const onTouchMove = (e) => {
-      if (e.touches.length !== 2 || prevDist === null) return
-      // Block native page zoom only; let the event reach @xyflow so two-finger pan works at fixed zoom.
+      if (e.touches.length !== 2 || prevCentroid === null) return
       e.preventDefault()
+      // Stop propagation so d3-zoom doesn't also try to pan (it may have tracked
+      // the touchstart; we take over movement so there's no double-pan).
+      e.stopPropagation()
 
-      const currDist = getDist(e.touches)
-      prevDist = currDist
+      const currCentroid = getCentroid(e.touches)
+      const dy = currCentroid.y - prevCentroid.y
+      prevCentroid = currCentroid
+
+      if (dy !== 0) {
+        const { y } = getViewport()
+        const newY = Math.max(-CANVAS_POLICY.maxPanDown, Math.min(0, y + dy))
+        setViewport({ x: CANVAS_POLICY.origin.x, y: newY, zoom: CANVAS_POLICY.zoom }, { duration: 0 })
+      }
     }
 
-    const onTouchEnd = (e) => { if (e.touches.length < 2) prevDist = null }
+    const onTouchEnd = (e) => { if (e.touches.length < 2) prevCentroid = null }
 
-    el.addEventListener('touchstart', onTouchStart, { passive: true,  capture: true })
+    el.addEventListener('touchstart', onTouchStart, { passive: false, capture: true })
     el.addEventListener('touchmove',  onTouchMove,  { passive: false, capture: true })
     el.addEventListener('touchend',   onTouchEnd,   { passive: true,  capture: true })
 
@@ -317,7 +335,7 @@ const PinchZoomHandler = ({ containerRef }) => {
       el.removeEventListener('touchmove',  onTouchMove,  { capture: true })
       el.removeEventListener('touchend',   onTouchEnd,   { capture: true })
     }
-  }, [containerRef])
+  }, [containerRef, getViewport, setViewport])
 
   return null
 }
