@@ -14,12 +14,16 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useNavigate } from 'react-router-dom'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { useMindMapStore } from '../store/useMindMapStore'
 import CustomNode from './CustomNode'
 import StraightCenterEdge from './StraightCenterEdge'
 import RelationshipEdge from './RelationshipEdge'
-import { GRID, GRID_SIZE, MAP_GRID_SIZE, MAP_GRID_Y_SIZE, snapPoint } from '../lib/grid'
+import { GRID, GRID_SIZE, MAP_CLIENT_WIDTH, MAP_GRID_SIZE, MAP_GRID_Y_SIZE, snapPoint, snapValue } from '../lib/grid'
 import { STANDARD_THEME_COLORS } from '../lib/themePalette'
+import { NodeIconDisplay } from './NodeIcon'
+import { markdownComponents, urlTransform } from './MarkdownEditor'
 
 const nodeTypes = { mindmap: CustomNode }
 const edgeTypes = { 'straight-center': StraightCenterEdge, 'relationship-edge': RelationshipEdge }
@@ -353,7 +357,6 @@ const MindMapCanvas = () => {
     onConnect,
     pushHistory,
     deselectNode,
-    moveSubtreeBy,
     addNode,
     addChildNode,
     isEditMode,
@@ -362,6 +365,8 @@ const MindMapCanvas = () => {
     breadcrumbs,
     currentMapId,
     currentMapName,
+    currentMapIconUrl,
+    currentMapContent,
     isDirty,
     saveMap,
     openMenuNodeId,
@@ -389,6 +394,7 @@ const MindMapCanvas = () => {
     reverseRelationshipConnector,
     moveNodePosition,
     autoLayoutChildrenForCard,
+    finalizeSubtreeDrag,
     setReparentSourceNodeId,
     setCopySizeSourceNodeId,
     openDiagramEditor,
@@ -456,6 +462,11 @@ const MindMapCanvas = () => {
       map[e.source].push(e.target)
     })
     return map
+  }, [hierarchyEdges])
+  const nodesWithHierarchyChildren = useMemo(() => {
+    const ids = new Set()
+    hierarchyEdges.forEach((e) => ids.add(e.source))
+    return ids
   }, [hierarchyEdges])
 
   // Assign each L1 node a palette color in creation order — includes both
@@ -592,7 +603,6 @@ const MindMapCanvas = () => {
   const displayEdges = useMemo(() => [], [])
 
   const containerRef = useRef(null)
-  const dragStartRef = useRef({})
 
   useEffect(() => {
     if (!reparentSourceNodeId && !copySizeSourceNodeId) return
@@ -622,33 +632,19 @@ const MindMapCanvas = () => {
 
   const onNodeDragStart = useCallback((_, node) => {
     if (!isEditMode) return
-    dragStartRef.current[node.id] = { x: node.position.x, y: node.position.y }
     pushHistory()
   }, [isEditMode, pushHistory])
-
-  const onNodeDrag = useCallback((_, draggedNode) => {
-    if (!isEditMode) return
-    if (!draggedNode.data?.groupSize) return  // only parent nodes need subtree dragging
-    const prev = dragStartRef.current[draggedNode.id]
-    if (!prev) {
-      dragStartRef.current[draggedNode.id] = { x: draggedNode.position.x, y: draggedNode.position.y }
-      return
-    }
-    const dx = draggedNode.position.x - prev.x
-    const dy = draggedNode.position.y - prev.y
-    if (Math.abs(dx) > 0.01 || Math.abs(dy) > 0.01) {
-      moveSubtreeBy(draggedNode.id, dx, dy, false)
-    }
-    dragStartRef.current[draggedNode.id] = { x: draggedNode.position.x, y: draggedNode.position.y }
-  }, [isEditMode, moveSubtreeBy])
 
   // Dragging onto another node does not change hierarchy; reparent uses context-menu actions.
   const onNodeDragStop = useCallback((_, draggedNode) => {
     if (!isEditMode) return
     if (draggedNode.data?.level === 0) return
-    snapSubtreeToGrid(draggedNode.id, true)
-    delete dragStartRef.current[draggedNode.id]
-  }, [isEditMode, snapSubtreeToGrid])
+    if (nodesWithHierarchyChildren.has(draggedNode.id)) {
+      finalizeSubtreeDrag(draggedNode.id)
+    } else {
+      snapSubtreeToGrid(draggedNode.id, true)
+    }
+  }, [isEditMode, snapSubtreeToGrid, finalizeSubtreeDrag, nodesWithHierarchyChildren])
 
   const containerRectRef = useRef(null)
 
@@ -1281,12 +1277,20 @@ const MindMapCanvas = () => {
   )
 
   const overlayTransform = `translate(${viewport.x} ${viewport.y}) scale(${viewport.zoom})`
-
+  const mapHeaderTitle = (currentMapName || 'Untitled Map').trim() || 'Untitled Map'
+  const mapHeaderContent = (currentMapContent || '').trim()
   return (
     <div
-      ref={containerRef}
-      onWheelCapture={onVerticalWheelPan}
-      style={{ width: '100%', height: '100%', position: 'relative', cursor: pendingToolboxType ? 'crosshair' : undefined }}
+      className="map-view-root"
+      style={{
+        width: '100%',
+        height: '100%',
+        minHeight: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        position: 'relative',
+        cursor: pendingToolboxType ? 'crosshair' : undefined,
+      }}
     >
       {isEditMode && nodeContextMenu && (
         <div
@@ -1529,7 +1533,35 @@ const MindMapCanvas = () => {
           </button>
         </div>
       )}
-      <ReactFlow
+      <header className="map-header-shell">
+        <div className="map-header-block" style={{ width: MAP_CLIENT_WIDTH, margin: '0 auto' }}>
+          <div className="map-header-title-row">
+            {currentMapIconUrl && (
+              <NodeIconDisplay iconUrl={currentMapIconUrl} className="map-header-icon" />
+            )}
+            <h1 className="map-header-title">{mapHeaderTitle}</h1>
+          </div>
+          {mapHeaderContent && (
+            <div className="map-header-content">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={markdownComponents}
+                urlTransform={urlTransform}
+              >
+                {mapHeaderContent}
+              </ReactMarkdown>
+            </div>
+          )}
+        </div>
+      </header>
+      <div className="map-header-gap" aria-hidden="true" />
+      <div
+        ref={containerRef}
+        className="map-flow-client"
+        onWheelCapture={onVerticalWheelPan}
+      >
+        <ReactFlow
+        style={{ width: '100%', height: '100%' }}
         nodes={nodesWithColor}
         edges={displayEdges}
         onNodesChange={onNodesChange}
@@ -1537,7 +1569,6 @@ const MindMapCanvas = () => {
         onConnect={onConnect}
         onEdgeDoubleClick={onRelationshipEdgeDoubleClick}
         onNodeDragStart={onNodeDragStart}
-        onNodeDrag={onNodeDrag}
         onNodeDragStop={onNodeDragStop}
         onPaneClick={(event) => {
           setSelectedRelationshipId(null)
@@ -1606,7 +1637,7 @@ const MindMapCanvas = () => {
         // by PinchZoomHandler to keep behavior consistent on touch devices.
         zoomOnPinch={false}
         preventScrolling={false}
-        snapToGrid={isEditMode}
+        snapToGrid={false}
         snapGrid={DRAG_SNAP_GRID}
         minZoom={CANVAS_POLICY.zoom}
         maxZoom={CANVAS_POLICY.zoom}
@@ -2081,6 +2112,7 @@ const MindMapCanvas = () => {
         <FocusNodeHandler />
         <PinchZoomHandler containerRef={containerRef} />
       </ReactFlow>
+      </div>
     </div>
   )
 }

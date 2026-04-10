@@ -2,6 +2,8 @@
 export const GRID_SIZE = 10
 // Map placement grid: 6 columns across the 1470px client area.
 export const MAP_CLIENT_WIDTH = 1470
+/** Vertical gap (screen px) from the header’s bottom edge to where the map grid / L1 placement begins. */
+export const MAP_GRID_TOP_MARGIN_SCREEN_PX = 20
 export const MAP_GRID_COLUMNS = 6
 export const MAP_GRID_SIZE = MAP_CLIENT_WIDTH / MAP_GRID_COLUMNS
 export const MAP_GRID_Y_SIZE = MAP_GRID_SIZE / 2

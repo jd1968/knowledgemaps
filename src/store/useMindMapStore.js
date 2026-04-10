@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { applyNodeChanges, applyEdgeChanges, addEdge } from '@xyflow/react'
 import { v4 as uuidv4 } from 'uuid'
 import { supabase } from '../lib/supabase'
-import { CARD_GAP, GRID_SIZE, MAP_GRID_SIZE, MAP_GRID_Y_SIZE, NEST_PAD_BOTTOM, NEST_PAD_LEFT, NEST_PAD_RIGHT, NEST_PAD_TOP, NEST_V_SPACING, snapCardSpanSize, snapPoint, snapSize, snapValue } from '../lib/grid'
+import { CARD_GAP, GRID_SIZE, MAP_CLIENT_WIDTH, MAP_GRID_SIZE, MAP_GRID_Y_SIZE, NEST_PAD_BOTTOM, NEST_PAD_LEFT, NEST_PAD_RIGHT, NEST_PAD_TOP, NEST_V_SPACING, snapCardSpanSize, snapPoint, snapSize, snapValue } from '../lib/grid'
 import { buildSubtreePayload, parseSubtreePayload, remapSubtreeForPaste } from '../lib/subtreeClipboard'
 
 const HISTORY_LIMIT = 50
@@ -49,19 +49,6 @@ const hierarchyEdgesOnly = (edges) => edges.filter((e) => !isRelationshipEdge(e)
 
 const normalizeLevel = (level = 1) => Math.min(Math.max(level, 0), 3)
 const FIXED_ORIGIN = { x: 0, y: 0 }
-const CHILD_LAYOUT_HEIGHTS = {
-  small: 70,
-  medium: 100,
-  large: 130,
-  xlarge: 170,
-}
-const DEFAULT_CHILD_LAYOUT_HEIGHT = 'medium'
-
-const normalizeChildLayoutHeight = (preset) => {
-  if (preset === 'small' || preset === 'medium' || preset === 'large' || preset === 'xlarge') return preset
-  return DEFAULT_CHILD_LAYOUT_HEIGHT
-}
-
 const snapResizeDimensionsForNode = (node, dimensions, isResizing) => {
   if (isResizing) return dimensions
   const isL1CardLike = (node?.data?.nodeType === 'card' || node?.data?.nodeType === 'diagram') && (node?.data?.level ?? 0) === 1
@@ -90,18 +77,41 @@ const getHierarchyChildrenMap = (edges) => {
   return childrenMap
 }
 
+/** Transitive hierarchy targets under `rootId` (excludes `rootId`). */
+const collectDescendantIds = (rootId, childrenMap) => {
+  const out = new Set()
+  const stack = [...(childrenMap.get(rootId) || [])]
+  while (stack.length) {
+    const id = stack.pop()
+    if (out.has(id)) continue
+    out.add(id)
+    for (const next of childrenMap.get(id) || []) stack.push(next)
+  }
+  return out
+}
+
 const hasNodeContent = (node) => {
   const content = node?.data?.content
   return typeof content === 'string' && content.trim() !== '' && content !== '<p></p>'
+}
+
+const estimateCardContentOffset = (parentNode, parentWidth, parentHeight) => {
+  if (!hasNodeContent(parentNode)) return 0
+  const raw = String(parentNode?.data?.content || '')
+  const plain = raw.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+  const hardBreaks = (raw.match(/\n/g) || []).length
+  const usableWidth = Math.max(120, parentWidth - NEST_PAD_LEFT - NEST_PAD_RIGHT)
+  const charsPerLine = Math.max(18, Math.floor(usableWidth / 7))
+  const lineCount = Math.max(1, Math.ceil((plain.length || 1) / charsPerLine) + hardBreaks)
+  const estimatedHeight = lineCount * 16 + 8
+  return Math.min(Math.max(16, estimatedHeight), Math.max(24, parentHeight * 0.35))
 }
 
 const getCardChildClientArea = (parentNode) => {
   if (!parentNode || parentNode?.data?.nodeType !== 'card') return null
   if ((parentNode?.data?.level ?? 0) <= 0) return null
   const parentSize = resolveNodePixelSize(parentNode)
-  const contentOffset = hasNodeContent(parentNode)
-    ? Math.min(Math.max(40, parentSize.height * 0.2), 180)
-    : 0
+  const contentOffset = estimateCardContentOffset(parentNode, parentSize.width, parentSize.height)
   const minX = parentNode.position.x + NEST_PAD_LEFT
   const minY = parentNode.position.y + NEST_PAD_TOP + contentOffset
   const maxX = parentNode.position.x + parentSize.width - NEST_PAD_RIGHT
@@ -123,16 +133,17 @@ const clampChildPositionInCardClientArea = (node, parentNode, position) => {
   }
 }
 
-const applyAutoLayoutChildrenForCard = ({ nodes, edges, parentId, heightPreset = null }) => {
+const applyAutoLayoutChildrenForCard = ({ nodes, edges, parentId }) => {
   const parent = nodes.find((n) => n.id === parentId)
   if (!parent) return { nodes, changed: false }
   if (parent.data?.nodeType !== 'card') return { nodes, changed: false }
+  const clientArea = getCardChildClientArea(parent)
+  if (!clientArea) return { nodes, changed: false }
 
   const childrenMap = getHierarchyChildrenMap(edges)
   const childIds = childrenMap.get(parentId) || []
   const childIdSet = new Set(childIds)
   const children = nodes.filter((n) => childIdSet.has(n.id))
-  const resolvedPreset = normalizeChildLayoutHeight(heightPreset || DEFAULT_CHILD_LAYOUT_HEIGHT)
   if (children.length === 0) {
     return { nodes, changed: false }
   }
@@ -147,17 +158,27 @@ const applyAutoLayoutChildrenForCard = ({ nodes, edges, parentId, heightPreset =
     return String(a.id).localeCompare(String(b.id))
   })
 
-  const parentWidth = resolveNodePixelSize(parent).width
-  const columns = Math.max(1, Math.round((parentWidth + CARD_GAP) / MAP_GRID_SIZE))
+  const clientAreaWidth = Math.max(120, clientArea.maxX - clientArea.minX)
+  const columns = Math.max(1, Math.round((clientAreaWidth + CARD_GAP) / MAP_GRID_SIZE))
   const gap = CARD_GAP
-  const sideInsetBase = Math.max(NEST_PAD_LEFT, NEST_PAD_RIGHT)
-  const innerWidth = Math.max(120, parentWidth - sideInsetBase * 2)
-  const rawChildWidth = (innerWidth - gap * (columns - 1)) / columns
-  const childWidth = Math.max(80, Math.floor(rawChildWidth / GRID_SIZE) * GRID_SIZE)
-  const occupiedWidth = childWidth * columns + gap * (columns - 1)
-  const centeredSideInset = sideInsetBase + Math.max(0, (innerWidth - occupiedWidth) / 2)
-  const childHeight = CHILD_LAYOUT_HEIGHTS[resolvedPreset]
-  const childHeightSnapped = Math.max(30, snapValue(childHeight, GRID_SIZE))
+  const innerWidth = clientAreaWidth
+  const childWidth = Math.max(40, (innerWidth - gap * (columns - 1)) / columns)
+  const startX = clientArea.minX
+
+  const childHeights = sortedChildren.map((child) => {
+    const live = resolveNodePixelSize(child).height
+    return Math.max(30, snapValue(live, GRID_SIZE))
+  })
+  const rowCount = Math.ceil(sortedChildren.length / columns)
+  const rowHeights = Array.from({ length: rowCount }, () => 0)
+  for (let i = 0; i < sortedChildren.length; i++) {
+    const row = Math.floor(i / columns)
+    rowHeights[row] = Math.max(rowHeights[row], childHeights[i])
+  }
+  const rowOffsets = Array.from({ length: rowCount }, () => 0)
+  for (let row = 1; row < rowCount; row++) {
+    rowOffsets[row] = rowOffsets[row - 1] + rowHeights[row - 1] + gap
+  }
 
   let changed = false
   const nextNodes = nodes.map((node) => {
@@ -165,26 +186,31 @@ const applyAutoLayoutChildrenForCard = ({ nodes, edges, parentId, heightPreset =
     if (idx < 0) return node
     const row = Math.floor(idx / columns)
     const col = idx % columns
-    const x = parent.position.x + centeredSideInset + col * (childWidth + gap)
-    const y = snapValue(parent.position.y + NEST_PAD_TOP + row * (childHeightSnapped + gap), GRID_SIZE)
+    const rawX = startX + col * (childWidth + gap)
+    const maxXForNode = Math.max(clientArea.minX, clientArea.maxX - childWidth)
+    const x = Math.min(maxXForNode, Math.max(clientArea.minX, rawX))
+    const existingHeight = childHeights[idx]
+    const rawY = snapValue(clientArea.minY + rowOffsets[row], GRID_SIZE)
+    const maxYForNode = Math.max(clientArea.minY, clientArea.maxY - existingHeight)
+    const y = Math.min(maxYForNode, Math.max(clientArea.minY, rawY))
     const nextNode = {
       ...node,
       position: { x, y },
       style: {
         ...(node.style || {}),
         width: childWidth,
-        height: childHeightSnapped,
+        height: existingHeight,
       },
       data: {
         ...node.data,
-        size: { width: childWidth, height: childHeightSnapped },
+        size: { width: childWidth, height: existingHeight },
       },
     }
     if (
       (node.position?.x ?? 0) !== x ||
       (node.position?.y ?? 0) !== y ||
       (node.data?.size?.width ?? node.style?.width ?? 0) !== childWidth ||
-      (node.data?.size?.height ?? node.style?.height ?? 0) !== childHeightSnapped
+      (node.data?.size?.height ?? node.style?.height ?? 0) !== existingHeight
     ) {
       changed = true
     }
@@ -221,6 +247,35 @@ const resolveNodePixelSize = (node) => {
   const h = styleDim(node?.style?.height)
   if (w != null && h != null) return snapResizeDimensionsForNode(node, { width: w, height: h }, false)
   return snapResizeDimensionsForNode(node, getDefaultSizeForNode(node), false)
+}
+
+/** L1: keep within fixed map width. Y is unbounded (vertical panning). */
+const clampNodePositionToBounds = (node, position) => {
+  const level = node?.data?.level ?? 0
+  let x = Math.max(FIXED_ORIGIN.x, position?.x ?? 0)
+  let y = Math.max(FIXED_ORIGIN.y, position?.y ?? 0)
+  if (level === 1) {
+    const { width } = resolveNodePixelSize(node)
+    x = Math.min(MAP_CLIENT_WIDTH - width, x)
+  }
+  return { x, y }
+}
+
+/** L1 vertical snap to MAP_GRID_Y_SIZE, never above minY (top of map pane). */
+const snapL1YToLargeGrid = (y, minY) => Math.max(minY, snapValue(y, MAP_GRID_Y_SIZE))
+
+const snapDragPositionForNode = (node, position) => {
+  const level = node?.data?.level ?? 0
+  if (level === 1) {
+    return {
+      x: snapValue(position.x, MAP_GRID_SIZE),
+      y: snapL1YToLargeGrid(position.y, FIXED_ORIGIN.y),
+    }
+  }
+  return {
+    x: snapValue(position.x, GRID_SIZE),
+    y: snapValue(position.y, GRID_SIZE),
+  }
 }
 
 const shiftPoint = (point, dx, dy) => {
@@ -370,6 +425,8 @@ export const useMindMapStore = create((set, get) => ({
   // ── Map metadata ─────────────────────────────────────────────
   currentMapId: null,
   currentMapName: 'Untitled Map',
+  currentMapIconUrl: '',
+  currentMapContent: '',
   isDirty: false,
   saveStatus: 'idle', // 'idle' | 'saving' | 'saved' | 'error'
 
@@ -504,22 +561,88 @@ export const useMindMapStore = create((set, get) => ({
     // Don't push position changes to history during drag (too noisy)
     // History is pushed in onNodeDragStart instead
     set((state) => {
+      const prevById = new Map(state.nodes.map((n) => [n.id, n]))
       const selectedApplied = applySelectionChanges(effectiveChanges, state.nodes)
       const positionedApplied = applyPositionChanges(effectiveChanges, selectedApplied)
       const resizedApplied = applyResizeChanges(effectiveChanges, positionedApplied, edges)
+      const changedPositionIds = new Set(
+        effectiveChanges
+          .filter((c) => c.type === 'position')
+          .map((c) => c.id)
+      )
+      const positionChangeById = new Map()
+      effectiveChanges.forEach((c) => {
+        if (c.type === 'position') positionChangeById.set(c.id, c)
+      })
       const hierarchyEdges = hierarchyEdgesOnly(edges)
       const parentByChildId = {}
       hierarchyEdges.forEach((e) => { parentByChildId[e.target] = e.source })
+      const hierarchyChildMap = getHierarchyChildrenMap(hierarchyEdges)
+
+      // When RF moves a parent, it only updates that node. Shift all hierarchy descendants by the
+      // same delta (after clamp/snap) so the last drop frame cannot leave children behind.
+      let working = resizedApplied
+      const subtreeShiftedParents = new Set()
+      for (const cid of changedPositionIds) {
+        const directKids = hierarchyChildMap.get(cid)
+        if (!directKids?.length) continue
+        const prevNode = prevById.get(cid)
+        if (!prevNode) continue
+        const cur = working.find((n) => n.id === cid)
+        if (!cur) continue
+        const posCh = positionChangeById.get(cid)
+        const isPointerDrag = posCh?.dragging === true
+        let targetP = clampNodePositionToBounds(cur, cur.position)
+        if (!isPointerDrag) {
+          targetP = snapDragPositionForNode(cur, targetP)
+        }
+        const dx = targetP.x - (prevNode.position?.x ?? 0)
+        const dy = targetP.y - (prevNode.position?.y ?? 0)
+        const descIds = collectDescendantIds(cid, hierarchyChildMap)
+        working = working.map((n) => {
+          if (n.id === cid) return { ...n, position: targetP }
+          if (descIds.has(n.id)) {
+            return {
+              ...n,
+              position: {
+                x: (n.position?.x ?? 0) + dx,
+                y: (n.position?.y ?? 0) + dy,
+              },
+              data: shiftRelationshipNodeData(n.data, dx, dy),
+            }
+          }
+          return n
+        })
+        subtreeShiftedParents.add(cid)
+      }
+
       const byId = {}
-      resizedApplied.forEach((n) => { byId[n.id] = n })
-      const boundedNodes = resizedApplied.map((node) => {
+      working.forEach((n) => { byId[n.id] = n })
+      const boundedNodes = working.map((node) => {
+        let p
+        if (subtreeShiftedParents.has(node.id)) {
+          p = { x: node.position.x, y: node.position.y }
+        } else {
+          p = clampNodePositionToBounds(node, node.position)
+          if (changedPositionIds.has(node.id)) {
+            const pch = positionChangeById.get(node.id)
+            if (pch?.dragging !== true) {
+              p = snapDragPositionForNode(node, p)
+            }
+          }
+        }
+        let boundedNode = node
+        if (p.x !== node.position.x || p.y !== node.position.y) {
+          boundedNode = { ...node, position: p }
+        }
         const parentId = parentByChildId[node.id]
-        if (!parentId) return node
+        if (!parentId) return boundedNode
         const parentNode = byId[parentId]
-        if (!parentNode || parentNode.data?.nodeType !== 'card') return node
-        const bounded = clampChildPositionInCardClientArea(node, parentNode, node.position)
-        if (bounded.x === node.position.x && bounded.y === node.position.y) return node
-        return { ...node, position: bounded }
+        if (!parentNode || parentNode.data?.nodeType !== 'card') return boundedNode
+        if (!changedPositionIds.has(node.id)) return boundedNode
+        const bounded = clampChildPositionInCardClientArea(boundedNode, parentNode, boundedNode.position)
+        if (bounded.x === boundedNode.position.x && bounded.y === boundedNode.position.y) return boundedNode
+        return { ...boundedNode, position: bounded }
       })
       const anchor = selectionAnchorFromNodes(boundedNodes)
       return {
@@ -800,7 +923,10 @@ export const useMindMapStore = create((set, get) => ({
     set((state) => ({
       nodes: state.nodes.map((n) => (
         n.id === nodeId
-          ? { ...n, position: nextPosition }
+          ? {
+              ...n,
+              position: clampNodePositionToBounds(n, nextPosition),
+            }
           : n
       )),
       isDirty: isFinal ? true : state.isDirty,
@@ -814,7 +940,11 @@ export const useMindMapStore = create((set, get) => ({
     if (!get().isEditMode) return null
     get().pushHistory()
     const id = uuidv4()
-    const snappedPosition = snapPoint(position)
+    const provisionalNodeForBounds = { data: { level } }
+    const snappedPosition = clampNodePositionToBounds(
+      provisionalNodeForBounds,
+      snapPoint(position)
+    )
     const baseSize = getDefaultSizeForNode({ data: { level, nodeType } })
     const effectiveTitle = nodeType === 'or' ? (title || 'or') : title
     const newNode = {
@@ -875,7 +1005,10 @@ export const useMindMapStore = create((set, get) => ({
           return {
             ...node,
             position: (x != null && y != null)
-              ? { x: isResizing ? x : snapValue(x, positionSnapGridX), y: isResizing ? y : snapValue(y, positionSnapGridY) }
+              ? clampNodePositionToBounds(
+                  node,
+                  { x: isResizing ? x : snapValue(x, positionSnapGridX), y: isResizing ? y : snapValue(y, positionSnapGridY) },
+                )
               : node.position,
             style: { ...(node.style || {}), width: size.width, height: size.height },
             // Mark explicit user resizes as manual so layout defaults don't override them.
@@ -940,18 +1073,16 @@ export const useMindMapStore = create((set, get) => ({
     get().scheduleAutosave()
   },
 
-  autoLayoutChildrenForCard: (nodeId, options = {}) => {
+  autoLayoutChildrenForCard: (nodeId) => {
     if (!get().isEditMode) return
     const target = get().nodes.find((n) => n.id === nodeId)
     if (!target || target.data?.nodeType !== 'card') return
     get().pushHistory()
     set((state) => {
-      const preset = normalizeChildLayoutHeight(options?.heightPreset || DEFAULT_CHILD_LAYOUT_HEIGHT)
       const laidOut = applyAutoLayoutChildrenForCard({
         nodes: state.nodes,
         edges: state.edges,
         parentId: nodeId,
-        heightPreset: preset,
       })
       return { nodes: laidOut.nodes, isDirty: true }
     })
@@ -1200,6 +1331,10 @@ export const useMindMapStore = create((set, get) => ({
 
     // Strip content from diagram JSON — content lives in the nodes table
     const mapData = {
+      meta: {
+        iconUrl: get().currentMapIconUrl || '',
+        content: get().currentMapContent || '',
+      },
       nodes: nodes.map((rawNode) => {
         const {
           data: { content: _c, ...restData },
@@ -1302,6 +1437,8 @@ export const useMindMapStore = create((set, get) => ({
         edges: (mapResult.data.data.edges || []).map((e) => ({ ...e, type: normalizeEdgeType(e.type) })),
         currentMapId: mapResult.data.id,
         currentMapName: mapResult.data.name,
+        currentMapIconUrl: mapResult.data.data?.meta?.iconUrl || '',
+        currentMapContent: mapResult.data.data?.meta?.content || '',
         isDirty: false,
         past: [],
         future: [],
@@ -1494,6 +1631,8 @@ export const useMindMapStore = create((set, get) => ({
       edges: [],
       currentMapId: null,
       currentMapName: name,
+      currentMapIconUrl: '',
+      currentMapContent: '',
       isDirty: false,
       past: [],
       future: [],
@@ -1507,6 +1646,16 @@ export const useMindMapStore = create((set, get) => ({
 
   setMapName: (name) => {
     set({ currentMapName: name, isDirty: true })
+  },
+
+  setMapProperties: ({ name, iconUrl, content }) => {
+    set((state) => ({
+      currentMapName: typeof name === 'string' ? name : state.currentMapName,
+      currentMapIconUrl: typeof iconUrl === 'string' ? iconUrl : state.currentMapIconUrl,
+      currentMapContent: typeof content === 'string' ? content : state.currentMapContent,
+      isDirty: true,
+    }))
+    get().scheduleAutosave()
   },
 
   // ── Add child node ────────────────────────────────────────────
@@ -1547,7 +1696,10 @@ export const useMindMapStore = create((set, get) => ({
     const overridePosition = options?.position
       ? snapPoint(options.position)
       : null
-    const initialPosition = overridePosition ?? snapPoint({ x, y })
+    const initialPosition = clampNodePositionToBounds(
+      { data: { level: childLevel } },
+      overridePosition ?? snapPoint({ x, y })
+    )
 
     const id = uuidv4()
     const size = getDefaultSizeForNode({ data: { level: childLevel, nodeType } })
@@ -1740,12 +1892,11 @@ export const useMindMapStore = create((set, get) => ({
     get().scheduleAutosave()
   },
 
-  // ── Move subtree ──────────────────────────────────────────────
-
-  moveSubtreeBy: (rootId, dx, dy, shouldScheduleAutosave = true) => {
+  finalizeSubtreeDrag: (rootId) => {
     if (!get().isEditMode) return
-    if (!dx && !dy) return
-    const { edges, nodes } = get()
+    const { nodes, edges } = get()
+    const root = nodes.find((n) => n.id === rootId)
+    if (!root) return
     const hierarchyEdges = hierarchyEdgesOnly(edges)
     const descendants = new Set()
     const stack = [rootId]
@@ -1758,32 +1909,32 @@ export const useMindMapStore = create((set, get) => ({
         }
       })
     }
-    if (descendants.size === 0) return
-
-    let minDescendantX = Number.POSITIVE_INFINITY
-    let minDescendantY = Number.POSITIVE_INFINITY
-    nodes.forEach((node) => {
-      if (!descendants.has(node.id)) return
-      minDescendantX = Math.min(minDescendantX, node.position?.x ?? 0)
-      minDescendantY = Math.min(minDescendantY, node.position?.y ?? 0)
+    const rootSnapGrid = getMoveSnapGridForNode(root)
+    const rawY = (root.data?.level ?? 0) === 1
+      ? snapL1YToLargeGrid(root.position?.y ?? 0, FIXED_ORIGIN.y)
+      : snapValue(root.position?.y ?? 0, rootSnapGrid.y)
+    const snappedRoot = clampNodePositionToBounds(root, {
+      x: snapValue(root.position?.x ?? 0, rootSnapGrid.x),
+      y: rawY,
     })
-    const boundedDx = Math.max(dx, FIXED_ORIGIN.x - minDescendantX)
-    const boundedDy = Math.max(dy, FIXED_ORIGIN.y - minDescendantY)
-    if (!boundedDx && !boundedDy) return
-
+    const dx = snappedRoot.x - (root.position?.x ?? 0)
+    const dy = snappedRoot.y - (root.position?.y ?? 0)
+    if (Math.abs(dx) < 0.01 && Math.abs(dy) < 0.01) {
+      get().scheduleAutosave()
+      return
+    }
     set((state) => ({
-      nodes: state.nodes.map((n) =>
-        descendants.has(n.id)
-          ? {
-              ...n,
-              position: { x: n.position.x + boundedDx, y: n.position.y + boundedDy },
-              data: shiftRelationshipNodeData(n.data, boundedDx, boundedDy),
-            }
-          : n
-      ),
+      nodes: state.nodes.map((n) => {
+        if (n.id !== rootId && !descendants.has(n.id)) return n
+        return {
+          ...n,
+          position: { x: (n.position?.x ?? 0) + dx, y: (n.position?.y ?? 0) + dy },
+          data: shiftRelationshipNodeData(n.data, dx, dy),
+        }
+      }),
       isDirty: true,
     }))
-    if (shouldScheduleAutosave) get().scheduleAutosave()
+    get().scheduleAutosave()
   },
 
   snapSubtreeToGrid: (rootId, includeRoot = true) => {
@@ -1810,10 +1961,14 @@ export const useMindMapStore = create((set, get) => ({
         nodes: state.nodes.map((n) => {
           if (!ids.has(n.id)) return n
           const snapGrid = getMoveSnapGridForNode(n)
-          let snappedPosition = {
+          const level = n?.data?.level ?? 0
+          const sy = level === 1
+            ? snapL1YToLargeGrid(n.position.y, FIXED_ORIGIN.y)
+            : snapValue(n.position.y, snapGrid.y)
+          let snappedPosition = clampNodePositionToBounds(n, {
             x: snapValue(n.position.x, snapGrid.x),
-            y: snapValue(n.position.y, snapGrid.y),
-          }
+            y: sy,
+          })
           const parentId = parentByChildId[n.id]
           const parentNode = parentId ? byId[parentId] : null
           if (parentNode?.data?.nodeType === 'card') {

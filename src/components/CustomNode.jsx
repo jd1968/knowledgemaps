@@ -39,6 +39,17 @@ const HANDLES = [
 const MIN_W = 60
 const MIN_H = 30
 const VIEW_MODE_PASSIVE_NODE_TYPES = new Set(['card', 'shape', 'image', 'note', 'text'])
+const estimateCardContentOffset = ({ content, width, height }) => {
+  if (!content || content === '<p></p>') return 0
+  const raw = String(content)
+  const plain = raw.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+  const hardBreaks = (raw.match(/\n/g) || []).length
+  const usableWidth = Math.max(120, (width || 200) - NEST_PAD_LEFT - NEST_PAD_RIGHT)
+  const charsPerLine = Math.max(18, Math.floor(usableWidth / 7))
+  const lineCount = Math.max(1, Math.ceil((plain.length || 1) / charsPerLine) + hardBreaks)
+  const estimatedHeight = lineCount * 16 + 8
+  return Math.min(Math.max(16, estimatedHeight), Math.max(24, (height || 120) * 0.35))
+}
 
 function ResizeHandles({ nodeId, nodeType, nodeLevel, visible }) {
   const { getNode } = useReactFlow()
@@ -207,12 +218,17 @@ const CustomNode = memo(({ id, data, selected }) => {
   const bgAlpha     = isParent ? 0.05 + Math.max(0, level - 1) * 0.04 : 0
   const width       = nodeType === 'text' ? 'auto' : (groupSize?.width ?? '100%')
   const height      = nodeType === 'text' ? null : (groupSize?.height ?? '100%')
+  const numericWidth = typeof groupSize?.width === 'number'
+    ? groupSize.width
+    : (typeof data?.size?.width === 'number' ? data.size.width : 220)
   const numericHeight = typeof groupSize?.height === 'number'
     ? groupSize.height
     : (typeof data?.size?.height === 'number' ? data.size.height : null)
-  const childClientContentOffset = shouldShowContents && numericHeight
-    ? Math.min(Math.max(40, numericHeight * 0.2), 180)
-    : 0
+  const childClientContentOffset = estimateCardContentOffset({
+    content,
+    width: numericWidth,
+    height: numericHeight || 120,
+  })
   const childClientAreaTop = NEST_PAD_TOP + childClientContentOffset
   const resolvedShapeTextAlign = (shapeTextAlign === 'left' || shapeTextAlign === 'right') ? shapeTextAlign : 'center'
   const shapeTitleJustify = resolvedShapeTextAlign === 'left' ? 'flex-start' : (resolvedShapeTextAlign === 'right' ? 'flex-end' : 'center')

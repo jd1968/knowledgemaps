@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useMindMapStore } from '../store/useMindMapStore'
 import { useAuth } from '../contexts/AuthContext'
+import MapPropertiesModal from './MapPropertiesModal'
 
 /* ── Icons ─────────────────────────────────────────────────────────── */
 
@@ -133,6 +134,7 @@ const Toolbar = () => {
   const menuRef = useRef(null)
   const [newMapDialogOpen, setNewMapDialogOpen] = useState(false)
   const [newMapName, setNewMapName] = useState('')
+  const [mapPropertiesOpen, setMapPropertiesOpen] = useState(false)
 
   useEffect(() => {
     if (!menuOpen) return
@@ -348,6 +350,14 @@ const Toolbar = () => {
         </button>
         <button
           className="btn btn--ghost btn--sm toolbar-desktop-only"
+          onClick={() => setMapPropertiesOpen(true)}
+          title="Map properties"
+          aria-label="Map properties"
+        >
+          <span className="btn-label">Properties</span>
+        </button>
+        <button
+          className="btn btn--ghost btn--sm toolbar-desktop-only"
           onClick={handleNormalizeCoordinates}
           title="Normalize map coordinates to origin"
           aria-label="Normalize map coordinates"
@@ -426,6 +436,13 @@ const Toolbar = () => {
               <button
                 className="toolbar-menu-item"
                 role="menuitem"
+                onClick={() => { setMapPropertiesOpen(true); setMenuOpen(false) }}
+              >
+                Properties
+              </button>
+              <button
+                className="toolbar-menu-item"
+                role="menuitem"
                 onClick={() => { handleNormalizeCoordinates(); setMenuOpen(false) }}
               >
                 Normalize
@@ -480,6 +497,7 @@ const Toolbar = () => {
       </div>,
       document.body
     )}
+    <MapPropertiesModal open={mapPropertiesOpen} onClose={() => setMapPropertiesOpen(false)} />
     </>
   )
 }
