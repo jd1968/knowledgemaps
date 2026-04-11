@@ -31,51 +31,33 @@ const REGION_TYPE_LABELS = {
 const CARD_SIZE_OPTIONS = ['XS', 'S', 'M', 'L', 'XL']
 const CARD_SIZE_HEIGHTS = {
   XS: 80,
-  S: 180,
+  S: 140,
   M: 200,
   L: 300,
   XL: 400,
 }
 
-function RegionCardItem({ card, cardSize, isEditMode, onEdit }) {
-  const [expanded, setExpanded] = useState(false)
-  const [isOverflowing, setIsOverflowing] = useState(false)
-  const contentRef = useRef(null)
-  const showContent = cardSize !== 'XS' && !!card.content
-
+function CardDetailModal({ card, onClose }) {
   useEffect(() => {
-    if (!showContent || expanded) {
-      setIsOverflowing(false)
-      return
-    }
-    const el = contentRef.current
-    if (!el) return
-    setIsOverflowing(el.scrollHeight > el.clientHeight + 1)
-  }, [card.content, cardSize, expanded, showContent])
+    const handler = (e) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [onClose])
 
   return (
-    <article
-      className={`map-editor-region-card${expanded ? ' map-editor-region-card--expanded' : ''}`}
-      style={{ height: expanded ? 'auto' : `${CARD_SIZE_HEIGHTS[cardSize] || CARD_SIZE_HEIGHTS.S}px` }}
+    <div
+      className="node-modal-overlay"
+      onPointerDown={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="map-editor-region-card__header">
-        <h3 className="map-editor-region-card__title">{card.title}</h3>
-        {isEditMode && (
-          <button
-            type="button"
-            className="btn btn--ghost btn--sm"
-            onClick={onEdit}
-          >
-            Properties
-          </button>
-        )}
-      </div>
-      {showContent ? (
-        <>
-          <div
-            ref={contentRef}
-            className={`map-editor-region-card__content${expanded ? ' map-editor-region-card__content--expanded' : ''}${!expanded && isOverflowing ? ' map-editor-region-card__content--truncated' : ''}`}
-          >
+      <div className="node-modal map-editor-card-detail-modal" onPointerDown={(e) => e.stopPropagation()}>
+        <div className="node-modal-header">
+          <div className="node-modal-header-left">
+            <span className="node-modal-header-title">{card.title}</span>
+          </div>
+          <button className="icon-btn" onClick={onClose} aria-label="Close">x</button>
+        </div>
+        <div className="node-modal-body">
+          <div className="map-editor-card-detail-modal__content">
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               components={markdownComponents}
@@ -84,18 +66,74 @@ function RegionCardItem({ card, cardSize, isEditMode, onEdit }) {
               {card.content}
             </ReactMarkdown>
           </div>
-          {!expanded && isOverflowing && (
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function RegionCardItem({ card, cardSize, isEditMode, onEdit }) {
+  const [detailOpen, setDetailOpen] = useState(false)
+  const [isOverflowing, setIsOverflowing] = useState(false)
+  const contentRef = useRef(null)
+  const showContent = cardSize !== 'XS' && !!card.content
+
+  useEffect(() => {
+    if (!showContent) {
+      setIsOverflowing(false)
+      return
+    }
+    const el = contentRef.current
+    if (!el) return
+    setIsOverflowing(el.scrollHeight > el.clientHeight + 1)
+  }, [card.content, cardSize, showContent])
+
+  return (
+    <>
+      <article
+        className="map-editor-region-card"
+        style={{ height: `${CARD_SIZE_HEIGHTS[cardSize] || CARD_SIZE_HEIGHTS.S}px` }}
+      >
+        <div className="map-editor-region-card__header">
+          <h3 className="map-editor-region-card__title">{card.title}</h3>
+          {isEditMode && (
             <button
               type="button"
-              className="map-editor-region-card__show-more"
-              onClick={() => setExpanded(true)}
+              className="btn btn--ghost btn--sm"
+              onClick={onEdit}
             >
-              show more...
+              Properties
             </button>
           )}
-        </>
-      ) : null}
-    </article>
+        </div>
+        {showContent ? (
+          <div className="map-editor-region-card__content-wrap">
+            <div
+              ref={contentRef}
+              className={`map-editor-region-card__content${isOverflowing ? ' map-editor-region-card__content--truncated' : ''}`}
+            >
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={markdownComponents}
+                urlTransform={urlTransform}
+              >
+                {card.content}
+              </ReactMarkdown>
+            </div>
+            {isOverflowing && (
+              <button
+                type="button"
+                className="map-editor-region-card__show-more"
+                onClick={(e) => { e.stopPropagation(); setDetailOpen(true) }}
+              >
+                show more...
+              </button>
+            )}
+          </div>
+        ) : null}
+      </article>
+      {detailOpen && <CardDetailModal card={card} onClose={() => setDetailOpen(false)} />}
+    </>
   )
 }
 
