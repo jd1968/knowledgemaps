@@ -1,10 +1,14 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getSupabaseClient } from '../image-library/lib/supabase'
 import { useAssets, useTags } from '../image-library/hooks/useAssets'
 import { ImageUploader } from '../image-library/components/ImageUploader'
 import { TagFilter } from '../image-library/components/TagFilter'
+import { generateThumbnail, getImageDimensions } from '../image-library/lib/thumbnail'
 import { injectImageLibraryStyles } from '../image-library'
+
+const ASSETS_BUCKET = 'assets'
+const THUMBS_BUCKET = 'thumbnails'
 
 const BackIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -27,7 +31,10 @@ export default function ImageLibraryPage() {
   const [draft, setDraft] = useState(null)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [replacing, setReplacing] = useState(false)
+  const [replaceProgress, setReplaceProgress] = useState(null)
   const [saveError, setSaveError] = useState(null)
+  const replaceInputRef = useRef()
 
   const { assets, loading, refresh } = useAssets({ search, tagIds: selectedTags })
   const tags = useTags()
@@ -109,6 +116,93 @@ export default function ImageLibraryPage() {
       refresh()
     } finally {
       setDeleting(false)
+    }
+  }
+
+  const handleReplace = async (file) => {
+    if (!file || !selectedAsset) return
+    setReplacing(true)
+    setSaveError(null)
+    const supabase = getSupabaseClient()
+    try {
+      const id = selectedAsset.id
+      const oldPublicUrl = selectedAsset.public_url
+      const oldThumbnailUrl = selectedAsset.thumbnail_url
+      const ext = file.name.split('.').pop().toLowerCase()
+      const version = Date.now()
+      const assetPath = `${id}/original-${version}.${ext}`
+      const thumbExt = file.type === 'image/svg+xml' ? ext : 'webp'
+      const thumbPath = `${id}/thumb-${version}.${thumbExt}`
+
+      setReplaceProgress('Generating thumbnail…')
+      const thumbBlob = await generateThumbnail(file)
+      const { width, height } = await getImageDimensions(file)
+
+      setReplaceProgress('Uploading original…')
+      const { error: assetErr } = await supabase.storage
+        .from(ASSETS_BUCKET)
+        .upload(assetPath, file, { contentType: file.type, upsert: false })
+      if (assetErr) throw assetErr
+
+      setReplaceProgress('Uploading thumbnail…')
+      const { error: thumbErr } = await supabase.storage
+        .from(THUMBS_BUCKET)
+        .upload(thumbPath, thumbBlob, { contentType: thumbBlob.type || 'image/webp', upsert: false })
+      if (thumbErr) throw thumbErr
+
+      // Remove old storage files
+      if (selectedAsset.storage_path) {
+        await supabase.storage.from(ASSETS_BUCKET).remove([selectedAsset.storage_path])
+      }
+      if (selectedAsset.thumbnail_path) {
+        await supabase.storage.from(THUMBS_BUCKET).remove([selectedAsset.thumbnail_path])
+      }
+
+      const { data: assetUrlData } = supabase.storage.from(ASSETS_BUCKET).getPublicUrl(assetPath)
+      const { data: thumbUrlData } = supabase.storage.from(THUMBS_BUCKET).getPublicUrl(thumbPath)
+      const newPublicUrl = assetUrlData.publicUrl
+      const newThumbnailUrl = thumbUrlData.publicUrl
+
+      setReplaceProgress('Saving…')
+      const { error: dbErr } = await supabase
+        .from('assets')
+        .update({
+          storage_path: assetPath,
+          thumbnail_path: thumbPath,
+          public_url: newPublicUrl,
+          thumbnail_url: newThumbnailUrl,
+          format: ext,
+          file_size: file.size,
+          width,
+          height,
+        })
+        .eq('id', id)
+      if (dbErr) throw dbErr
+
+      // Update any maps that reference the old URL
+      if (oldPublicUrl) {
+        setReplaceProgress('Updating maps…')
+        const { data: maps } = await supabase.from('maps').select('id, data')
+        const mapsToUpdate = (maps || []).filter(
+          (m) => m.data && JSON.stringify(m.data).includes(oldPublicUrl)
+        )
+        for (const map of mapsToUpdate) {
+          const newData = JSON.parse(
+            JSON.stringify(map.data)
+              .replaceAll(oldPublicUrl, newPublicUrl)
+              .replaceAll(oldThumbnailUrl, newThumbnailUrl)
+          )
+          await supabase.from('maps').update({ data: newData }).eq('id', map.id)
+        }
+      }
+
+      refresh()
+    } catch (err) {
+      setSaveError(err.message)
+    } finally {
+      setReplacing(false)
+      setReplaceProgress(null)
+      if (replaceInputRef.current) replaceInputRef.current.value = ''
     }
   }
 
@@ -246,19 +340,34 @@ export default function ImageLibraryPage() {
                   </div>
 
                   {saveError && <p className="illib-detail__error">{saveError}</p>}
+                  {replaceProgress && <p className="illib-detail__progress">{replaceProgress}</p>}
 
                   <div className="illib-detail__actions">
                     <button
                       className="btn btn--danger btn--sm"
                       onClick={handleDelete}
-                      disabled={deleting || saving}
+                      disabled={deleting || saving || replacing}
                     >
                       {deleting ? 'Deleting…' : 'Delete'}
+                    </button>
+                    <input
+                      ref={replaceInputRef}
+                      type="file"
+                      accept="image/*"
+                      style={{ display: 'none' }}
+                      onChange={(e) => handleReplace(e.target.files?.[0])}
+                    />
+                    <button
+                      className="btn btn--secondary btn--sm"
+                      onClick={() => replaceInputRef.current?.click()}
+                      disabled={saving || deleting || replacing}
+                    >
+                      {replacing ? replaceProgress || 'Replacing…' : 'Replace image'}
                     </button>
                     <button
                       className="btn btn--primary btn--sm"
                       onClick={handleSave}
-                      disabled={saving || deleting}
+                      disabled={saving || deleting || replacing}
                     >
                       {saving ? 'Saving…' : 'Save changes'}
                     </button>

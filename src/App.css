@@ -2456,6 +2456,12 @@ select.node-props__input { cursor: pointer; }
   margin: 0;
 }
 
+.illib-detail__progress {
+  font-size: 12px;
+  color: #78716c;
+  margin: 0;
+}
+
 .illib-detail__actions {
   display: flex;
   gap: 8px;
