@@ -102,8 +102,8 @@
 }
 
 .map-header-icon {
-  width: 44px;
-  height: 44px;
+  width: 55px;
+  height: 55px;
   border-radius: 10px;
   object-fit: cover;
   flex-shrink: 0;
@@ -446,8 +446,8 @@
 }
 
 .map-editor-region__icon {
-  width: 34px;
-  height: 34px;
+  width: 43px;
+  height: 43px;
   border-radius: 8px;
   object-fit: cover;
   flex-shrink: 0;
@@ -701,22 +701,34 @@
     justify-content: center;
   }
 
+  .map-editor-region-card {
+    width: 100%;
+    height: auto !important;
+    max-height: var(--card-height);
+  }
+
   .map-editor-page__content {
     border: none;
     box-shadow: none;
   }
 
   .map-editor-page__client-inner {
-    padding: 20px 16px;
+    padding: 20px 0;
   }
 
   .map-editor-region-insert {
     align-items: flex-start;
     flex-direction: column;
+    padding-left: 16px;
+    padding-right: 16px;
   }
 
   .map-editor-region {
-    padding: 18px;
+    padding: 18px 16px;
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+    box-shadow: none;
   }
 
   .map-editor-region__header {

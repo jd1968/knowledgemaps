@@ -93,7 +93,7 @@ function RegionCardItem({ card, cardSize, isEditMode, onEdit, onDelete }) {
     <>
       <article
         className="map-editor-region-card"
-        style={{ height: `${CARD_SIZE_HEIGHTS[cardSize] || CARD_SIZE_HEIGHTS.S}px` }}
+        style={{ '--card-height': `${CARD_SIZE_HEIGHTS[cardSize] || CARD_SIZE_HEIGHTS.S}px`, height: `${CARD_SIZE_HEIGHTS[cardSize] || CARD_SIZE_HEIGHTS.S}px` }}
       >
         <div className="map-editor-region-card__header">
           <div className="map-editor-region-card__title-row">
