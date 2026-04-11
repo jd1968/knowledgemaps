@@ -134,6 +134,12 @@ export default function HomePage() {
           >
             + New Map
           </button>
+          <button
+            className="btn btn--secondary home-page__new-btn"
+            onClick={() => navigate('/image-library')}
+          >
+            Image Library
+          </button>
         </div>
 
       </div>

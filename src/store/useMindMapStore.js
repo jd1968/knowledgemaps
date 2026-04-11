@@ -12,6 +12,7 @@ const normalizeRegionCard = (card = {}, index = 0) => ({
     ? card.title
     : `Untitled Card ${index + 1}`,
   content: typeof card.content === 'string' ? card.content : '',
+  iconUrl: typeof card.iconUrl === 'string' ? card.iconUrl : '',
 })
 const normalizeRegion = (region = {}, index = 0) => ({
   id: region.id || `region-${uuidv4().slice(0, 8)}`,

@@ -3,23 +3,42 @@ import { createPortal } from 'react-dom'
 import { supabase } from '../lib/supabase'
 import { BUCKET, STORAGE_PREFIX, fetchBlobUrl } from './MarkdownEditor'
 
-/* Renders a node icon stored as a storage: reference */
+/* Renders a node icon from a storage: reference or a Supabase HTTPS storage URL */
 export function NodeIconDisplay({ iconUrl, className, style }) {
-  const filePath = iconUrl?.startsWith('storage:')
-    ? iconUrl.slice(iconUrl.indexOf('/', 'storage:'.length) + 1)
-    : null
-
-  const [blobUrl, setBlobUrl] = useState(null)
+  const [resolvedSrc, setResolvedSrc] = useState(null)
 
   useEffect(() => {
-    if (!filePath) return
+    if (!iconUrl) { setResolvedSrc(null); return }
     let cancelled = false
-    fetchBlobUrl(filePath).then((url) => { if (!cancelled && url) setBlobUrl(url) })
-    return () => { cancelled = true }
-  }, [filePath])
+    let objectUrl = null
 
-  if (!blobUrl) return null
-  return <img src={blobUrl} alt="" draggable={false} className={className} style={style} />
+    if (iconUrl.startsWith('storage:')) {
+      // Existing storage: protocol — download via knowledge-files bucket
+      const filePath = iconUrl.slice(iconUrl.indexOf('/', 'storage:'.length) + 1)
+      fetchBlobUrl(filePath).then((url) => { if (!cancelled && url) setResolvedSrc(url) })
+    } else {
+      // HTTPS URL — check if it's a Supabase storage URL (private bucket requires auth)
+      const supabaseMatch = iconUrl.match(/\/storage\/v1\/object\/(?:public|authenticated)\/([^/]+)\/(.+)/)
+      if (supabaseMatch) {
+        const [, bucket, path] = supabaseMatch
+        supabase.storage.from(bucket).download(path).then(({ data, error }) => {
+          if (cancelled || error || !data) return
+          objectUrl = URL.createObjectURL(data)
+          setResolvedSrc(objectUrl)
+        })
+      } else {
+        setResolvedSrc(iconUrl)
+      }
+    }
+
+    return () => {
+      cancelled = true
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [iconUrl])
+
+  if (!resolvedSrc) return null
+  return <img src={resolvedSrc} alt="" draggable={false} className={className} style={style} />
 }
 
 /* Upload label — the file input is portalled to document.body to escape React

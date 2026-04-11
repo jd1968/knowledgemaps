@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useMindMapStore } from '../store/useMindMapStore'
-import { NodeIconDisplay, NodeIconUpload } from './NodeIcon'
+import { NodeIconDisplay } from './NodeIcon'
+import { ImageLibraryTrigger } from '../image-library'
 import MarkdownEditor from './MarkdownEditor'
 
 export default function MapPropertiesModal({ open, onClose }) {
@@ -68,13 +69,7 @@ export default function MapPropertiesModal({ open, onClose }) {
                 {iconUrl ? <NodeIconDisplay iconUrl={iconUrl} className="map-properties-icon-image" /> : <span className="map-properties-icon-placeholder">No icon</span>}
               </div>
               <div className="map-properties-icon-actions">
-                <NodeIconUpload
-                  iconUrl={iconUrl}
-                  onUpload={(nextUrl) => setIconUrl(nextUrl)}
-                  className="btn btn--secondary btn--sm"
-                >
-                  Upload icon
-                </NodeIconUpload>
+                <ImageLibraryTrigger onSelect={(url) => setIconUrl(url)} />
                 {iconUrl && (
                   <button
                     type="button"

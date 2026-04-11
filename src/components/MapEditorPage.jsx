@@ -8,6 +8,7 @@ import MapHeaderBlock from './MapHeaderBlock'
 import MapPropertiesModal from './MapPropertiesModal'
 import { NodeIconDisplay } from './NodeIcon'
 import MarkdownEditor, { markdownComponents, urlTransform } from './MarkdownEditor'
+import { ImageLibraryTrigger } from '../image-library'
 
 const HomeIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -72,7 +73,7 @@ function CardDetailModal({ card, onClose }) {
   )
 }
 
-function RegionCardItem({ card, cardSize, isEditMode, onEdit }) {
+function RegionCardItem({ card, cardSize, isEditMode, onEdit, onDelete }) {
   const [detailOpen, setDetailOpen] = useState(false)
   const [isOverflowing, setIsOverflowing] = useState(false)
   const contentRef = useRef(null)
@@ -95,15 +96,31 @@ function RegionCardItem({ card, cardSize, isEditMode, onEdit }) {
         style={{ height: `${CARD_SIZE_HEIGHTS[cardSize] || CARD_SIZE_HEIGHTS.S}px` }}
       >
         <div className="map-editor-region-card__header">
-          <h3 className="map-editor-region-card__title">{card.title}</h3>
+          <div className="map-editor-region-card__title-row">
+            {card.iconUrl && (
+              <NodeIconDisplay iconUrl={card.iconUrl} className="map-editor-region-card__icon" />
+            )}
+            <h3 className="map-editor-region-card__title">{card.title}</h3>
+          </div>
           {isEditMode && (
-            <button
-              type="button"
-              className="btn btn--ghost btn--sm"
-              onClick={onEdit}
-            >
-              Properties
-            </button>
+            <>
+              <button
+                type="button"
+                className="btn btn--ghost btn--sm"
+                onClick={onEdit}
+              >
+                Properties
+              </button>
+              <button
+                type="button"
+                className="btn btn--danger btn--sm"
+                onClick={() => {
+                  if (window.confirm(`Delete card "${card.title}"?`)) onDelete()
+                }}
+              >
+                Delete
+              </button>
+            </>
           )}
         </div>
         {showContent ? (
@@ -170,6 +187,7 @@ export default function MapEditorPage() {
   const [editingCardId, setEditingCardId] = useState(null)
   const [cardDraftTitle, setCardDraftTitle] = useState('')
   const [cardDraftContent, setCardDraftContent] = useState('')
+  const [cardDraftIconUrl, setCardDraftIconUrl] = useState('')
 
   useEffect(() => {
     const nextBreadcrumbs = location.state?.breadcrumbs ?? []
@@ -205,13 +223,21 @@ export default function MapEditorPage() {
     setEditingCardId(card?.id || null)
     setCardDraftTitle(card?.title || '')
     setCardDraftContent(card?.content || '')
+    setCardDraftIconUrl(card?.iconUrl || '')
   }
   const closeCardProperties = () => {
     setEditingCardRegionId(null)
     setEditingCardId(null)
     setCardDraftTitle('')
     setCardDraftContent('')
+    setCardDraftIconUrl('')
   }
+  useEffect(() => {
+    if (!editingCardRegionId) return
+    const handler = (e) => { if (e.key === 'Escape') closeCardProperties() }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [editingCardRegionId])
   const saveRegionProperties = () => {
     if (!editingRegionId) return
     setMapRegions(regions.map((region) => (
@@ -234,6 +260,7 @@ export default function MapEditorPage() {
         id: editingCardId || `region-card-${uuidv4().slice(0, 8)}`,
         title: cardDraftTitle.trim() || 'Untitled Card',
         content: cardDraftContent,
+        iconUrl: cardDraftIconUrl,
       }
       const existingCards = Array.isArray(region.cards) ? region.cards : []
       return {
@@ -241,6 +268,17 @@ export default function MapEditorPage() {
         cards: editingCardId
           ? existingCards.map((card) => (card.id === editingCardId ? { ...card, ...nextCard } : card))
           : [...existingCards, nextCard],
+      }
+    }))
+    closeCardProperties()
+  }
+  const deleteCard = () => {
+    if (!editingCardRegionId || !editingCardId) return
+    setMapRegions(regions.map((region) => {
+      if (region.id !== editingCardRegionId) return region
+      return {
+        ...region,
+        cards: (region.cards || []).filter((card) => card.id !== editingCardId),
       }
     }))
     closeCardProperties()
@@ -385,6 +423,11 @@ export default function MapEditorPage() {
                                 cardSize={region.cardSize || 'S'}
                                 isEditMode={isEditMode}
                                 onEdit={() => openCardProperties(region.id, card)}
+                                onDelete={() => {
+                                  setMapRegions(regions.map((r) =>
+                                    r.id !== region.id ? r : { ...r, cards: r.cards.filter((c) => c.id !== card.id) }
+                                  ))
+                                }}
                               />
                             ))}
                           </div>
@@ -496,6 +539,25 @@ export default function MapEditorPage() {
                 />
               </div>
 
+              <div className="field">
+                <label className="field-label">Icon</label>
+                <div className="map-properties-icon-row">
+                  <div className="map-properties-icon-preview" aria-hidden="true">
+                    {cardDraftIconUrl
+                      ? <NodeIconDisplay iconUrl={cardDraftIconUrl} className="map-properties-icon-image" />
+                      : <span className="map-properties-icon-placeholder">No icon</span>}
+                  </div>
+                  <div className="map-properties-icon-actions">
+                    <ImageLibraryTrigger onSelect={(url) => setCardDraftIconUrl(url)} />
+                    {cardDraftIconUrl && (
+                      <button type="button" className="btn btn--ghost btn--sm" onClick={() => setCardDraftIconUrl('')}>
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               <div className="field field--grow">
                 <label className="field-label">Content</label>
                 <div className="map-editor-region-modal__markdown">
@@ -509,6 +571,13 @@ export default function MapEditorPage() {
             </div>
 
             <div className="node-modal-footer">
+              {editingCardId && (
+                <button className="btn btn--danger btn--sm" onClick={() => {
+                  if (window.confirm(`Delete card "${cardDraftTitle || 'this card'}"?`)) deleteCard()
+                }}>
+                  Delete
+                </button>
+              )}
               <button className="btn btn--secondary btn--sm" onClick={closeCardProperties}>
                 Cancel
               </button>
