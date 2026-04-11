@@ -180,7 +180,7 @@ const Toolbar = () => {
     const result = await saveMap(name)
     if (result.success) {
       const { currentMapId } = useMindMapStore.getState()
-      navigate(`/map/${currentMapId}`)
+      navigate(`/legacymap/${currentMapId}`)
     }
   }
 
@@ -242,7 +242,7 @@ const Toolbar = () => {
               onClick={() => {
                 const parent = breadcrumbs[breadcrumbs.length - 1]
                 const newCrumbs = breadcrumbs.slice(0, -1)
-                navigate(`/map/${parent.mapId}`, { state: { breadcrumbs: newCrumbs } })
+                navigate(`/legacymap/${parent.mapId}`, { state: { breadcrumbs: newCrumbs } })
               }}
               title={`Back to ${breadcrumbs[breadcrumbs.length - 1].mapName}`}
               aria-label={`Back to ${breadcrumbs[breadcrumbs.length - 1].mapName}`}

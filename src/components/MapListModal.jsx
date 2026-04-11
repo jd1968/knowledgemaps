@@ -36,7 +36,7 @@ const MapListModal = () => {
 
   const handleLoad = (mapId) => {
     closeMapList()
-    navigate(`/map/${mapId}`)
+    navigate(`/legacymap/${mapId}`)
   }
 
   const handleDelete = async (mapId, name, e) => {

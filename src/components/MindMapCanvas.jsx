@@ -1284,7 +1284,7 @@ const MindMapCanvas = () => {
         if (node.data?.isSubmap && node.data?.submapId) {
           if (isDirty && currentMapId) await saveMap()
           const newCrumbs = [...breadcrumbs, { mapId: currentMapId, mapName: currentMapName }]
-          navigate(`/map/${node.data.submapId}`, { state: { breadcrumbs: newCrumbs } })
+          navigate(`/legacymap/${node.data.submapId}`, { state: { breadcrumbs: newCrumbs } })
           return
         }
         setSelectedNodeIds([node.id])
@@ -1340,7 +1340,7 @@ const MindMapCanvas = () => {
                 if (isDirty && currentMapId) await saveMap()
                 const newCrumbs = [...breadcrumbs, { mapId: currentMapId, mapName: currentMapName }]
                 closeContextMenus()
-                navigate(`/map/${contextNode.data.submapId}`, { state: { breadcrumbs: newCrumbs } })
+                navigate(`/legacymap/${contextNode.data.submapId}`, { state: { breadcrumbs: newCrumbs } })
               }}
             >
               Open submap

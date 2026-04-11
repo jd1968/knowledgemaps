@@ -98,8 +98,8 @@ function AppInner() {
   return (
     <Routes>
       <Route path="/" element={<HomePage />} />
-      <Route path="/editor/:mapId" element={<MapEditorPage />} />
-      <Route path="/map/:mapId" element={<MapPage />} />
+      <Route path="/map/:mapId" element={<MapEditorPage />} />
+      <Route path="/legacymap/:mapId" element={<MapPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )

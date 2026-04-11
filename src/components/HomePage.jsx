@@ -39,11 +39,11 @@ export default function HomePage() {
 
   const handleOpen = (mapId) => {
     setOpening(mapId)
-    navigate(`/editor/${mapId}`)
+    navigate(`/map/${mapId}`)
   }
 
   const handleOpenLegacy = (mapId) => {
-    navigate(`/map/${mapId}`)
+    navigate(`/legacymap/${mapId}`)
   }
 
   const handleNew = async () => {
@@ -52,7 +52,7 @@ export default function HomePage() {
     const result = await saveMap()
     if (result.success) {
       const { currentMapId } = useMindMapStore.getState()
-      navigate(`/editor/${currentMapId}`)
+      navigate(`/map/${currentMapId}`)
     } else {
       setOpening(null)
       alert('Failed to create map')

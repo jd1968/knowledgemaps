@@ -123,7 +123,7 @@ export default function MapEditorPage() {
   const insertMapRegion = useMindMapStore((s) => s.insertMapRegion)
   const setMapRegions = useMindMapStore((s) => s.setMapRegions)
   const [mapPropertiesOpen, setMapPropertiesOpen] = useState(false)
-  const [isEditMode, setIsEditMode] = useState(true)
+  const [isEditMode, setIsEditMode] = useState(false)
   const [editingRegionId, setEditingRegionId] = useState(null)
   const [regionDraftTitle, setRegionDraftTitle] = useState('')
   const [regionDraftContent, setRegionDraftContent] = useState('')
@@ -226,7 +226,7 @@ export default function MapEditorPage() {
               <>
                 <button
                   className="toolbar-back-crumb"
-                  onClick={() => navigate(`/editor/${parent.mapId}`, { state: { breadcrumbs: breadcrumbs.slice(0, -1) } })}
+                  onClick={() => navigate(`/map/${parent.mapId}`, { state: { breadcrumbs: breadcrumbs.slice(0, -1) } })}
                   title={`Back to ${parent.mapName}`}
                   aria-label={`Back to ${parent.mapName}`}
                 >
