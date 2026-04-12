@@ -16,6 +16,8 @@ export default function DiagramEditorView() {
   const svgRef = useRef(null)
   const [selectedId, setSelectedId] = useState(null)
   const [selectedConnId, setSelectedConnId] = useState(null)
+  const [isReroutingConn, setIsReroutingConn] = useState(false)
+  const [isEditingConnLabel, setIsEditingConnLabel] = useState(false)
   const [shapes, setShapes] = useState([])
   const [connections, setConnections] = useState([])
   const [past, setPast] = useState([])
@@ -120,7 +122,7 @@ export default function DiagramEditorView() {
             <button className="btn btn--primary btn--sm" onClick={saveAndClose}>Save</button>
           </div>
         </div>
-        <div className="diagram-modal__body">
+        <div className="diagram-modal__body diagram-modal__body--edit">
           <DiagramSidebar shapeLibrary={DEFAULT_SHAPE_LIBRARY} />
           <div ref={svgRef} style={{ minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
             <CanvasAdvanced
@@ -134,9 +136,18 @@ export default function DiagramEditorView() {
               onDeleteShape={(id) => { pushHistory(); setShapes((prev) => prev.filter((s) => s.id !== id)); setConnections((prev) => prev.filter((c) => c.fromShapeId !== id && c.toShapeId !== id)) }}
               onAddConnection={(fromShapeId, fromNorm, toShapeId, toNorm) => {
                 pushHistory()
-                setConnections((prev) => [...prev, { id: uuidv4(), fromShapeId, fromNorm, toShapeId, toNorm, style: 'elbow', relType: 'lookup', waypoints: [] }])
+                const id = uuidv4()
+                setConnections((prev) => [...prev, { id, fromShapeId, fromNorm, toShapeId, toNorm, style: 'elbow', relType: 'lookup', fromLabel: 'from', toLabel: 'to', waypoints: [] }])
+                setSelectedId(null)
+                setSelectedConnId(id)
               }}
-              onAddStandaloneRelationship={(x, y) => { pushHistory(); setConnections((prev) => [...prev, { id: uuidv4(), fromShapeId: null, fromNorm: null, toShapeId: null, toNorm: null, fromFree: { x: x - 80, y }, toFree: { x: x + 80, y }, style: 'elbow', relType: 'lookup', waypoints: [] }]) }}
+              onAddStandaloneRelationship={(x, y) => {
+                pushHistory()
+                const id = uuidv4()
+                setConnections((prev) => [...prev, { id, fromShapeId: null, fromNorm: null, toShapeId: null, toNorm: null, fromFree: { x: x - 80, y }, toFree: { x: x + 80, y }, style: 'elbow', relType: 'lookup', fromLabel: 'from', toLabel: 'to', waypoints: [] }])
+                setSelectedId(null)
+                setSelectedConnId(id)
+              }}
               onUpdateConnection={(id, end, newShapeId, newNorm, keepWaypoints = false, freePoint = null) => {
                 pushHistory()
                 setConnections((prev) => prev.map((c) => {
@@ -146,11 +157,14 @@ export default function DiagramEditorView() {
                 }))
               }}
               onSelectShape={(id) => { setSelectedId(id); if (id != null) setSelectedConnId(null) }}
-              onSelectConn={setSelectedConnId}
+              onSelectConn={(id) => { setSelectedConnId(id); if (id != null) setSelectedId(null) }}
+              onUpdateConn={(id, updates) => setConnections((prev) => prev.map((c) => (c.id === id ? { ...c, ...updates } : c)))}
               onUpdateConnWaypoints={(id, waypoints) => setConnections((prev) => prev.map((c) => (c.id === id ? { ...c, waypoints } : c)))}
               onUpdateConnLabelOffset={(id, end, offset) => setConnections((prev) => prev.map((c) => (c.id === id ? { ...c, [end === 'from' ? 'fromLabelOffset' : 'toLabelOffset']: offset } : c)))}
               onDeleteConn={(id) => { pushHistory(); setConnections((prev) => prev.filter((c) => c.id !== id)); setSelectedConnId(null) }}
               onReverseConn={(id) => { pushHistory(); setConnections((prev) => prev.map((c) => (c.id === id ? { ...c, fromShapeId: c.toShapeId, fromNorm: c.toNorm, toShapeId: c.fromShapeId, toNorm: c.fromNorm } : c))) }}
+              onRerouteStateChange={setIsReroutingConn}
+              onLabelEditStateChange={setIsEditingConnLabel}
               fitOnMount
             />
           </div>
@@ -160,6 +174,10 @@ export default function DiagramEditorView() {
             shapes={shapes}
             onUpdateShape={(id, updates) => { pushHistory(); setShapes((prev) => prev.map((s) => (s.id === id ? { ...s, ...updates } : s))) }}
             onUpdateConn={(id, updates) => { pushHistory(); setConnections((prev) => prev.map((c) => (c.id === id ? { ...c, ...updates } : c))) }}
+            onClose={() => { setSelectedId(null); setSelectedConnId(null) }}
+            onDeleteShape={(id) => { pushHistory(); setShapes((prev) => prev.filter((s) => s.id !== id)); setConnections((prev) => prev.filter((c) => c.fromShapeId !== id && c.toShapeId !== id)); setSelectedId(null) }}
+            onDeleteConn={(id) => { pushHistory(); setConnections((prev) => prev.filter((c) => c.id !== id)); setSelectedConnId(null) }}
+            suspendOpen={isReroutingConn || isEditingConnLabel}
           />
         </div>
       </div>

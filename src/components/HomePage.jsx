@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useMindMapStore } from '../store/useMindMapStore'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
@@ -20,7 +20,8 @@ export default function HomePage() {
   const { newMap, saveMap } = useMindMapStore()
   const { user } = useAuth()
   const navigate = useNavigate()
-  const [activeTab, setActiveTab] = useState('maps')
+  const location = useLocation()
+  const [activeTab, setActiveTab] = useState(location.state?.activeTab || 'maps')
 
   // Maps state
   const [maps, setMaps] = useState([])
@@ -49,6 +50,12 @@ export default function HomePage() {
       setFetchingMaps(false)
     })()
   }, [user.id])
+
+  useEffect(() => {
+    if (activeTab === 'diagrams' && !diagramsFetched && !fetchingDiagrams) {
+      fetchDiagrams()
+    }
+  }, [activeTab, diagramsFetched, fetchingDiagrams])
 
   const fetchDiagrams = async () => {
     setFetchingDiagrams(true)

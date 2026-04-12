@@ -766,7 +766,14 @@
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 140px 1fr 240px;
+}
+
+.diagram-modal__body--edit {
+  grid-template-columns: 140px 1fr;
+}
+
+.diagram-modal__body--view {
+  grid-template-columns: 1fr;
 }
 
 .diagram-tools {
@@ -912,7 +919,8 @@
   padding: 6px;
 }
 .canvas-ctrl-btn { border: 1px solid #cbd5e1; background: #fff; border-radius: 6px; padding: 4px 8px; cursor: pointer; }
-.canvas-ctrl-zoom { font-size: 12px; color: #475569; min-width: 46px; text-align: center; }
+.canvas-ctrl-zoom { font-size: 12px; color: #475569; min-width: 58px; display: flex; align-items: center; justify-content: center; gap: 2px; }
+.canvas-ctrl-zoom-input { width: 40px; border: none; background: transparent; text-align: right; font: inherit; color: inherit; outline: none; padding: 0; }
 
 .diagram-tool-btn {
   border: 1px solid #cbd5e1;
@@ -934,6 +942,7 @@
   min-height: 0;
   display: block;
   background: #f8fafc;
+  touch-action: none;
 }
 
 .diagram-details {
@@ -2298,6 +2307,11 @@
 .props-backdrop--open {
   background: rgba(28, 25, 23, 0.25);
   pointer-events: auto;
+}
+
+.props-backdrop--nonmodal {
+  background: transparent;
+  pointer-events: none;
 }
 
 .props-panel {

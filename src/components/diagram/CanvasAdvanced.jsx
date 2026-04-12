@@ -1,6 +1,7 @@
 import { useRef, useState, useCallback, useEffect } from 'react'
 import {
   closestBoundaryPoint,
+  outwardNormal,
   normToPoint,
   makePath,
   makeStraightPath,
@@ -25,6 +26,17 @@ function screenToWorld(pt, view) {
   return {
     x: (pt.x - view.x) / view.scale,
     y: (pt.y - view.y) / view.scale,
+  }
+}
+
+function touchDistance(a, b) {
+  return Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY)
+}
+
+function touchMidpoint(a, b, rect) {
+  return {
+    x: (a.clientX + b.clientX) / 2 - rect.left,
+    y: (a.clientY + b.clientY) / 2 - rect.top,
   }
 }
 
@@ -63,16 +75,44 @@ function getConnPath(conn, shapes) {
   return { d: makePath(fp, fromNorm, tp, toNorm), fp, tp }
 }
 
+function getLabelPosition(point, norm, fallbackTarget, offset = null) {
+  let dx = 0
+  let dy = -1
+
+  if (norm) {
+    const normal = outwardNormal(norm.nx, norm.ny)
+    dx = normal.dx
+    dy = normal.dy
+  } else if (fallbackTarget) {
+    const vx = point.x - fallbackTarget.x
+    const vy = point.y - fallbackTarget.y
+    const len = Math.hypot(vx, vy)
+    if (len > 0) {
+      dx = vx / len
+      dy = vy / len
+    }
+  }
+
+  return {
+    x: point.x + dx * 18 + (offset?.x ?? 0),
+    y: point.y + dy * 18 + (offset?.y ?? 0),
+    dx,
+    dy,
+  }
+}
+
 export default function CanvasAdvanced({
   shapes, connections, selectedId, selectedConnId,
   onAddShape, onUpdateShape, onDeleteShape,
   onAddStandaloneRelationship, onUpdateConnection, onSelectShape,
   onSelectConn, onUpdateConnWaypoints, onDeleteConn, onReverseConn,
-  onBeginHistoryStep, onUpdateConnLabelOffset, fitOnMount = false,
+  onBeginHistoryStep, onUpdateConn, onUpdateConnLabelOffset, onRerouteStateChange, onLabelEditStateChange, fitOnMount = false, isEditMode = true,
 }) {
   const svgRef = useRef(null)
   const containerRef = useRef(null)
   const viewRef = useRef({ x: 0, y: 0, scale: 1 })
+  const suppressSelectionRef = useRef(false)
+  const touchStateRef = useRef(null)
   const [dragging, setDragging] = useState(null)
   const [panning, setPanning] = useState(null)
   const [connecting, setConnecting] = useState(null)
@@ -93,10 +133,25 @@ export default function CanvasAdvanced({
   const [marquee, setMarquee] = useState(null)
   const [multiSelectedIds, setMultiSelectedIds] = useState([])
   const [draggingLabel, setDraggingLabel] = useState(null)
+  const [editingConnLabel, setEditingConnLabel] = useState(null)
+  const [selectedConnLabel, setSelectedConnLabel] = useState(null)
+  const [hoveredConnId, setHoveredConnId] = useState(null)
+
+  useEffect(() => {
+    onRerouteStateChange?.(!!reroutingConn)
+  }, [reroutingConn, onRerouteStateChange])
+
+  useEffect(() => {
+    onLabelEditStateChange?.(!!editingConnLabel)
+  }, [editingConnLabel, onLabelEditStateChange])
+
+  useEffect(() => {
+    if (selectedId != null || selectedConnId != null) setSelectedConnLabel(null)
+  }, [selectedId, selectedConnId])
 
   useEffect(() => {
     const onKey = (e) => {
-      if (editingId) return
+      if (editingId || editingConnLabel) return
       const target = e.target
       const isEditingField =
         target instanceof HTMLElement &&
@@ -110,7 +165,7 @@ export default function CanvasAdvanced({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [selectedId, selectedConnId, editingId, onDeleteShape, onDeleteConn, multiSelectedIds])
+  }, [selectedId, selectedConnId, editingId, editingConnLabel, onDeleteShape, onDeleteConn, multiSelectedIds])
 
   useEffect(() => {
     const closeContextMenu = () => setContextMenu(null)
@@ -119,6 +174,7 @@ export default function CanvasAdvanced({
   }, [])
 
   const handleDrop = useCallback((e) => {
+    if (!isEditMode) return
     e.preventDefault()
     e.stopPropagation()
     const type = e.dataTransfer.getData('shapeType')
@@ -134,7 +190,7 @@ export default function CanvasAdvanced({
     const x = Math.max(0, world.x - 80)
     const y = Math.max(0, world.y - 40)
     onAddShape(type, Math.round(x / 20) * 20, Math.round(y / 20) * 20)
-  }, [onAddShape, onAddStandaloneRelationship, view])
+  }, [isEditMode, onAddShape, onAddStandaloneRelationship, view])
 
   const handleSVGMouseMove = useCallback((e) => {
     if (panning) {
@@ -223,7 +279,19 @@ export default function CanvasAdvanced({
 
   const handleShapeMouseDown = useCallback((e, shape) => {
     if (connecting || reroutingConn) return
+    if (suppressSelectionRef.current) {
+      suppressSelectionRef.current = false
+      e.stopPropagation()
+      return
+    }
     e.stopPropagation()
+    setSelectedConnLabel(null)
+    if (!isEditMode) {
+      onSelectShape(shape.id)
+      onSelectConn(null)
+      setMultiSelectedIds([])
+      return
+    }
     const pt = screenToWorld(getSVGPoint(svgRef.current, e), view)
     if (multiSelectedIds.length > 1 && multiSelectedIds.includes(shape.id)) {
       onBeginHistoryStep()
@@ -234,7 +302,7 @@ export default function CanvasAdvanced({
       onBeginHistoryStep(); onSelectShape(shape.id); onSelectConn(null); setMultiSelectedIds([])
       setDragging({ shapeId: shape.id, offsetX: pt.x - shape.x, offsetY: pt.y - shape.y })
     }
-  }, [connecting, reroutingConn, view, multiSelectedIds, shapes, onBeginHistoryStep, onSelectShape, onSelectConn])
+  }, [connecting, reroutingConn, isEditMode, view, multiSelectedIds, shapes, onBeginHistoryStep, onSelectShape, onSelectConn])
 
   const handleShapeMouseUp = useCallback((e, shape) => {
     if (reroutingConn) {
@@ -248,6 +316,10 @@ export default function CanvasAdvanced({
   }, [reroutingConn, connecting, view, onUpdateConnection])
 
   const handleSVGMouseDown = useCallback((e) => {
+    if (suppressSelectionRef.current) {
+      suppressSelectionRef.current = false
+      return
+    }
     setContextMenu(null)
     if (e.button === 1) {
       // Middle mouse button — pan
@@ -255,18 +327,18 @@ export default function CanvasAdvanced({
       setPanning({ startX: e.clientX, startY: e.clientY, startViewX: viewRef.current.x, startViewY: viewRef.current.y })
       return
     }
-    if (e.target === svgRef.current) {
-      onSelectShape(null); onSelectConn(null); setConnecting(null); setReroutingConn(null); setMultiSelectedIds([])
-      if (e.button === 0) {
-        const pt = screenToWorld(getSVGPoint(svgRef.current, e), view)
-        setMarquee({ startX: pt.x, startY: pt.y, x: pt.x, y: pt.y })
-      }
+    setSelectedConnLabel(null)
+    onSelectShape(null); onSelectConn(null); setConnecting(null); setReroutingConn(null); setMultiSelectedIds([])
+    if (e.button === 0 && isEditMode) {
+      const pt = screenToWorld(getSVGPoint(svgRef.current, e), view)
+      setMarquee({ startX: pt.x, startY: pt.y, x: pt.x, y: pt.y })
     }
-  }, [onSelectShape, onSelectConn, view])
+  }, [isEditMode, onSelectShape, onSelectConn, view])
 
   const handleDoubleClick = useCallback((e, shape) => {
+    if (!isEditMode) return
     e.stopPropagation(); setEditingId(shape.id); setEditingLabel(shape.type === 'note' ? (shape.noteText || '') : (shape.label || ''))
-  }, [])
+  }, [isEditMode])
   const commitEdit = useCallback(() => {
     if (!editingId) return
     const editingShape = shapes.find((s) => s.id === editingId)
@@ -274,6 +346,15 @@ export default function CanvasAdvanced({
     else onUpdateShape(editingId, { label: editingLabel || 'Label' })
     setEditingId(null)
   }, [editingId, editingLabel, onUpdateShape, shapes])
+  const commitConnLabelEdit = useCallback(() => {
+    if (!editingConnLabel) return
+    onBeginHistoryStep()
+    onUpdateConn(editingConnLabel.connId, {
+      [editingConnLabel.end === 'from' ? 'fromLabel' : 'toLabel']: editingConnLabel.value,
+    })
+    suppressSelectionRef.current = true
+    setEditingConnLabel(null)
+  }, [editingConnLabel, onBeginHistoryStep, onUpdateConn])
   const startReroute = (e, connId, end) => { e.stopPropagation(); setConnecting(null); setDragging(null); setReroutingConn({ connId, end }) }
   const openConnectionMenu = useCallback((e, connId) => {
     e.preventDefault(); e.stopPropagation()
@@ -290,6 +371,40 @@ export default function CanvasAdvanced({
       return { scale: nextScale, x: cx - (cx - v.x) * (nextScale / v.scale), y: cy - (cy - v.y) * (nextScale / v.scale) }
     })
   }, [])
+  const centerViewAtScale = useCallback((scale = 1) => {
+    const svgEl = svgRef.current
+    if (!svgEl) return
+    const rect = svgEl.getBoundingClientRect()
+    if (!rect.width || !rect.height) return
+    const pad = 24
+    if (shapes.length === 0) {
+      setView({ x: pad, y: pad, scale })
+      return
+    }
+    const minX = Math.min(...shapes.map((s) => s.x || 0))
+    const minY = Math.min(...shapes.map((s) => s.y || 0))
+    const maxX = Math.max(...shapes.map((s) => (s.x || 0) + (s.width || 160)))
+    const maxY = Math.max(...shapes.map((s) => (s.y || 0) + (s.height || 80)))
+    const contentW = maxX - minX || 160
+    const contentH = maxY - minY || 80
+    const centeredX = (rect.width - contentW * scale) / 2 - minX * scale
+    const leftAnchoredX = pad - minX * scale
+    setView({
+      scale,
+      x: Math.max(leftAnchoredX, centeredX),
+      y: Math.max(pad, (rect.height - contentH * scale) / 2 - minY * scale),
+    })
+  }, [shapes, setView])
+  const setZoomPercent = useCallback((percent) => {
+    const svgEl = svgRef.current
+    if (!svgEl) return
+    const rect = svgEl.getBoundingClientRect()
+    const cx = rect.width / 2
+    const cy = rect.height / 2
+    const rawScale = percent / 100
+    const nextScale = Math.max(0.25, Math.min(3, Number.isFinite(rawScale) ? rawScale : 1))
+    setView((v) => ({ scale: nextScale, x: cx - (cx - v.x) * (nextScale / v.scale), y: cy - (cy - v.y) * (nextScale / v.scale) }))
+  }, [setView])
   const fitView = useCallback(() => {
     if (shapes.length === 0) { setView({ x: 0, y: 0, scale: 1 }); return }
     const svgEl = svgRef.current; if (!svgEl) return
@@ -302,7 +417,12 @@ export default function CanvasAdvanced({
     if (!isFinite(scale)) return
     setView({ scale, x: (rect.width - contentW * scale) / 2 - minX * scale, y: (rect.height - contentH * scale) / 2 - minY * scale })
   }, [shapes])
-  useEffect(() => { if (fitOnMount) requestAnimationFrame(fitView) }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    requestAnimationFrame(() => {
+      if (fitOnMount) fitView()
+      else centerViewAtScale(1)
+    })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Scroll-wheel zoom (centred on cursor) + trackpad pan
   useEffect(() => {
@@ -330,6 +450,111 @@ export default function CanvasAdvanced({
     return () => { el.removeEventListener('wheel', onWheel); el.removeEventListener('auxclick', onAuxClick) }
   }, [])
 
+  useEffect(() => {
+    const el = svgRef.current
+    if (!el) return
+
+    const onTouchStart = (e) => {
+      if (e.touches.length === 2) {
+        const rect = el.getBoundingClientRect()
+        const [a, b] = e.touches
+        touchStateRef.current = {
+          mode: 'pinch',
+          startDistance: touchDistance(a, b),
+          startMid: touchMidpoint(a, b, rect),
+          startView: { ...viewRef.current },
+        }
+        e.preventDefault()
+        return
+      }
+
+      if (e.touches.length === 1) {
+        const touch = e.touches[0]
+        touchStateRef.current = {
+          mode: 'pan',
+          startX: touch.clientX,
+          startY: touch.clientY,
+          startView: { ...viewRef.current },
+          moved: false,
+        }
+      }
+    }
+
+    const onTouchMove = (e) => {
+      const state = touchStateRef.current
+      if (!state) return
+
+      if (e.touches.length === 2) {
+        const rect = el.getBoundingClientRect()
+        const [a, b] = e.touches
+        const mid = touchMidpoint(a, b, rect)
+        const distance = touchDistance(a, b)
+        const startDistance = state.startDistance || distance
+        const rawScale = state.startView.scale * (distance / Math.max(1, startDistance))
+        const nextScale = Math.max(0.25, Math.min(3, rawScale))
+        const panDx = mid.x - state.startMid.x
+        const panDy = mid.y - state.startMid.y
+        setView({
+          scale: nextScale,
+          x: mid.x - (state.startMid.x - state.startView.x) * (nextScale / state.startView.scale) + panDx,
+          y: mid.y - (state.startMid.y - state.startView.y) * (nextScale / state.startView.scale) + panDy,
+        })
+        e.preventDefault()
+        return
+      }
+
+      if (e.touches.length === 1 && state.mode === 'pan') {
+        const touch = e.touches[0]
+        const dx = touch.clientX - state.startX
+        const dy = touch.clientY - state.startY
+        if (!state.moved && Math.hypot(dx, dy) > 4) state.moved = true
+        if (state.moved) {
+          setView((v) => ({ ...v, x: state.startView.x + dx, y: state.startView.y + dy }))
+          e.preventDefault()
+        }
+      }
+    }
+
+    const onTouchEnd = (e) => {
+      if (e.touches.length === 2) {
+        const rect = el.getBoundingClientRect()
+        const [a, b] = e.touches
+        touchStateRef.current = {
+          mode: 'pinch',
+          startDistance: touchDistance(a, b),
+          startMid: touchMidpoint(a, b, rect),
+          startView: { ...viewRef.current },
+        }
+        return
+      }
+
+      if (e.touches.length === 1) {
+        const touch = e.touches[0]
+        touchStateRef.current = {
+          mode: 'pan',
+          startX: touch.clientX,
+          startY: touch.clientY,
+          startView: { ...viewRef.current },
+          moved: false,
+        }
+        return
+      }
+
+      touchStateRef.current = null
+    }
+
+    el.addEventListener('touchstart', onTouchStart, { passive: false })
+    el.addEventListener('touchmove', onTouchMove, { passive: false })
+    el.addEventListener('touchend', onTouchEnd, { passive: false })
+    el.addEventListener('touchcancel', onTouchEnd, { passive: false })
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart)
+      el.removeEventListener('touchmove', onTouchMove)
+      el.removeEventListener('touchend', onTouchEnd)
+      el.removeEventListener('touchcancel', onTouchEnd)
+    }
+  }, [setView])
+
   return (
     <div ref={containerRef} className="diagram-canvas-wrap" onDragOver={(e) => e.preventDefault()} onDrop={handleDrop}>
       <svg
@@ -343,9 +568,11 @@ export default function CanvasAdvanced({
         onMouseDown={handleSVGMouseDown}
       >
         <defs>
-          <pattern id="grid" width={20 * (view.scale || 1)} height={20 * (view.scale || 1)} patternUnits="userSpaceOnUse" x={(view.x || 0) % (20 * (view.scale || 1))} y={(view.y || 0) % (20 * (view.scale || 1))}>
-            <path d={`M ${20 * view.scale} 0 L 0 0 0 ${20 * view.scale}`} fill="none" stroke="#e0e5f2" strokeWidth="1"/>
-          </pattern>
+          {isEditMode && (
+            <pattern id="grid" width={20 * (view.scale || 1)} height={20 * (view.scale || 1)} patternUnits="userSpaceOnUse" x={(view.x || 0) % (20 * (view.scale || 1))} y={(view.y || 0) % (20 * (view.scale || 1))}>
+              <path d={`M ${20 * view.scale} 0 L 0 0 0 ${20 * view.scale}`} fill="none" stroke="#e0e5f2" strokeWidth="1"/>
+            </pattern>
+          )}
           {/* Lookup markers — matches RelationshipEdge.jsx */}
           <marker id="lookup-start" markerUnits="userSpaceOnUse" viewBox="-5 0 27 20" markerWidth="27" markerHeight="20" refX="0" refY="10" orient="auto">
             <path d="M 7 4 L 7 16" fill="none" stroke="#5b8dee" strokeWidth="2" strokeLinecap="round"/>
@@ -379,18 +606,19 @@ export default function CanvasAdvanced({
             <path d="M 12 10 L 20 4 M 12 10 L 20 16" fill="none" stroke="#c62828" strokeWidth="2.5" strokeLinecap="round"/>
           </marker>
         </defs>
-        <rect width="100%" height="100%" fill="url(#grid)" style={{ pointerEvents: 'none' }} />
+        <rect width="100%" height="100%" fill={isEditMode ? 'url(#grid)' : '#f8fafc'} style={{ pointerEvents: 'none' }} />
         <g transform={`translate(${view.x} ${view.y}) scale(${view.scale})`}>
           {connections.map((conn) => {
             const result = getConnPath(conn, shapes)
             if (!result) return null
             const { d, fp, tp } = result
             const sel = selectedConnId === conn.id
+            const hovered = hoveredConnId === conn.id
             const isMD = conn.relType === 'master-detail'
             const sfx = sel ? '-sel' : ''
             const stroke = isMD
-              ? (sel ? '#c62828' : '#e53935')
-              : (sel ? '#3a6fd8' : '#5b8dee')
+              ? (sel ? '#c62828' : hovered ? '#ef5350' : '#e53935')
+              : (sel ? '#3a6fd8' : hovered ? '#7aa6f2' : '#5b8dee')
             let markerEnd = null, markerStart = null
             if (conn.relType === 'lookup') {
               markerStart = `url(#lookup-start${sfx})`
@@ -401,12 +629,112 @@ export default function CanvasAdvanced({
             }
             return (
               <g key={conn.id}>
-                <path d={d} fill="none" stroke="transparent" strokeWidth="12" style={{ cursor: 'pointer' }} onMouseDown={(e) => { e.stopPropagation(); onSelectConn(conn.id); onSelectShape(null) }} onContextMenu={(e) => openConnectionMenu(e, conn.id)} />
-                <path d={d} fill="none" stroke={stroke} strokeWidth={sel ? 2.5 : 2}
+                <path d={d} fill="none" stroke="transparent" strokeWidth="16" style={{ cursor: 'pointer' }} onMouseEnter={() => setHoveredConnId(conn.id)} onMouseLeave={() => setHoveredConnId((prev) => (prev === conn.id ? null : prev))} onMouseDown={(e) => {
+                  if (suppressSelectionRef.current) {
+                    suppressSelectionRef.current = false
+                    e.stopPropagation()
+                    return
+                  }
+                  e.stopPropagation()
+                  setSelectedConnLabel(null)
+                  onSelectConn(conn.id)
+                  onSelectShape(null)
+                }} onContextMenu={(e) => openConnectionMenu(e, conn.id)} />
+                <path d={d} fill="none" stroke={stroke} strokeWidth={sel ? 3 : hovered ? 2.75 : 2}
+                  style={hovered && !sel ? { filter: 'drop-shadow(0 0 4px rgba(91, 141, 238, 0.45))' } : undefined}
                   markerEnd={markerEnd || undefined}
                   markerStart={markerStart || undefined}
                 />
-                {sel && (
+                {(() => {
+                  const fromLabel = conn.fromLabel ?? ''
+                  const toLabel = conn.toLabel ?? ''
+                  const fromPos = getLabelPosition(fp, conn.fromNorm, tp, conn.fromLabelOffset)
+                  const toPos = getLabelPosition(tp, conn.toNorm, fp, conn.toLabelOffset)
+                  const labels = [
+                    { key: 'from', text: fromLabel, pos: fromPos, offset: conn.fromLabelOffset },
+                    { key: 'to', text: toLabel, pos: toPos, offset: conn.toLabelOffset },
+                  ]
+
+                  return labels.map(({ key, text, pos, offset }) => {
+                    const width = Math.max(20, text.length * 7)
+                    const x = pos.x - width / 2
+                    const y = pos.y - 8
+                    const isEditing = editingConnLabel?.connId === conn.id && editingConnLabel?.end === key
+                    const isSelected = selectedConnLabel?.connId === conn.id && selectedConnLabel?.end === key
+                    return (
+                      <g
+                        key={key}
+                        transform={`translate(${x} ${y})`}
+                        style={{ cursor: isEditMode ? 'grab' : 'default' }}
+                        onMouseDown={(e) => {
+                          if (!isEditMode) return
+                          e.stopPropagation()
+                          const pt = screenToWorld(getSVGPoint(svgRef.current, e), view)
+                          onBeginHistoryStep()
+                          setSelectedConnLabel({ connId: conn.id, end: key })
+                          onSelectConn(null)
+                          onSelectShape(null)
+                          setDraggingLabel({
+                            connId: conn.id,
+                            end: key,
+                            startX: pt.x,
+                            startY: pt.y,
+                            baseOffset: offset,
+                          })
+                        }}
+                        onDoubleClick={(e) => {
+                          if (!isEditMode) return
+                          e.stopPropagation()
+                          setDraggingLabel(null)
+                          setSelectedConnLabel({ connId: conn.id, end: key })
+                          onSelectConn(null)
+                          onSelectShape(null)
+                          setEditingConnLabel({
+                            connId: conn.id,
+                            end: key,
+                            value: text,
+                          })
+                        }}
+                      >
+                        {(isSelected || isEditing) && (
+                          <rect
+                            x={-4}
+                            y={-6}
+                            width={Math.max(28, width + 8)}
+                            height={18}
+                            rx={6}
+                            fill="rgba(37, 99, 235, 0.14)"
+                          />
+                        )}
+                        {isEditing ? (
+                          <foreignObject x={-8} y={-10} width={Math.max(70, text.length * 8 + 24)} height={28}>
+                            <input
+                              xmlns="http://www.w3.org/1999/xhtml"
+                              className="diagram-inline-input"
+                              autoFocus
+                              value={editingConnLabel.value}
+                              onChange={(e) => setEditingConnLabel((prev) => (prev ? { ...prev, value: e.target.value } : prev))}
+                              onBlur={commitConnLabelEdit}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') commitConnLabelEdit()
+                                if (e.key === 'Escape') {
+                                  suppressSelectionRef.current = true
+                                  setEditingConnLabel(null)
+                                }
+                              }}
+                              onMouseDown={(e) => e.stopPropagation()}
+                            />
+                          </foreignObject>
+                        ) : (
+                          <text x={width / 2} y={8} textAnchor="middle" dominantBaseline="middle" fill={stroke} fontSize="11" fontWeight="600" style={{ userSelect: 'none' }}>
+                            {text}
+                          </text>
+                        )}
+                      </g>
+                    )
+                  })
+                })()}
+                {sel && isEditMode && (
                   <>
                     <circle cx={fp.x} cy={fp.y} r={5} fill="#fff" stroke="#2563eb" strokeWidth={1.5} style={{ cursor: 'grab' }} onMouseDown={(e) => startReroute(e, conn.id, 'from')} />
                     <circle cx={tp.x} cy={tp.y} r={5} fill="#fff" stroke="#2563eb" strokeWidth={1.5} style={{ cursor: 'grab' }} onMouseDown={(e) => startReroute(e, conn.id, 'to')} />
@@ -434,14 +762,32 @@ export default function CanvasAdvanced({
             const sy = shape.y ?? 0
             const sw = shape.width ?? 160
             const sh = shape.height ?? 80
+            const isHovered = hoveredShapeId === shape.id
+            const isSelected = selectedId === shape.id
+            const isRerouteTarget = reroutingConn && isHovered && shape.type !== 'region' && shape.type !== 'note' && shape.type !== 'or-annotation'
+            const stroke = isRerouteTarget
+              ? '#16a34a'
+              : isSelected
+                ? '#2563eb'
+                : isHovered
+                  ? '#5b8dee'
+                  : '#93b4f5'
+            const strokeWidth = isRerouteTarget
+              ? 2.5
+              : isSelected
+                ? 2.5
+                : isHovered
+                  ? 2.25
+                  : 2
             return (
               <g key={shape.id} onMouseEnter={() => setHoveredShapeId(shape.id)} onMouseLeave={() => { setHoveredShapeId(null); setBorderSnap(null) }}>
                 <rect
                   x={sx} y={sy} width={sw} height={sh}
                   rx={shape.type === 'note' ? 4 : 10}
                   fill={shape.type === 'note' ? '#fefce8' : (OBJECT_TYPE_FILLS[shape.objectType] || OBJECT_TYPE_FILLS.Standard)}
-                  stroke={reroutingConn && hoveredShapeId === shape.id && shape.type !== 'region' && shape.type !== 'note' && shape.type !== 'or-annotation' ? '#16a34a' : selectedId === shape.id ? '#2563eb' : '#93b4f5'}
-                  strokeWidth={reroutingConn && hoveredShapeId === shape.id && shape.type !== 'region' && shape.type !== 'note' && shape.type !== 'or-annotation' ? 2.5 : 2}
+                  stroke={stroke}
+                  strokeWidth={strokeWidth}
+                  style={{ filter: isHovered || isSelected ? 'drop-shadow(0 2px 8px rgba(37, 99, 235, 0.12))' : undefined }}
                   onMouseDown={(e) => handleShapeMouseDown(e, shape)}
                   onMouseUp={(e) => handleShapeMouseUp(e, shape)}
                   onDoubleClick={(e) => handleDoubleClick(e, shape)}
@@ -455,7 +801,7 @@ export default function CanvasAdvanced({
                     {shape.type === 'note' ? (shape.noteText || 'Note') : (shape.label || 'Object')}
                   </text>
                 )}
-                {selectedId === shape.id && !reroutingConn && [
+                {isEditMode && isSelected && !reroutingConn && [
                   { h: 'nw', cx: sx,        cy: sy },
                   { h: 'n',  cx: sx + sw/2,  cy: sy },
                   { h: 'ne', cx: sx + sw,    cy: sy },
@@ -495,7 +841,21 @@ export default function CanvasAdvanced({
         <button className="canvas-ctrl-btn" onClick={() => zoomBy(1.25)}>+</button>
         <button className="canvas-ctrl-btn" onClick={() => zoomBy(0.8)}>-</button>
         <button className="canvas-ctrl-btn" onClick={fitView}>Fit</button>
-        <div className="canvas-ctrl-zoom">{Math.round(view.scale * 100)}%</div>
+        <label className="canvas-ctrl-zoom">
+          <input
+            className="canvas-ctrl-zoom-input"
+            type="number"
+            min="25"
+            max="300"
+            step="5"
+            value={Math.round(view.scale * 100)}
+            onChange={(e) => {
+              const next = Number(e.target.value)
+              if (Number.isFinite(next)) setZoomPercent(next)
+            }}
+          />
+          <span>%</span>
+        </label>
       </div>
     </div>
   )

@@ -24,7 +24,7 @@ function MapPage() {
   const location = useLocation()
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
-  const { loadMap, setViewMode, isFullscreen, isEditMode, diagramEditorNodeId } = useMindMapStore()
+  const { loadMap, setViewMode, setEditMode, isFullscreen, isEditMode, diagramEditorNodeId } = useMindMapStore()
 
   const viewMode = searchParams.get('view') || 'map'
 
@@ -40,6 +40,10 @@ function MapPage() {
   useEffect(() => {
     setViewMode(viewMode)
   }, [viewMode]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (location.pathname.startsWith('/legacymap/')) setEditMode(false)
+  }, [location.pathname, setEditMode])
 
   return (
     <div className={`app${isFullscreen ? ' app--fullscreen' : ''}`}>

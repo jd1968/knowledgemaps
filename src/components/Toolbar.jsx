@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { useMindMapStore } from '../store/useMindMapStore'
 import { useAuth } from '../contexts/AuthContext'
 import MapPropertiesModal from './MapPropertiesModal'
@@ -126,7 +126,9 @@ const Toolbar = () => {
   } = useMindMapStore()
   const { user, signOut } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const [, setSearchParams] = useSearchParams()
+  const isLegacyMode = location.pathname.startsWith('/legacymap/')
 
   const [editingName, setEditingName] = useState(false)
   const [tempName, setTempName] = useState('')
@@ -148,6 +150,7 @@ const Toolbar = () => {
   }, [menuOpen])
 
   const handleNameClick = () => {
+    if (isLegacyMode) return
     setTempName(currentMapName)
     setEditingName(true)
   }
@@ -256,7 +259,7 @@ const Toolbar = () => {
             <span className="toolbar-crumb-current">{currentMapName}</span>
           </>
         ) : (
-          editingName ? (
+          editingName && !isLegacyMode ? (
             <input
               className="map-name-input"
               value={tempName}
@@ -288,7 +291,7 @@ const Toolbar = () => {
         <button
           className="btn btn--ghost btn--sm toolbar-desktop-only"
           onClick={undo}
-          disabled={!isEditMode || past.length === 0}
+          disabled={isLegacyMode || !isEditMode || past.length === 0}
           title="Undo (Ctrl+Z)"
           aria-label="Undo"
         >
@@ -298,7 +301,7 @@ const Toolbar = () => {
         <button
           className="btn btn--ghost btn--sm toolbar-desktop-only"
           onClick={redo}
-          disabled={!isEditMode || future.length === 0}
+          disabled={isLegacyMode || !isEditMode || future.length === 0}
           title="Redo (Ctrl+Y / Ctrl+Shift+Z)"
           aria-label="Redo"
         >
@@ -306,13 +309,15 @@ const Toolbar = () => {
           <span className="btn-label">Redo</span>
         </button>
 
-        <label className="edit-mode-toggle" title={isEditMode ? 'Disable editing' : 'Enable editing'}>
-          <input type="checkbox" checked={isEditMode} onChange={toggleEditMode} />
-          <span className="edit-mode-toggle__track">
-            <span className="edit-mode-toggle__thumb" />
-          </span>
-          <span className="edit-mode-toggle__label">Edit</span>
-        </label>
+        {!isLegacyMode && (
+          <label className="edit-mode-toggle" title={isEditMode ? 'Disable editing' : 'Enable editing'}>
+            <input type="checkbox" checked={isEditMode} onChange={toggleEditMode} />
+            <span className="edit-mode-toggle__track">
+              <span className="edit-mode-toggle__thumb" />
+            </span>
+            <span className="edit-mode-toggle__label">Edit</span>
+          </label>
+        )}
 
         {/* Mode selector */}
         <select
@@ -348,28 +353,32 @@ const Toolbar = () => {
           <OpenIcon />
           <span className="btn-label">Open</span>
         </button>
-        <button
-          className="btn btn--ghost btn--sm toolbar-desktop-only"
-          onClick={() => setMapPropertiesOpen(true)}
-          title="Map properties"
-          aria-label="Map properties"
-        >
-          <span className="btn-label">Properties</span>
-        </button>
-        <button
-          className="btn btn--ghost btn--sm toolbar-desktop-only"
-          onClick={handleNormalizeCoordinates}
-          title="Normalize map coordinates to origin"
-          aria-label="Normalize map coordinates"
-        >
-          <span className="btn-label">Normalize</span>
-        </button>
+        {!isLegacyMode && (
+          <button
+            className="btn btn--ghost btn--sm toolbar-desktop-only"
+            onClick={() => setMapPropertiesOpen(true)}
+            title="Map properties"
+            aria-label="Map properties"
+          >
+            <span className="btn-label">Properties</span>
+          </button>
+        )}
+        {!isLegacyMode && (
+          <button
+            className="btn btn--ghost btn--sm toolbar-desktop-only"
+            onClick={handleNormalizeCoordinates}
+            title="Normalize map coordinates to origin"
+            aria-label="Normalize map coordinates"
+          >
+            <span className="btn-label">Normalize</span>
+          </button>
+        )}
 
         {/* Save — always visible */}
         <button
           className="btn btn--primary btn--sm"
           onClick={handleSave}
-          disabled={saveStatus === 'saving'}
+          disabled={isLegacyMode || saveStatus === 'saving'}
           title="Save map"
           aria-label="Save map"
         >

@@ -10,7 +10,7 @@ const TRANSITION_MS = 250
  * Children are mounted only after the slide-in animation completes so that
  * autoFocus inputs don't fire during the animation (prevents iOS Safari zoom).
  */
-export default function PropertiesPanel({ open, title, onClose, footer, children }) {
+export default function PropertiesPanel({ open, title, onClose, footer, children, modal = true }) {
   // `ready` trails `open` by TRANSITION_MS so children mount after slide-in
   const [ready, setReady] = useState(false)
 
@@ -33,10 +33,10 @@ export default function PropertiesPanel({ open, title, onClose, footer, children
   return createPortal(
     <>
       <div
-        className={`props-backdrop${open ? ' props-backdrop--open' : ''}`}
-        onPointerDown={open ? (e) => { if (e.target === e.currentTarget) onClose() } : undefined}
+        className={`props-backdrop${open ? ' props-backdrop--open' : ''}${modal ? '' : ' props-backdrop--nonmodal'}`}
+        onPointerDown={open && modal ? (e) => { if (e.target === e.currentTarget) onClose() } : undefined}
       />
-      <aside className={`props-panel${open ? ' props-panel--open' : ''}`} aria-modal="true" role="dialog" aria-label={title}>
+      <aside className={`props-panel${open ? ' props-panel--open' : ''}`} aria-modal={modal ? 'true' : 'false'} role="dialog" aria-label={title}>
         <div className="props-panel__header">
           <span className="props-panel__title">{title}</span>
           <button className="icon-btn" onClick={onClose} aria-label="Close">✕</button>
