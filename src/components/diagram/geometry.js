@@ -41,6 +41,18 @@ export function normToPoint(shape, norm) {
   return { x: px, y: py }
 }
 
+// Returns 'H' (horizontal exit) or 'V' (vertical exit) for an endpoint.
+// Falls back to whichever axis has more distance when norm is absent (free endpoint).
+function getExitDir(norm, thisPt, otherPt) {
+  if (norm) {
+    const n = outwardNormal(norm.nx, norm.ny)
+    return Math.abs(n.dx) >= Math.abs(n.dy) ? 'H' : 'V'
+  }
+  const dx = Math.abs(otherPt.x - thisPt.x)
+  const dy = Math.abs(otherPt.y - thisPt.y)
+  return dx >= dy ? 'H' : 'V'
+}
+
 export function makePath(fp, fromNorm, toPt, toNorm) {
   const dist = Math.sqrt((toPt.x - fp.x) ** 2 + (toPt.y - fp.y) ** 2)
   const offset = Math.max(40, dist * 0.4)
@@ -60,13 +72,40 @@ export function makeElbowPath(fp, waypoints, tp) {
   return pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')
 }
 
+// Always generates a valid orthogonal (elbow) path between fp and tp.
+// Works with free endpoints (null norms) by inferring direction from the vector.
+export function generateElbowWaypoints(fp, fromNorm, tp, toNorm) {
+  const GRID = 20
+  const fromDir = getExitDir(fromNorm, fp, tp)
+  const toDir = getExitDir(toNorm, tp, fp)
+
+  if (fromDir === 'H' && toDir === 'H') {
+    const midX = Math.round(((fp.x + tp.x) / 2) / GRID) * GRID
+    return [{ x: midX, y: fp.y }, { x: midX, y: tp.y }]
+  }
+  if (fromDir === 'V' && toDir === 'V') {
+    const midY = Math.round(((fp.y + tp.y) / 2) / GRID) * GRID
+    return [{ x: fp.x, y: midY }, { x: tp.x, y: midY }]
+  }
+  if (fromDir === 'H' && toDir === 'V') {
+    return [{ x: tp.x, y: fp.y }]
+  }
+  // fromDir === 'V' && toDir === 'H'
+  return [{ x: fp.x, y: tp.y }]
+}
+
+// Adjusts manually-placed waypoints to stay orthogonal after fp/tp have moved.
+// If the result contains any diagonal segment, falls back to generateElbowWaypoints.
 export function rectifyElbowWaypoints(fp, fromNorm, tp, toNorm, waypoints) {
-  if (!waypoints || waypoints.length === 0) return []
+  if (!waypoints || waypoints.length === 0) return waypoints || []
+
   const fn = outwardNormal(fromNorm.nx, fromNorm.ny)
   const tn = outwardNormal(toNorm.nx, toNorm.ny)
   const fromH = Math.abs(fn.dx) > Math.abs(fn.dy)
   const toH = Math.abs(tn.dx) > Math.abs(tn.dy)
   const rect = waypoints.map((w) => ({ ...w }))
+
+  // Forward sweep: constrain each waypoint so each segment is orthogonal
   let isH = fromH
   let curr = fp
   for (let i = 0; i < rect.length; i++) {
@@ -75,6 +114,8 @@ export function rectifyElbowWaypoints(fp, fromNorm, tp, toNorm, waypoints) {
     curr = rect[i]
     isH = !isH
   }
+
+  // Backward sweep: constrain from the tp end
   isH = toH
   curr = tp
   for (let i = rect.length - 1; i >= 0; i--) {
@@ -83,22 +124,17 @@ export function rectifyElbowWaypoints(fp, fromNorm, tp, toNorm, waypoints) {
     curr = rect[i]
     isH = !isH
   }
-  return rect
-}
 
-export function generateElbowWaypoints(fp, fromNorm, tp, toNorm) {
-  const fn = outwardNormal(fromNorm.nx, fromNorm.ny)
-  const tn = outwardNormal(toNorm.nx, toNorm.ny)
-  const fromH = Math.abs(fn.dx) > Math.abs(fn.dy)
-  const toH = Math.abs(tn.dx) > Math.abs(tn.dy)
-  const GRID_SIZE = 20
-  if (fromH === toH) {
-    if (fromH) {
-      const midX = Math.round(((fp.x + tp.x) / 2) / GRID_SIZE) * GRID_SIZE
-      return [{ x: midX, y: fp.y }, { x: midX, y: tp.y }]
+  // Validate: every segment must be purely H or V
+  const pts = [fp, ...rect, tp]
+  for (let i = 1; i < pts.length; i++) {
+    const dx = Math.abs(pts[i].x - pts[i - 1].x)
+    const dy = Math.abs(pts[i].y - pts[i - 1].y)
+    if (dx > 1 && dy > 1) {
+      // Conflict — fall back to auto-routing
+      return generateElbowWaypoints(fp, fromNorm, tp, toNorm)
     }
-    const midY = Math.round(((fp.y + tp.y) / 2) / GRID_SIZE) * GRID_SIZE
-    return [{ x: fp.x, y: midY }, { x: tp.x, y: midY }]
   }
-  return fromH ? [{ x: tp.x, y: fp.y }] : [{ x: fp.x, y: tp.y }]
+
+  return rect
 }

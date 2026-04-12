@@ -48,19 +48,18 @@ function getConnPath(conn, shapes) {
   const fromNorm = from.norm
   const toNorm = to.norm
   if (conn.style === 'straight') return { d: makeStraightPath(fp, tp), fp, tp }
-  if (!fromNorm || !toNorm) return { d: makeStraightPath(fp, tp), fp, tp }
-  if (conn.style === 'elbow') {
-    let waypoints = conn.waypoints != null ? conn.waypoints : null
-    if (waypoints && waypoints.length === 0) {
-      const fromH = Math.abs(fromNorm.nx) > Math.abs(fromNorm.ny)
-      const isOrthogonal = fromH ? Math.abs(fp.y - tp.y) < 2 : Math.abs(fp.x - tp.x) < 2
-      if (!isOrthogonal) waypoints = generateElbowWaypoints(fp, fromNorm, tp, toNorm)
-    } else if (!waypoints) {
+  if (conn.style === 'elbow' || !conn.style) {
+    let waypoints
+    if (conn.waypoints && conn.waypoints.length > 0 && fromNorm && toNorm) {
+      // User manually adjusted — try to preserve, fall back if it produces diagonals
+      waypoints = rectifyElbowWaypoints(fp, fromNorm, tp, toNorm, conn.waypoints)
+    } else {
+      // Auto-route (handles free endpoints by inferring direction from the vector)
       waypoints = generateElbowWaypoints(fp, fromNorm, tp, toNorm)
     }
-    waypoints = rectifyElbowWaypoints(fp, fromNorm, tp, toNorm, waypoints)
     return { d: makeElbowPath(fp, waypoints, tp), fp, tp, rectifiedWaypoints: waypoints }
   }
+  if (!fromNorm || !toNorm) return { d: makeStraightPath(fp, tp), fp, tp }
   return { d: makePath(fp, fromNorm, tp, toNorm), fp, tp }
 }
 
@@ -121,6 +120,7 @@ export default function CanvasAdvanced({
 
   const handleDrop = useCallback((e) => {
     e.preventDefault()
+    e.stopPropagation()
     const type = e.dataTransfer.getData('shapeType')
     if (!type) return
     const pt = getSVGPoint(svgRef.current, e)
@@ -346,30 +346,37 @@ export default function CanvasAdvanced({
           <pattern id="grid" width={20 * (view.scale || 1)} height={20 * (view.scale || 1)} patternUnits="userSpaceOnUse" x={(view.x || 0) % (20 * (view.scale || 1))} y={(view.y || 0) % (20 * (view.scale || 1))}>
             <path d={`M ${20 * view.scale} 0 L 0 0 0 ${20 * view.scale}`} fill="none" stroke="#e0e5f2" strokeWidth="1"/>
           </pattern>
-          {/* Lookup: open arrowhead on 'to' end */}
-          <marker id="arrow-to" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="userSpaceOnUse">
-            <path d="M1 1 L7 4 L1 7" fill="none" stroke="#64748b" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round"/>
+          {/* Lookup markers — matches RelationshipEdge.jsx */}
+          <marker id="lookup-start" markerUnits="userSpaceOnUse" viewBox="-5 0 27 20" markerWidth="27" markerHeight="20" refX="0" refY="10" orient="auto">
+            <path d="M 7 4 L 7 16" fill="none" stroke="#5b8dee" strokeWidth="2" strokeLinecap="round"/>
+            <circle cx="16" cy="10" r="5" fill="#fff" stroke="#5b8dee" strokeWidth="2"/>
           </marker>
-          <marker id="arrow-to-sel" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="userSpaceOnUse">
-            <path d="M1 1 L7 4 L1 7" fill="none" stroke="#2563eb" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round"/>
+          <marker id="lookup-end" markerUnits="userSpaceOnUse" viewBox="0 0 25 20" markerWidth="25" markerHeight="20" refX="20" refY="10" orient="auto">
+            <circle cx="6" cy="10" r="5" fill="#fff" stroke="#5b8dee" strokeWidth="2"/>
+            <path d="M 12 10 L 20 4 M 12 10 L 20 16" fill="none" stroke="#5b8dee" strokeWidth="2" strokeLinecap="round"/>
           </marker>
-          {/* Master-detail: crow's foot on 'to' end — vertical bar + two splaying lines */}
-          <marker id="crowsfoot-to" markerWidth="12" markerHeight="12" refX="11" refY="6" orient="auto" markerUnits="userSpaceOnUse">
-            <line x1="11" y1="1" x2="11" y2="11" stroke="#64748b" strokeWidth="1.5" strokeLinecap="round"/>
-            <line x1="11" y1="6" x2="1"  y2="1"  stroke="#64748b" strokeWidth="1.5" strokeLinecap="round"/>
-            <line x1="11" y1="6" x2="1"  y2="11" stroke="#64748b" strokeWidth="1.5" strokeLinecap="round"/>
+          <marker id="lookup-start-sel" markerUnits="userSpaceOnUse" viewBox="-5 0 27 20" markerWidth="27" markerHeight="20" refX="0" refY="10" orient="auto">
+            <path d="M 7 4 L 7 16" fill="none" stroke="#3a6fd8" strokeWidth="2.5" strokeLinecap="round"/>
+            <circle cx="16" cy="10" r="5" fill="#fff" stroke="#3a6fd8" strokeWidth="2.5"/>
           </marker>
-          <marker id="crowsfoot-to-sel" markerWidth="12" markerHeight="12" refX="11" refY="6" orient="auto" markerUnits="userSpaceOnUse">
-            <line x1="11" y1="1" x2="11" y2="11" stroke="#2563eb" strokeWidth="1.5" strokeLinecap="round"/>
-            <line x1="11" y1="6" x2="1"  y2="1"  stroke="#2563eb" strokeWidth="1.5" strokeLinecap="round"/>
-            <line x1="11" y1="6" x2="1"  y2="11" stroke="#2563eb" strokeWidth="1.5" strokeLinecap="round"/>
+          <marker id="lookup-end-sel" markerUnits="userSpaceOnUse" viewBox="0 0 25 20" markerWidth="25" markerHeight="20" refX="20" refY="10" orient="auto">
+            <circle cx="6" cy="10" r="5" fill="#fff" stroke="#3a6fd8" strokeWidth="2.5"/>
+            <path d="M 12 10 L 20 4 M 12 10 L 20 16" fill="none" stroke="#3a6fd8" strokeWidth="2.5" strokeLinecap="round"/>
           </marker>
-          {/* Master-detail: single vertical bar on 'from' end */}
-          <marker id="bar-from" markerWidth="8" markerHeight="12" refX="2" refY="6" orient="auto" markerUnits="userSpaceOnUse">
-            <line x1="2" y1="1" x2="2" y2="11" stroke="#64748b" strokeWidth="1.5" strokeLinecap="round"/>
+          {/* Master-detail markers — matches RelationshipEdge.jsx */}
+          <marker id="md-start" markerUnits="userSpaceOnUse" viewBox="-5 0 25 20" markerWidth="25" markerHeight="20" refX="0" refY="10" orient="auto">
+            <path d="M 7 4 L 7 16 M 12 4 L 12 16" fill="none" stroke="#e53935" strokeWidth="2" strokeLinecap="round"/>
           </marker>
-          <marker id="bar-from-sel" markerWidth="8" markerHeight="12" refX="2" refY="6" orient="auto" markerUnits="userSpaceOnUse">
-            <line x1="2" y1="1" x2="2" y2="11" stroke="#2563eb" strokeWidth="1.5" strokeLinecap="round"/>
+          <marker id="md-end" markerUnits="userSpaceOnUse" viewBox="0 0 25 20" markerWidth="25" markerHeight="20" refX="20" refY="10" orient="auto">
+            <circle cx="6" cy="10" r="5" fill="#fff" stroke="#e53935" strokeWidth="2"/>
+            <path d="M 12 10 L 20 4 M 12 10 L 20 16" fill="none" stroke="#e53935" strokeWidth="2" strokeLinecap="round"/>
+          </marker>
+          <marker id="md-start-sel" markerUnits="userSpaceOnUse" viewBox="-5 0 25 20" markerWidth="25" markerHeight="20" refX="0" refY="10" orient="auto">
+            <path d="M 7 4 L 7 16 M 12 4 L 12 16" fill="none" stroke="#c62828" strokeWidth="2.5" strokeLinecap="round"/>
+          </marker>
+          <marker id="md-end-sel" markerUnits="userSpaceOnUse" viewBox="0 0 25 20" markerWidth="25" markerHeight="20" refX="20" refY="10" orient="auto">
+            <circle cx="6" cy="10" r="5" fill="#fff" stroke="#c62828" strokeWidth="2.5"/>
+            <path d="M 12 10 L 20 4 M 12 10 L 20 16" fill="none" stroke="#c62828" strokeWidth="2.5" strokeLinecap="round"/>
           </marker>
         </defs>
         <rect width="100%" height="100%" fill="url(#grid)" style={{ pointerEvents: 'none' }} />
@@ -377,20 +384,24 @@ export default function CanvasAdvanced({
           {connections.map((conn) => {
             const result = getConnPath(conn, shapes)
             if (!result) return null
-            const { d } = result
+            const { d, fp, tp } = result
             const sel = selectedConnId === conn.id
-            const stroke = sel ? '#2563eb' : '#64748b'
+            const isMD = conn.relType === 'master-detail'
             const sfx = sel ? '-sel' : ''
+            const stroke = isMD
+              ? (sel ? '#c62828' : '#e53935')
+              : (sel ? '#3a6fd8' : '#5b8dee')
             let markerEnd = null, markerStart = null
             if (conn.relType === 'lookup') {
-              markerEnd = `url(#arrow-to${sfx})`
+              markerStart = `url(#lookup-start${sfx})`
+              markerEnd = `url(#lookup-end${sfx})`
             } else if (conn.relType === 'master-detail') {
-              markerEnd = `url(#crowsfoot-to${sfx})`
-              markerStart = `url(#bar-from${sfx})`
+              markerStart = `url(#md-start${sfx})`
+              markerEnd = `url(#md-end${sfx})`
             }
             return (
               <g key={conn.id}>
-                <path d={d} fill="none" stroke="transparent" strokeWidth="12" onClick={(e) => { e.stopPropagation(); onSelectConn(conn.id); onSelectShape(null) }} onContextMenu={(e) => openConnectionMenu(e, conn.id)} />
+                <path d={d} fill="none" stroke="transparent" strokeWidth="12" style={{ cursor: 'pointer' }} onMouseDown={(e) => { e.stopPropagation(); onSelectConn(conn.id); onSelectShape(null) }} onContextMenu={(e) => openConnectionMenu(e, conn.id)} />
                 <path d={d} fill="none" stroke={stroke} strokeWidth={sel ? 2.5 : 2}
                   markerEnd={markerEnd || undefined}
                   markerStart={markerStart || undefined}
@@ -404,54 +415,74 @@ export default function CanvasAdvanced({
               </g>
             )
           })}
-          {shapes.map((shape) => (
-            <g key={shape.id} onMouseEnter={() => setHoveredShapeId(shape.id)} onMouseLeave={() => { setHoveredShapeId(null); setBorderSnap(null) }}>
-              <rect
-                x={shape.x} y={shape.y} width={shape.width} height={shape.height}
-                rx={shape.type === 'note' ? 4 : 10}
-                fill={shape.type === 'note' ? '#fefce8' : (OBJECT_TYPE_FILLS[shape.objectType] || OBJECT_TYPE_FILLS.Standard)}
-                stroke={selectedId === shape.id ? '#2563eb' : '#93b4f5'}
-                strokeWidth="2"
-                onMouseDown={(e) => handleShapeMouseDown(e, shape)}
-                onMouseUp={(e) => handleShapeMouseUp(e, shape)}
-                onDoubleClick={(e) => handleDoubleClick(e, shape)}
-              />
-              {editingId === shape.id ? (
-                <foreignObject x={shape.x + 8} y={shape.y + 8} width={Math.max(0, shape.width - 16)} height={Math.max(0, shape.height - 16)}>
-                  <textarea xmlns="http://www.w3.org/1999/xhtml" className="diagram-inline-input" autoFocus value={editingLabel} onChange={(e) => setEditingLabel(e.target.value)} onBlur={commitEdit} />
-                </foreignObject>
-              ) : (
-                <text x={shape.x + shape.width / 2} y={shape.y + shape.height / 2} textAnchor="middle" dominantBaseline="middle" fill="#1e3a8a" fontSize="12">
-                  {shape.type === 'note' ? (shape.noteText || 'Note') : (shape.label || 'Object')}
-                </text>
-              )}
-              {selectedId === shape.id && !reroutingConn && [
-                { h: 'nw', cx: shape.x,                    cy: shape.y },
-                { h: 'n',  cx: shape.x + shape.width / 2,  cy: shape.y },
-                { h: 'ne', cx: shape.x + shape.width,      cy: shape.y },
-                { h: 'e',  cx: shape.x + shape.width,      cy: shape.y + shape.height / 2 },
-                { h: 'se', cx: shape.x + shape.width,      cy: shape.y + shape.height },
-                { h: 's',  cx: shape.x + shape.width / 2,  cy: shape.y + shape.height },
-                { h: 'sw', cx: shape.x,                    cy: shape.y + shape.height },
-                { h: 'w',  cx: shape.x,                    cy: shape.y + shape.height / 2 },
-              ].map(({ h, cx, cy }) => (
+          {reroutingConn && (() => {
+            const conn = connections.find((c) => c.id === reroutingConn.connId)
+            if (!conn) return null
+            const fixedEnd = reroutingConn.end === 'from' ? 'to' : 'from'
+            const fixed = resolveConnEndpoint(conn, fixedEnd, shapes)
+            if (!fixed) return null
+            const target = borderSnap || mousePos
+            const fp = reroutingConn.end === 'from' ? target : fixed.point
+            const tp = reroutingConn.end === 'to' ? target : fixed.point
+            const d = makeStraightPath(fp, tp)
+            return (
+              <path key="reroute-preview" d={d} fill="none" stroke="#2563eb" strokeWidth={2} strokeDasharray="6 4" style={{ pointerEvents: 'none' }} />
+            )
+          })()}
+          {shapes.map((shape) => {
+            const sx = shape.x ?? 0
+            const sy = shape.y ?? 0
+            const sw = shape.width ?? 160
+            const sh = shape.height ?? 80
+            return (
+              <g key={shape.id} onMouseEnter={() => setHoveredShapeId(shape.id)} onMouseLeave={() => { setHoveredShapeId(null); setBorderSnap(null) }}>
                 <rect
-                  key={h}
-                  x={cx - 4} y={cy - 4} width={8} height={8}
-                  fill="#fff" stroke="#2563eb" strokeWidth={1.5}
-                  style={{ cursor: `${h}-resize` }}
-                  onMouseDown={(e) => {
-                    e.stopPropagation()
-                    onBeginHistoryStep()
-                    setDragging({ type: 'resize', shapeId: shape.id, handle: h, origX: shape.x, origY: shape.y, origW: shape.width, origH: shape.height })
-                  }}
+                  x={sx} y={sy} width={sw} height={sh}
+                  rx={shape.type === 'note' ? 4 : 10}
+                  fill={shape.type === 'note' ? '#fefce8' : (OBJECT_TYPE_FILLS[shape.objectType] || OBJECT_TYPE_FILLS.Standard)}
+                  stroke={reroutingConn && hoveredShapeId === shape.id && shape.type !== 'region' && shape.type !== 'note' && shape.type !== 'or-annotation' ? '#16a34a' : selectedId === shape.id ? '#2563eb' : '#93b4f5'}
+                  strokeWidth={reroutingConn && hoveredShapeId === shape.id && shape.type !== 'region' && shape.type !== 'note' && shape.type !== 'or-annotation' ? 2.5 : 2}
+                  onMouseDown={(e) => handleShapeMouseDown(e, shape)}
+                  onMouseUp={(e) => handleShapeMouseUp(e, shape)}
+                  onDoubleClick={(e) => handleDoubleClick(e, shape)}
                 />
-              ))}
-              {reroutingConn && hoveredShapeId === shape.id && borderSnap && (
-                <circle cx={borderSnap.x} cy={borderSnap.y} r={SNAP_R} fill="#fff" stroke="#2563eb" strokeWidth={2.5} />
-              )}
-            </g>
-          ))}
+                {editingId === shape.id ? (
+                  <foreignObject x={sx + 8} y={sy + 8} width={Math.max(0, sw - 16)} height={Math.max(0, sh - 16)}>
+                    <textarea xmlns="http://www.w3.org/1999/xhtml" className="diagram-inline-input" autoFocus value={editingLabel} onChange={(e) => setEditingLabel(e.target.value)} onBlur={commitEdit} />
+                  </foreignObject>
+                ) : (
+                  <text x={sx + sw / 2} y={sy + sh / 2} textAnchor="middle" dominantBaseline="middle" fill="#1e3a8a" fontSize="12">
+                    {shape.type === 'note' ? (shape.noteText || 'Note') : (shape.label || 'Object')}
+                  </text>
+                )}
+                {selectedId === shape.id && !reroutingConn && [
+                  { h: 'nw', cx: sx,        cy: sy },
+                  { h: 'n',  cx: sx + sw/2,  cy: sy },
+                  { h: 'ne', cx: sx + sw,    cy: sy },
+                  { h: 'e',  cx: sx + sw,    cy: sy + sh/2 },
+                  { h: 'se', cx: sx + sw,    cy: sy + sh },
+                  { h: 's',  cx: sx + sw/2,  cy: sy + sh },
+                  { h: 'sw', cx: sx,         cy: sy + sh },
+                  { h: 'w',  cx: sx,         cy: sy + sh/2 },
+                ].map(({ h, cx, cy }) => (
+                  <rect
+                    key={h}
+                    x={cx - 4} y={cy - 4} width={8} height={8}
+                    fill="#fff" stroke="#2563eb" strokeWidth={1.5}
+                    style={{ cursor: `${h}-resize` }}
+                    onMouseDown={(e) => {
+                      e.stopPropagation()
+                      onBeginHistoryStep()
+                      setDragging({ type: 'resize', shapeId: shape.id, handle: h, origX: sx, origY: sy, origW: sw, origH: sh })
+                    }}
+                  />
+                ))}
+                {reroutingConn && hoveredShapeId === shape.id && borderSnap && (
+                  <circle cx={borderSnap.x} cy={borderSnap.y} r={SNAP_R} fill="#fff" stroke="#2563eb" strokeWidth={2.5} />
+                )}
+              </g>
+            )
+          })}
         </g>
       </svg>
       {contextMenu && (
