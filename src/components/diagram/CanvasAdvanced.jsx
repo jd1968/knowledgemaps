@@ -7,11 +7,9 @@ import {
   makeElbowPath,
   generateElbowWaypoints,
   rectifyElbowWaypoints,
-  outwardNormal,
 } from './geometry.js'
 
 const SNAP_R = 5
-const ENDPOINT_R = 5
 const OBJECT_TYPE_FILLS = {
   Standard: '#f1f3f7',
   Packaged: '#e9fbff',
@@ -69,24 +67,30 @@ function getConnPath(conn, shapes) {
 export default function CanvasAdvanced({
   shapes, connections, selectedId, selectedConnId,
   onAddShape, onUpdateShape, onDeleteShape,
-  onAddConnection, onAddStandaloneRelationship, onUpdateConnection, onSelectShape,
+  onAddStandaloneRelationship, onUpdateConnection, onSelectShape,
   onSelectConn, onUpdateConnWaypoints, onDeleteConn, onReverseConn,
   onBeginHistoryStep, onUpdateConnLabelOffset, fitOnMount = false,
 }) {
   const svgRef = useRef(null)
   const containerRef = useRef(null)
+  const viewRef = useRef({ x: 0, y: 0, scale: 1 })
   const [dragging, setDragging] = useState(null)
+  const [panning, setPanning] = useState(null)
   const [connecting, setConnecting] = useState(null)
   const [reroutingConn, setReroutingConn] = useState(null)
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 })
   const [hoveredShapeId, setHoveredShapeId] = useState(null)
-  const [hoveredConnId, setHoveredConnId] = useState(null)
   const [borderSnap, setBorderSnap] = useState(null)
   const [editingId, setEditingId] = useState(null)
   const [editingLabel, setEditingLabel] = useState('')
   const [draggingWp, setDraggingWp] = useState(null)
   const [contextMenu, setContextMenu] = useState(null)
-  const [view, setView] = useState({ x: 0, y: 0, scale: 1 })
+  const [view, setViewState] = useState({ x: 0, y: 0, scale: 1 })
+  const setView = useCallback((v) => {
+    const next = typeof v === 'function' ? v(viewRef.current) : v
+    viewRef.current = next
+    setViewState(next)
+  }, [])
   const [marquee, setMarquee] = useState(null)
   const [multiSelectedIds, setMultiSelectedIds] = useState([])
   const [draggingLabel, setDraggingLabel] = useState(null)
@@ -133,6 +137,12 @@ export default function CanvasAdvanced({
   }, [onAddShape, onAddStandaloneRelationship, view])
 
   const handleSVGMouseMove = useCallback((e) => {
+    if (panning) {
+      const dx = e.clientX - panning.startX
+      const dy = e.clientY - panning.startY
+      setView((v) => ({ ...v, x: panning.startViewX + dx, y: panning.startViewY + dy }))
+      return
+    }
     const screenPt = getSVGPoint(svgRef.current, e)
     const pt = screenToWorld(screenPt, view)
     setMousePos(pt)
@@ -192,7 +202,7 @@ export default function CanvasAdvanced({
         setBorderSnap(reroutingConn ? snap : null)
       } else setBorderSnap(null)
     } else setBorderSnap(null)
-  }, [marquee, draggingLabel, draggingWp, dragging, hoveredShapeId, shapes, reroutingConn, onUpdateConnLabelOffset, connections, onUpdateConnWaypoints, onUpdateShape, view])
+  }, [panning, marquee, draggingLabel, draggingWp, dragging, hoveredShapeId, shapes, reroutingConn, onUpdateConnLabelOffset, connections, onUpdateConnWaypoints, onUpdateShape, view])
 
   const handleSVGMouseUp = useCallback(() => {
     if (reroutingConn) {
@@ -208,7 +218,7 @@ export default function CanvasAdvanced({
       if (ids.length === 1) onSelectShape(ids[0]); else onSelectShape(null)
       onSelectConn(null); setMarquee(null); return
     }
-    setDragging(null); setDraggingWp(null); setDraggingLabel(null); if (connecting) setConnecting(null)
+    setPanning(null); setDragging(null); setDraggingWp(null); setDraggingLabel(null); if (connecting) setConnecting(null)
   }, [reroutingConn, onUpdateConnection, mousePos, connecting, marquee, shapes, onSelectShape, onSelectConn])
 
   const handleShapeMouseDown = useCallback((e, shape) => {
@@ -239,6 +249,12 @@ export default function CanvasAdvanced({
 
   const handleSVGMouseDown = useCallback((e) => {
     setContextMenu(null)
+    if (e.button === 1) {
+      // Middle mouse button — pan
+      e.preventDefault()
+      setPanning({ startX: e.clientX, startY: e.clientY, startViewX: viewRef.current.x, startViewY: viewRef.current.y })
+      return
+    }
     if (e.target === svgRef.current) {
       onSelectShape(null); onSelectConn(null); setConnecting(null); setReroutingConn(null); setMultiSelectedIds([])
       if (e.button === 0) {
@@ -258,7 +274,7 @@ export default function CanvasAdvanced({
     else onUpdateShape(editingId, { label: editingLabel || 'Label' })
     setEditingId(null)
   }, [editingId, editingLabel, onUpdateShape, shapes])
-  const startReroute = useCallback((e, connId, end) => { e.stopPropagation(); setConnecting(null); setDragging(null); setReroutingConn({ connId, end }) }, [])
+  const startReroute = (e, connId, end) => { e.stopPropagation(); setConnecting(null); setDragging(null); setReroutingConn({ connId, end }) }
   const openConnectionMenu = useCallback((e, connId) => {
     e.preventDefault(); e.stopPropagation()
     const pt = getSVGPoint(svgRef.current, e)
@@ -288,6 +304,32 @@ export default function CanvasAdvanced({
   }, [shapes])
   useEffect(() => { if (fitOnMount) requestAnimationFrame(fitView) }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Scroll-wheel zoom (centred on cursor) + trackpad pan
+  useEffect(() => {
+    const el = svgRef.current
+    if (!el) return
+    const onWheel = (e) => {
+      e.preventDefault()
+      if (e.ctrlKey || e.metaKey) {
+        // Pinch-to-zoom (trackpad) or ctrl+scroll — zoom centred on cursor
+        const rect = el.getBoundingClientRect()
+        const cx = e.clientX - rect.left
+        const cy = e.clientY - rect.top
+        const factor = e.deltaY < 0 ? 1.08 : 1 / 1.08
+        const v = viewRef.current
+        const nextScale = Math.max(0.25, Math.min(3, v.scale * factor))
+        setView({ scale: nextScale, x: cx - (cx - v.x) * (nextScale / v.scale), y: cy - (cy - v.y) * (nextScale / v.scale) })
+      } else {
+        // Two-finger trackpad pan or plain scroll
+        setView((v) => ({ ...v, x: v.x - e.deltaX, y: v.y - e.deltaY }))
+      }
+    }
+    const onAuxClick = (e) => { if (e.button === 1) e.preventDefault() }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    el.addEventListener('auxclick', onAuxClick)
+    return () => { el.removeEventListener('wheel', onWheel); el.removeEventListener('auxclick', onAuxClick) }
+  }, [])
+
   return (
     <div ref={containerRef} className="diagram-canvas-wrap" onDragOver={(e) => e.preventDefault()} onDrop={handleDrop}>
       <svg
@@ -304,6 +346,31 @@ export default function CanvasAdvanced({
           <pattern id="grid" width={20 * (view.scale || 1)} height={20 * (view.scale || 1)} patternUnits="userSpaceOnUse" x={(view.x || 0) % (20 * (view.scale || 1))} y={(view.y || 0) % (20 * (view.scale || 1))}>
             <path d={`M ${20 * view.scale} 0 L 0 0 0 ${20 * view.scale}`} fill="none" stroke="#e0e5f2" strokeWidth="1"/>
           </pattern>
+          {/* Lookup: open arrowhead on 'to' end */}
+          <marker id="arrow-to" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+            <path d="M1 1 L7 4 L1 7" fill="none" stroke="#64748b" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round"/>
+          </marker>
+          <marker id="arrow-to-sel" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+            <path d="M1 1 L7 4 L1 7" fill="none" stroke="#2563eb" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round"/>
+          </marker>
+          {/* Master-detail: crow's foot on 'to' end — vertical bar + two splaying lines */}
+          <marker id="crowsfoot-to" markerWidth="12" markerHeight="12" refX="11" refY="6" orient="auto" markerUnits="userSpaceOnUse">
+            <line x1="11" y1="1" x2="11" y2="11" stroke="#64748b" strokeWidth="1.5" strokeLinecap="round"/>
+            <line x1="11" y1="6" x2="1"  y2="1"  stroke="#64748b" strokeWidth="1.5" strokeLinecap="round"/>
+            <line x1="11" y1="6" x2="1"  y2="11" stroke="#64748b" strokeWidth="1.5" strokeLinecap="round"/>
+          </marker>
+          <marker id="crowsfoot-to-sel" markerWidth="12" markerHeight="12" refX="11" refY="6" orient="auto" markerUnits="userSpaceOnUse">
+            <line x1="11" y1="1" x2="11" y2="11" stroke="#2563eb" strokeWidth="1.5" strokeLinecap="round"/>
+            <line x1="11" y1="6" x2="1"  y2="1"  stroke="#2563eb" strokeWidth="1.5" strokeLinecap="round"/>
+            <line x1="11" y1="6" x2="1"  y2="11" stroke="#2563eb" strokeWidth="1.5" strokeLinecap="round"/>
+          </marker>
+          {/* Master-detail: single vertical bar on 'from' end */}
+          <marker id="bar-from" markerWidth="8" markerHeight="12" refX="2" refY="6" orient="auto" markerUnits="userSpaceOnUse">
+            <line x1="2" y1="1" x2="2" y2="11" stroke="#64748b" strokeWidth="1.5" strokeLinecap="round"/>
+          </marker>
+          <marker id="bar-from-sel" markerWidth="8" markerHeight="12" refX="2" refY="6" orient="auto" markerUnits="userSpaceOnUse">
+            <line x1="2" y1="1" x2="2" y2="11" stroke="#2563eb" strokeWidth="1.5" strokeLinecap="round"/>
+          </marker>
         </defs>
         <rect width="100%" height="100%" fill="url(#grid)" style={{ pointerEvents: 'none' }} />
         <g transform={`translate(${view.x} ${view.y}) scale(${view.scale})`}>
@@ -311,10 +378,29 @@ export default function CanvasAdvanced({
             const result = getConnPath(conn, shapes)
             if (!result) return null
             const { d } = result
+            const sel = selectedConnId === conn.id
+            const stroke = sel ? '#2563eb' : '#64748b'
+            const sfx = sel ? '-sel' : ''
+            let markerEnd = null, markerStart = null
+            if (conn.relType === 'lookup') {
+              markerEnd = `url(#arrow-to${sfx})`
+            } else if (conn.relType === 'master-detail') {
+              markerEnd = `url(#crowsfoot-to${sfx})`
+              markerStart = `url(#bar-from${sfx})`
+            }
             return (
-              <g key={conn.id} onMouseEnter={() => setHoveredConnId(conn.id)} onMouseLeave={() => setHoveredConnId(null)}>
+              <g key={conn.id}>
                 <path d={d} fill="none" stroke="transparent" strokeWidth="12" onClick={(e) => { e.stopPropagation(); onSelectConn(conn.id); onSelectShape(null) }} onContextMenu={(e) => openConnectionMenu(e, conn.id)} />
-                <path d={d} fill="none" stroke={selectedConnId === conn.id ? '#2563eb' : '#64748b'} strokeWidth={selectedConnId === conn.id ? 2.5 : 2} />
+                <path d={d} fill="none" stroke={stroke} strokeWidth={sel ? 2.5 : 2}
+                  markerEnd={markerEnd || undefined}
+                  markerStart={markerStart || undefined}
+                />
+                {sel && (
+                  <>
+                    <circle cx={fp.x} cy={fp.y} r={5} fill="#fff" stroke="#2563eb" strokeWidth={1.5} style={{ cursor: 'grab' }} onMouseDown={(e) => startReroute(e, conn.id, 'from')} />
+                    <circle cx={tp.x} cy={tp.y} r={5} fill="#fff" stroke="#2563eb" strokeWidth={1.5} style={{ cursor: 'grab' }} onMouseDown={(e) => startReroute(e, conn.id, 'to')} />
+                  </>
+                )}
               </g>
             )
           })}
@@ -339,6 +425,28 @@ export default function CanvasAdvanced({
                   {shape.type === 'note' ? (shape.noteText || 'Note') : (shape.label || 'Object')}
                 </text>
               )}
+              {selectedId === shape.id && !reroutingConn && [
+                { h: 'nw', cx: shape.x,                    cy: shape.y },
+                { h: 'n',  cx: shape.x + shape.width / 2,  cy: shape.y },
+                { h: 'ne', cx: shape.x + shape.width,      cy: shape.y },
+                { h: 'e',  cx: shape.x + shape.width,      cy: shape.y + shape.height / 2 },
+                { h: 'se', cx: shape.x + shape.width,      cy: shape.y + shape.height },
+                { h: 's',  cx: shape.x + shape.width / 2,  cy: shape.y + shape.height },
+                { h: 'sw', cx: shape.x,                    cy: shape.y + shape.height },
+                { h: 'w',  cx: shape.x,                    cy: shape.y + shape.height / 2 },
+              ].map(({ h, cx, cy }) => (
+                <rect
+                  key={h}
+                  x={cx - 4} y={cy - 4} width={8} height={8}
+                  fill="#fff" stroke="#2563eb" strokeWidth={1.5}
+                  style={{ cursor: `${h}-resize` }}
+                  onMouseDown={(e) => {
+                    e.stopPropagation()
+                    onBeginHistoryStep()
+                    setDragging({ type: 'resize', shapeId: shape.id, handle: h, origX: shape.x, origY: shape.y, origW: shape.width, origH: shape.height })
+                  }}
+                />
+              ))}
               {reroutingConn && hoveredShapeId === shape.id && borderSnap && (
                 <circle cx={borderSnap.x} cy={borderSnap.y} r={SNAP_R} fill="#fff" stroke="#2563eb" strokeWidth={2.5} />
               )}

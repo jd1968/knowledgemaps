@@ -23,6 +23,20 @@ export default function DiagramDetailsPanel({ selectedShape, selectedConn, shape
           ) : (
             <input className="diagram-details-input" value={selectedShape.label || ''} onChange={(e) => onUpdateShape(selectedShape.id, { label: e.target.value })} />
           )}
+          {selectedShape.type === 'object' && (
+            <div className="diagram-details-grid" style={{ marginTop: 10 }}>
+              <label>Type</label>
+              <select
+                className="diagram-details-input"
+                value={selectedShape.objectType || 'Standard'}
+                onChange={(e) => onUpdateShape(selectedShape.id, { objectType: e.target.value })}
+              >
+                <option value="Standard">Standard</option>
+                <option value="Packaged">Packaged</option>
+                <option value="Custom">Custom</option>
+              </select>
+            </div>
+          )}
         </>
       )}
       {!selectedShape && selectedConn && (

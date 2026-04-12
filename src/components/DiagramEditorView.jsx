@@ -72,6 +72,7 @@ export default function DiagramEditorView() {
       height: isRegion ? 240 : isNote ? 160 : isOr ? 40 : 80,
       label: isRegion ? 'Region' : isOr ? 'OR' : (isNote ? '' : 'Object'),
       noteText: isNote ? '' : '',
+      objectType: 'Standard',
     }
     setShapes((prev) => [...prev, shape])
     setSelectedId(shape.id)
@@ -121,7 +122,7 @@ export default function DiagramEditorView() {
         </div>
         <div className="diagram-modal__body">
           <DiagramSidebar shapeLibrary={DEFAULT_SHAPE_LIBRARY} />
-          <div ref={svgRef} style={{ minWidth: 0 }}>
+          <div ref={svgRef} style={{ minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
             <CanvasAdvanced
               shapes={shapes}
               connections={connections}

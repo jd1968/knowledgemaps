@@ -251,8 +251,9 @@
 }
 
 .diagram-page {
-  flex: 1;
-  min-height: 0;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
 }
@@ -744,7 +745,8 @@
 
 .diagram-page .diagram-modal {
   width: 100%;
-  height: 100%;
+  flex: 1;
+  min-height: 0;
   border-radius: 0;
   border: none;
 }
@@ -831,6 +833,16 @@
 }
 
 .diagram-toolbar-group { display: flex; gap: 6px; }
+.diagram-toolbar-group--end { margin-left: auto; align-items: center; }
+
+.diagram-toolbar-save-status {
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.diagram-toolbar-save-status--unsaved {
+  color: var(--amber, #b45309);
+}
 
 .diagram-toolbar-btn {
   border: 1px solid #cbd5e1;
@@ -873,7 +885,7 @@
 
 .diagram-details-empty { font-size: 13px; color: #64748b; }
 
-.diagram-canvas-wrap { position: relative; min-width: 0; background: #f8fafc; }
+.diagram-canvas-wrap { position: relative; min-width: 0; min-height: 0; flex: 1; display: flex; flex-direction: column; background: #f8fafc; }
 .diagram-inline-input { width: 100%; height: 100%; border: none; outline: none; background: transparent; resize: none; font: inherit; }
 .conn-context-menu {
   position: absolute;
@@ -889,7 +901,7 @@
 .conn-context-item.danger { color: #b91c1c; }
 .canvas-controls {
   position: absolute;
-  right: 12px;
+  left: 12px;
   bottom: 12px;
   display: flex;
   align-items: center;
@@ -918,7 +930,8 @@
 
 .diagram-canvas {
   width: 100%;
-  height: 100%;
+  flex: 1;
+  min-height: 0;
   display: block;
   background: #f8fafc;
 }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { v4 as uuidv4 } from 'uuid'
 import { supabase } from '../lib/supabase'
@@ -12,9 +12,10 @@ export default function DiagramPage() {
   const { diagramId } = useParams()
   const navigate = useNavigate()
   const svgRef = useRef(null)
+  const autosaveTimer = useRef(null)
 
   const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
+  const [saveStatus, setSaveStatus] = useState('saved') // 'saved' | 'saving' | 'unsaved'
   const [name, setName] = useState('Untitled Diagram')
   const [editingName, setEditingName] = useState(false)
   const [shapes, setShapes] = useState([])
@@ -41,6 +42,44 @@ export default function DiagramPage() {
       setLoading(false)
     })()
   }, [diagramId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const save = useCallback(async (currentShapes, currentConnections, currentName) => {
+    setSaveStatus('saving')
+    let snapshot = ''
+    const svgEl = svgRef.current?.querySelector?.('svg')
+    if (svgEl) {
+      const clone = svgEl.cloneNode(true)
+      clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
+      const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect')
+      bg.setAttribute('x', '0')
+      bg.setAttribute('y', '0')
+      bg.setAttribute('width', '100%')
+      bg.setAttribute('height', '100%')
+      bg.setAttribute('fill', '#f8fafc')
+      clone.insertBefore(bg, clone.firstChild)
+      const xml = new XMLSerializer().serializeToString(clone)
+      snapshot = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(xml)}`
+    }
+    await supabase
+      .from('diagrams')
+      .update({ name: currentName, data: { shapes: currentShapes, connections: currentConnections } })
+      .eq('id', diagramId)
+    setSaveStatus('saved')
+  }, [diagramId])
+
+  // Autosave 2s after any change (skip during initial load)
+  useEffect(() => {
+    if (loading) return
+    setSaveStatus('unsaved')
+    clearTimeout(autosaveTimer.current)
+    autosaveTimer.current = setTimeout(() => save(shapes, connections, name), 2000)
+    return () => clearTimeout(autosaveTimer.current)
+  }, [shapes, connections, name]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleSave = () => {
+    clearTimeout(autosaveTimer.current)
+    save(shapes, connections, name)
+  }
 
   if (loading) return <div className="diagram-page-loading">Loading…</div>
 
@@ -83,34 +122,10 @@ export default function DiagramPage() {
       height: isRegion ? 240 : isNote ? 160 : isOr ? 40 : 80,
       label: isRegion ? 'Region' : isOr ? 'OR' : (isNote ? '' : 'Object'),
       noteText: '',
+      objectType: 'Standard',
     }
     setShapes((prev) => [...prev, shape])
     setSelectedId(shape.id)
-  }
-
-  const handleSave = async () => {
-    setSaving(true)
-    let snapshot = ''
-    const svgEl = svgRef.current?.querySelector?.('svg')
-    if (svgEl) {
-      const clone = svgEl.cloneNode(true)
-      clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
-      const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect')
-      bg.setAttribute('x', '0')
-      bg.setAttribute('y', '0')
-      bg.setAttribute('width', '100%')
-      bg.setAttribute('height', '100%')
-      bg.setAttribute('fill', '#f8fafc')
-      clone.insertBefore(bg, clone.firstChild)
-      const xml = new XMLSerializer().serializeToString(clone)
-      snapshot = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(xml)}`
-    }
-    await supabase
-      .from('diagrams')
-      .update({ name, data: { shapes, connections }, snapshot, updated_at: new Date().toISOString() })
-      .eq('id', diagramId)
-    setSaving(false)
-    navigate('/')
   }
 
   const selected = shapes.find((s) => s.id === selectedId) || null
@@ -135,20 +150,14 @@ export default function DiagramPage() {
           </button>
         )}
       </div>
-      <DiagramToolbar onUndo={undo} onRedo={redo} canUndo={past.length > 0} canRedo={future.length > 0} />
+      <DiagramToolbar onUndo={undo} onRedo={redo} canUndo={past.length > 0} canRedo={future.length > 0} onSave={handleSave} saveStatus={saveStatus} />
       <div className="diagram-modal">
         <div className="diagram-modal__header">
           <strong>{name}</strong>
-          <div>
-            <button className="btn btn--secondary btn--sm" onClick={() => navigate('/')}>Cancel</button>
-            <button className="btn btn--primary btn--sm" onClick={handleSave} disabled={saving}>
-              {saving ? 'Saving…' : 'Save'}
-            </button>
-          </div>
         </div>
         <div className="diagram-modal__body">
           <DiagramSidebar shapeLibrary={DEFAULT_SHAPE_LIBRARY} />
-          <div ref={svgRef} style={{ minWidth: 0 }}>
+          <div ref={svgRef} style={{ minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
             <CanvasAdvanced
               shapes={shapes}
               connections={connections}
