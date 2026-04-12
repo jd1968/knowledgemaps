@@ -498,13 +498,6 @@ export default function MapEditorPage() {
         onClose={closeCardProperties}
         footer={
           <>
-            {editingCardId && (
-              <button className="btn btn--danger btn--sm" onClick={() => {
-                if (window.confirm(`Delete card "${cardDraftTitle || 'this card'}"?`)) deleteCard()
-              }}>
-                Delete
-              </button>
-            )}
             <button className="btn btn--secondary btn--sm" onClick={closeCardProperties}>Cancel</button>
             <button className="btn btn--primary btn--sm" onClick={saveCardProperties}>Save</button>
           </>
