@@ -280,7 +280,7 @@ export default function HomePage() {
 
       {activeTab === 'images' && <ImageLibraryPage embedded />}
     </div>
-    {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+    <SettingsModal open={showSettings} onClose={() => setShowSettings(false)} />
     </>
   )
 }

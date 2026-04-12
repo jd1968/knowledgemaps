@@ -6,6 +6,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { useMindMapStore } from '../store/useMindMapStore'
 import MapHeaderBlock from './MapHeaderBlock'
 import MapPropertiesModal from './MapPropertiesModal'
+import PropertiesPanel from './PropertiesPanel'
 import { NodeIconDisplay } from './NodeIcon'
 import MarkdownEditor, { markdownComponents, urlTransform } from './MarkdownEditor'
 import { ImageLibraryTrigger } from '../image-library'
@@ -218,12 +219,6 @@ export default function MapEditorPage() {
     setRegionDraftContent('')
     setRegionDraftCardSize('S')
   }
-  useEffect(() => {
-    if (!editingRegionId) return
-    const handler = (e) => { if (e.key === 'Escape') closeRegionProperties() }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
-  }, [editingRegionId]) // eslint-disable-line react-hooks/exhaustive-deps
   const openCardProperties = (regionId, card = null) => {
     setEditingCardRegionId(regionId)
     setEditingCardId(card?.id || null)
@@ -238,12 +233,6 @@ export default function MapEditorPage() {
     setCardDraftContent('')
     setCardDraftIconUrl('')
   }
-  useEffect(() => {
-    if (!editingCardRegionId) return
-    const handler = (e) => { if (e.key === 'Escape') closeCardProperties() }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
-  }, [editingCardRegionId])
   const saveRegionProperties = () => {
     if (!editingRegionId) return
     setMapRegions(regions.map((region) => (
@@ -453,137 +442,115 @@ export default function MapEditorPage() {
       </div>
 
       <MapPropertiesModal open={isEditMode && mapPropertiesOpen} onClose={() => setMapPropertiesOpen(false)} />
-      {isEditMode && editingRegionId && (
-        <div className="node-modal-overlay">
-          <div className="node-modal map-editor-region-modal" onPointerDown={(event) => event.stopPropagation()}>
-            <div className="node-modal-header">
-              <div className="node-modal-header-left">
-                <span className="node-modal-header-title">Region Properties</span>
-              </div>
-              <button className="icon-btn" onClick={closeRegionProperties} aria-label="Close">x</button>
-            </div>
 
-            <div className="node-modal-body">
-              <div className="field">
-                <label className="field-label">Title</label>
-                <input
-                  className="field-input"
-                  value={regionDraftTitle}
-                  onChange={(event) => setRegionDraftTitle(event.target.value)}
-                  placeholder="Region title..."
-                  autoFocus
-                />
-              </div>
+      <PropertiesPanel
+        open={isEditMode && !!editingRegionId}
+        title="Region Properties"
+        onClose={closeRegionProperties}
+        footer={
+          <>
+            <button className="btn btn--secondary btn--sm" onClick={closeRegionProperties}>Cancel</button>
+            <button className="btn btn--primary btn--sm" onClick={saveRegionProperties}>Save</button>
+          </>
+        }
+      >
+        <div className="field">
+          <label className="field-label">Title</label>
+          <input
+            className="field-input"
+            value={regionDraftTitle}
+            onChange={(e) => setRegionDraftTitle(e.target.value)}
+            placeholder="Region title..."
+            autoFocus
+          />
+        </div>
 
-              <div className="field field--grow">
-                <label className="field-label">Content</label>
-                <div className="map-editor-region-modal__markdown">
-                  <MarkdownEditor
-                    content={regionDraftContent}
-                    onChange={(next) => setRegionDraftContent(next)}
-                    editable={true}
-                  />
-                </div>
-              </div>
-
-              {regions.find((region) => region.id === editingRegionId)?.type === 'card' && (
-                <div className="field">
-                  <label className="field-label">Card Size</label>
-                  <select
-                    className="field-input"
-                    value={regionDraftCardSize}
-                    onChange={(event) => setRegionDraftCardSize(event.target.value)}
-                  >
-                    {CARD_SIZE_OPTIONS.map((option) => (
-                      <option key={option} value={option}>{option}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-            </div>
-
-            <div className="node-modal-footer">
-              <button className="btn btn--secondary btn--sm" onClick={closeRegionProperties}>
-                Cancel
-              </button>
-              <button className="btn btn--primary btn--sm" onClick={saveRegionProperties}>
-                Save
-              </button>
-            </div>
+        <div className="field field--grow">
+          <label className="field-label">Content</label>
+          <div className="map-editor-region-modal__markdown">
+            <MarkdownEditor
+              content={regionDraftContent}
+              onChange={(next) => setRegionDraftContent(next)}
+              editable={true}
+            />
           </div>
         </div>
-      )}
-      {isEditMode && editingCardRegionId && (
-        <div className="node-modal-overlay">
-          <div className="node-modal map-editor-region-modal" onPointerDown={(event) => event.stopPropagation()}>
-            <div className="node-modal-header">
-              <div className="node-modal-header-left">
-                <span className="node-modal-header-title">{editingCardId ? 'Card Properties' : 'New Card'}</span>
-              </div>
-              <button className="icon-btn" onClick={closeCardProperties} aria-label="Close">x</button>
+
+        {regions.find((r) => r.id === editingRegionId)?.type === 'card' && (
+          <div className="field">
+            <label className="field-label">Card Size</label>
+            <select
+              className="field-input"
+              value={regionDraftCardSize}
+              onChange={(e) => setRegionDraftCardSize(e.target.value)}
+            >
+              {CARD_SIZE_OPTIONS.map((option) => (
+                <option key={option} value={option}>{option}</option>
+              ))}
+            </select>
+          </div>
+        )}
+      </PropertiesPanel>
+
+      <PropertiesPanel
+        open={isEditMode && !!editingCardRegionId}
+        title={editingCardId ? 'Card Properties' : 'New Card'}
+        onClose={closeCardProperties}
+        footer={
+          <>
+            {editingCardId && (
+              <button className="btn btn--danger btn--sm" onClick={() => {
+                if (window.confirm(`Delete card "${cardDraftTitle || 'this card'}"?`)) deleteCard()
+              }}>
+                Delete
+              </button>
+            )}
+            <button className="btn btn--secondary btn--sm" onClick={closeCardProperties}>Cancel</button>
+            <button className="btn btn--primary btn--sm" onClick={saveCardProperties}>Save</button>
+          </>
+        }
+      >
+        <div className="field">
+          <label className="field-label">Title</label>
+          <input
+            className="field-input"
+            value={cardDraftTitle}
+            onChange={(e) => setCardDraftTitle(e.target.value)}
+            placeholder="Card title..."
+            autoFocus
+          />
+        </div>
+
+        <div className="field">
+          <label className="field-label">Icon</label>
+          <div className="map-properties-icon-row">
+            <div className="map-properties-icon-preview" aria-hidden="true">
+              {cardDraftIconUrl
+                ? <NodeIconDisplay iconUrl={cardDraftIconUrl} className="map-properties-icon-image" />
+                : <span className="map-properties-icon-placeholder">No icon</span>}
             </div>
-
-            <div className="node-modal-body">
-              <div className="field">
-                <label className="field-label">Title</label>
-                <input
-                  className="field-input"
-                  value={cardDraftTitle}
-                  onChange={(event) => setCardDraftTitle(event.target.value)}
-                  placeholder="Card title..."
-                  autoFocus
-                />
-              </div>
-
-              <div className="field">
-                <label className="field-label">Icon</label>
-                <div className="map-properties-icon-row">
-                  <div className="map-properties-icon-preview" aria-hidden="true">
-                    {cardDraftIconUrl
-                      ? <NodeIconDisplay iconUrl={cardDraftIconUrl} className="map-properties-icon-image" />
-                      : <span className="map-properties-icon-placeholder">No icon</span>}
-                  </div>
-                  <div className="map-properties-icon-actions">
-                    <ImageLibraryTrigger onSelect={(url) => setCardDraftIconUrl(url)} />
-                    {cardDraftIconUrl && (
-                      <button type="button" className="btn btn--ghost btn--sm" onClick={() => setCardDraftIconUrl('')}>
-                        Remove
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div className="field field--grow">
-                <label className="field-label">Content</label>
-                <div className="map-editor-region-modal__markdown">
-                  <MarkdownEditor
-                    content={cardDraftContent}
-                    onChange={(next) => setCardDraftContent(next)}
-                    editable={true}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="node-modal-footer">
-              {editingCardId && (
-                <button className="btn btn--danger btn--sm" onClick={() => {
-                  if (window.confirm(`Delete card "${cardDraftTitle || 'this card'}"?`)) deleteCard()
-                }}>
-                  Delete
+            <div className="map-properties-icon-actions">
+              <ImageLibraryTrigger onSelect={(url) => setCardDraftIconUrl(url)} />
+              {cardDraftIconUrl && (
+                <button type="button" className="btn btn--ghost btn--sm" onClick={() => setCardDraftIconUrl('')}>
+                  Remove
                 </button>
               )}
-              <button className="btn btn--secondary btn--sm" onClick={closeCardProperties}>
-                Cancel
-              </button>
-              <button className="btn btn--primary btn--sm" onClick={saveCardProperties}>
-                Save
-              </button>
             </div>
           </div>
         </div>
-      )}
+
+        <div className="field field--grow">
+          <label className="field-label">Content</label>
+          <div className="map-editor-region-modal__markdown">
+            <MarkdownEditor
+              content={cardDraftContent}
+              onChange={(next) => setCardDraftContent(next)}
+              editable={true}
+            />
+          </div>
+        </div>
+      </PropertiesPanel>
     </>
   )
 }

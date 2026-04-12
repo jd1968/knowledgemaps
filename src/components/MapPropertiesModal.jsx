@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import { createPortal } from 'react-dom'
 import { useMindMapStore } from '../store/useMindMapStore'
 import { NodeIconDisplay } from './NodeIcon'
 import { ImageLibraryTrigger } from '../image-library'
 import MarkdownEditor from './MarkdownEditor'
+import PropertiesPanel from './PropertiesPanel'
 
 export default function MapPropertiesModal({ open, onClose }) {
   const currentMapName = useMindMapStore((s) => s.currentMapName)
@@ -22,90 +22,65 @@ export default function MapPropertiesModal({ open, onClose }) {
     setContent(currentMapContent || '')
   }, [open, currentMapName, currentMapIconUrl, currentMapContent])
 
-  useEffect(() => {
-    if (!open) return
-    const onKeyDown = (event) => {
-      if (event.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [open, onClose])
-
   const resolvedName = useMemo(() => name.trim() || 'Untitled Map', [name])
 
-  if (!open) return null
+  const handleSave = () => {
+    setMapProperties({ name: resolvedName, iconUrl, content })
+    onClose()
+  }
 
-  return createPortal(
-    <div className="node-modal-overlay">
-      <div className="node-modal map-properties-modal" onPointerDown={(event) => event.stopPropagation()}>
-        <div className="node-modal-header">
-          <div className="node-modal-header-left">
-            <span className="node-modal-header-title">Map Properties</span>
+  return (
+    <PropertiesPanel
+      open={open}
+      title="Map Properties"
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn btn--secondary btn--sm" onClick={onClose}>Cancel</button>
+          <button className="btn btn--primary btn--sm" onClick={handleSave}>Save</button>
+        </>
+      }
+    >
+      <div className="field">
+        <label className="field-label">Map Name</label>
+        <input
+          className="field-input"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Map name..."
+          autoFocus
+        />
+      </div>
+
+      <div className="field">
+        <label className="field-label">Icon</label>
+        <div className="map-properties-icon-row">
+          <div className="map-properties-icon-preview" aria-hidden="true">
+            {iconUrl
+              ? <NodeIconDisplay iconUrl={iconUrl} className="map-properties-icon-image" />
+              : <span className="map-properties-icon-placeholder">No icon</span>}
           </div>
-          <button className="icon-btn" onClick={onClose} aria-label="Close">x</button>
-        </div>
-
-        <div className="node-modal-body">
-          <div className="field">
-            <label className="field-label">Map Name</label>
-            <input
-              className="field-input"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              placeholder="Map name..."
-              autoFocus
-            />
+          <div className="map-properties-icon-actions">
+            <ImageLibraryTrigger onSelect={(url) => setIconUrl(url)} />
+            {iconUrl && (
+              <button type="button" className="btn btn--ghost btn--sm" onClick={() => setIconUrl('')}>
+                Remove
+              </button>
+            )}
           </div>
-
-          <div className="field">
-            <label className="field-label">Icon</label>
-            <div className="map-properties-icon-row">
-              <div className="map-properties-icon-preview" aria-hidden="true">
-                {iconUrl ? <NodeIconDisplay iconUrl={iconUrl} className="map-properties-icon-image" /> : <span className="map-properties-icon-placeholder">No icon</span>}
-              </div>
-              <div className="map-properties-icon-actions">
-                <ImageLibraryTrigger onSelect={(url) => setIconUrl(url)} />
-                {iconUrl && (
-                  <button
-                    type="button"
-                    className="btn btn--ghost btn--sm"
-                    onClick={() => setIconUrl('')}
-                  >
-                    Remove
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="field field--grow">
-            <label className="field-label">Map Content</label>
-            <div className="map-properties-markdown-wrap">
-              <MarkdownEditor
-                content={content}
-                onChange={(next) => setContent(next)}
-                editable={true}
-              />
-            </div>
-          </div>
-        </div>
-
-        <div className="node-modal-footer">
-          <button className="btn btn--secondary btn--sm" onClick={onClose}>
-            Cancel
-          </button>
-          <button
-            className="btn btn--primary btn--sm"
-            onClick={() => {
-              setMapProperties({ name: resolvedName, iconUrl, content })
-              onClose()
-            }}
-          >
-            Save
-          </button>
         </div>
       </div>
-    </div>,
-    document.body
+
+      <div className="field field--grow">
+        <label className="field-label">Map Content</label>
+        <div className="map-properties-markdown-wrap">
+          <MarkdownEditor
+            content={content}
+            onChange={(next) => setContent(next)}
+            editable={true}
+          />
+        </div>
+      </div>
+    </PropertiesPanel>
   )
 }
