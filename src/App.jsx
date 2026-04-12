@@ -9,6 +9,7 @@ import TextView from './components/MapTextModal'
 import NodePopup from './components/NodePopup'
 import Toolbox from './components/NodePalette'
 import DiagramEditorView from './components/DiagramEditorView'
+import DiagramPage from './components/DiagramPage'
 import MapListModal from './components/MapListModal'
 import LoginPage from './components/LoginPage'
 import HomePage from './components/HomePage'
@@ -100,6 +101,7 @@ function AppInner() {
     <Routes>
       <Route path="/" element={<HomePage />} />
       <Route path="/image-library" element={<ImageLibraryPage />} />
+      <Route path="/diagram/:diagramId" element={<DiagramPage />} />
       <Route path="/map/:mapId" element={<MapEditorPage />} />
       <Route path="/legacymap/:mapId" element={<MapPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />

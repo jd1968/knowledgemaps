@@ -22,7 +22,7 @@ const fmtBytes = (bytes) => {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-export default function ImageLibraryPage() {
+export default function ImageLibraryPage({ embedded = false }) {
   const navigate = useNavigate()
   const [tab, setTab] = useState('browse')
   const [search, setSearch] = useState('')
@@ -207,17 +207,19 @@ export default function ImageLibraryPage() {
   }
 
   return (
-    <div className="illib-page">
-      <div className="illib-toolbar">
-        <button className="toolbar-home-btn" onClick={() => navigate('/')} title="Back to home" aria-label="Back to home">
-          <BackIcon />
-        </button>
-        <span className="illib-toolbar__title">Image Library</span>
-        <div className="illib-toolbar__spacer" />
-        {!loading && (
-          <span className="illib-toolbar__count">{assets.length} image{assets.length !== 1 ? 's' : ''}</span>
-        )}
-      </div>
+    <div className={embedded ? 'illib-embedded' : 'illib-page'}>
+      {!embedded && (
+        <div className="illib-toolbar">
+          <button className="toolbar-home-btn" onClick={() => navigate('/')} title="Back to home" aria-label="Back to home">
+            <BackIcon />
+          </button>
+          <span className="illib-toolbar__title">Image Library</span>
+          <div className="illib-toolbar__spacer" />
+          {!loading && (
+            <span className="illib-toolbar__count">{assets.length} image{assets.length !== 1 ? 's' : ''}</span>
+          )}
+        </div>
+      )}
 
       <div className="illib-tabs">
         <button className={`il-tab${tab === 'browse' ? ' il-tab--active' : ''}`} onClick={() => setTab('browse')}>Browse</button>

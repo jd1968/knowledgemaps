@@ -4,6 +4,7 @@ import { useMindMapStore } from '../store/useMindMapStore'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import SettingsModal from './SettingsModal'
+import ImageLibraryPage from './ImageLibraryPage'
 
 const fmt = (iso) => {
   const d = new Date(iso)
@@ -19,9 +20,21 @@ export default function HomePage() {
   const { newMap, saveMap } = useMindMapStore()
   const { user } = useAuth()
   const navigate = useNavigate()
+  const [activeTab, setActiveTab] = useState('maps')
+
+  // Maps state
   const [maps, setMaps] = useState([])
-  const [fetching, setFetching] = useState(true)
+  const [fetchingMaps, setFetchingMaps] = useState(true)
   const [opening, setOpening] = useState(null)
+
+  // Diagrams state
+  const [diagrams, setDiagrams] = useState([])
+  const [fetchingDiagrams, setFetchingDiagrams] = useState(false)
+  const [diagramsFetched, setDiagramsFetched] = useState(false)
+  const [diagramsError, setDiagramsError] = useState(null)
+  const [deletingDiagramId, setDeletingDiagramId] = useState(null)
+  const [creatingDiagram, setCreatingDiagram] = useState(false)
+
   const [showSettings, setShowSettings] = useState(false)
 
   useEffect(() => {
@@ -33,9 +46,32 @@ export default function HomePage() {
         .order('last_visited_at', { ascending: false, nullsFirst: false })
         .limit(12)
       setMaps(data || [])
-      setFetching(false)
+      setFetchingMaps(false)
     })()
   }, [user.id])
+
+  const fetchDiagrams = async () => {
+    setFetchingDiagrams(true)
+    setDiagramsError(null)
+    const { data, error } = await supabase
+      .from('diagrams')
+      .select('id, name, updated_at')
+      .order('updated_at', { ascending: false })
+    if (error) {
+      console.error('diagrams fetch error:', error)
+      setDiagramsError(error.message)
+    }
+    setDiagrams(data || [])
+    setFetchingDiagrams(false)
+    setDiagramsFetched(true)
+  }
+
+  const handleTabChange = (tab) => {
+    setActiveTab(tab)
+    if (tab === 'diagrams' && !diagramsFetched) {
+      fetchDiagrams()
+    }
+  }
 
   const handleOpen = (mapId) => {
     setOpening(mapId)
@@ -59,12 +95,40 @@ export default function HomePage() {
     }
   }
 
+  const handleNewDiagram = async () => {
+    setCreatingDiagram(true)
+    const { data, error } = await supabase
+      .from('diagrams')
+      .insert({ name: 'Untitled Diagram', data: { shapes: [], connections: [] } })
+      .select('id')
+      .single()
+    if (error || !data) {
+      setCreatingDiagram(false)
+      alert('Failed to create diagram')
+      return
+    }
+    navigate(`/diagram/${data.id}`)
+  }
+
+  const handleOpenDiagram = (diagramId) => {
+    navigate(`/diagram/${diagramId}`)
+  }
+
+  const handleDeleteDiagram = async (diagramId, e) => {
+    e.stopPropagation()
+    if (!confirm('Delete this diagram?')) return
+    setDeletingDiagramId(diagramId)
+    await supabase.from('diagrams').delete().eq('id', diagramId)
+    setDiagrams((prev) => prev.filter((d) => d.id !== diagramId))
+    setDeletingDiagramId(null)
+  }
+
   const avatarUrl = user?.user_metadata?.avatar_url
   const initial = (user?.user_metadata?.full_name?.[0] ?? user?.email?.[0] ?? '?').toUpperCase()
 
   return (
     <>
-    <div className="home-page">
+    <div className={`home-page${activeTab === 'images' ? ' home-page--images' : ''}`}>
       <div className="home-page__inner">
 
         <header className="home-page__header">
@@ -88,61 +152,133 @@ export default function HomePage() {
           </div>
         </header>
 
-        <section>
-          <h2 className="home-page__section-title">Recent</h2>
-          {fetching ? (
-            <p className="home-page__state">Loading…</p>
-          ) : maps.length === 0 ? (
-            <p className="home-page__state">No maps yet — create your first one below.</p>
-          ) : (
-            <div className="home-page__grid">
-              {maps.map((map) => (
-                <article
-                  key={map.id}
-                  className={`home-map-tile${opening === map.id ? ' home-map-tile--opening' : ''}`}
-                >
-                  <button
-                    type="button"
-                    className="home-map-tile__main"
-                    onClick={() => handleOpen(map.id)}
-                    disabled={!!opening}
-                  >
-                    <span className="home-map-tile__name">{map.name}</span>
-                    <span className="home-map-tile__date">{fmt(map.last_visited_at ?? map.updated_at)}</span>
-                  </button>
-                  <div className="home-map-tile__actions">
-                    <button
-                      type="button"
-                      className="btn btn--secondary btn--sm home-map-tile__legacy-btn"
-                      onClick={() => handleOpenLegacy(map.id)}
-                      disabled={!!opening}
-                    >
-                      Legacy
-                    </button>
-                  </div>
-                </article>
-              ))}
-            </div>
-          )}
-        </section>
-
-        <div className="home-page__actions">
+        <div className="home-tabs">
           <button
-            className="btn btn--primary home-page__new-btn"
-            onClick={handleNew}
-            disabled={!!opening}
+            className={`home-tab${activeTab === 'maps' ? ' home-tab--active' : ''}`}
+            onClick={() => handleTabChange('maps')}
           >
-            + New Map
+            Maps
           </button>
           <button
-            className="btn btn--secondary home-page__new-btn"
-            onClick={() => navigate('/image-library')}
+            className={`home-tab${activeTab === 'diagrams' ? ' home-tab--active' : ''}`}
+            onClick={() => handleTabChange('diagrams')}
           >
-            Image Library
+            Diagrams
+          </button>
+          <button
+            className={`home-tab${activeTab === 'images' ? ' home-tab--active' : ''}`}
+            onClick={() => handleTabChange('images')}
+          >
+            Images
           </button>
         </div>
 
+        {activeTab === 'maps' && (
+          <>
+            <div className="home-page__actions">
+              <button
+                className="btn btn--primary home-page__new-btn"
+                onClick={handleNew}
+                disabled={!!opening}
+              >
+                + New Map
+              </button>
+            </div>
+
+            <section>
+              <h2 className="home-page__section-title">Recent</h2>
+              {fetchingMaps ? (
+                <p className="home-page__state">Loading…</p>
+              ) : maps.length === 0 ? (
+                <p className="home-page__state">No maps yet.</p>
+              ) : (
+                <div className="home-page__grid">
+                  {maps.map((map) => (
+                    <article
+                      key={map.id}
+                      className={`home-map-tile${opening === map.id ? ' home-map-tile--opening' : ''}`}
+                    >
+                      <button
+                        type="button"
+                        className="home-map-tile__main"
+                        onClick={() => handleOpen(map.id)}
+                        disabled={!!opening}
+                      >
+                        <span className="home-map-tile__name">{map.name}</span>
+                        <span className="home-map-tile__date">{fmt(map.last_visited_at ?? map.updated_at)}</span>
+                      </button>
+                      <div className="home-map-tile__actions">
+                        <button
+                          type="button"
+                          className="btn btn--secondary btn--sm home-map-tile__legacy-btn"
+                          onClick={() => handleOpenLegacy(map.id)}
+                          disabled={!!opening}
+                        >
+                          Legacy
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </section>
+          </>
+        )}
+
+        {activeTab === 'diagrams' && (
+          <>
+            <div className="home-page__actions">
+              <button
+                className="btn btn--primary home-page__new-btn"
+                onClick={handleNewDiagram}
+                disabled={creatingDiagram}
+              >
+                + New Diagram
+              </button>
+            </div>
+
+            <section>
+              {fetchingDiagrams ? (
+                <p className="home-page__state">Loading…</p>
+              ) : diagramsError ? (
+                <p className="home-page__state home-page__state--error">Error: {diagramsError}</p>
+              ) : diagrams.length === 0 ? (
+                <p className="home-page__state">No diagrams yet — create your first one below.</p>
+              ) : (
+                <div className="home-page__grid">
+                  {diagrams.map((diagram) => (
+                    <article key={diagram.id} className="home-map-tile">
+                      <button
+                        type="button"
+                        className="home-map-tile__main"
+                        onClick={() => handleOpenDiagram(diagram.id)}
+                      >
+                        <span className="home-map-tile__name">{diagram.name}</span>
+                        <span className="home-map-tile__date">{fmt(diagram.updated_at)}</span>
+                      </button>
+                      <div className="home-map-tile__actions">
+                        <button
+                          type="button"
+                          className="btn btn--danger btn--sm"
+                          onClick={(e) => handleDeleteDiagram(diagram.id, e)}
+                          disabled={deletingDiagramId === diagram.id}
+                          aria-label="Delete diagram"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </section>
+
+          </>
+        )}
+
       </div>
+
+      {activeTab === 'images' && <ImageLibraryPage embedded />}
     </div>
     {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
     </>
