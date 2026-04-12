@@ -218,6 +218,12 @@ export default function MapEditorPage() {
     setRegionDraftContent('')
     setRegionDraftCardSize('S')
   }
+  useEffect(() => {
+    if (!editingRegionId) return
+    const handler = (e) => { if (e.key === 'Escape') closeRegionProperties() }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [editingRegionId]) // eslint-disable-line react-hooks/exhaustive-deps
   const openCardProperties = (regionId, card = null) => {
     setEditingCardRegionId(regionId)
     setEditingCardId(card?.id || null)
@@ -448,12 +454,7 @@ export default function MapEditorPage() {
 
       <MapPropertiesModal open={isEditMode && mapPropertiesOpen} onClose={() => setMapPropertiesOpen(false)} />
       {isEditMode && editingRegionId && (
-        <div
-          className="node-modal-overlay"
-          onPointerDown={(event) => {
-            if (event.target === event.currentTarget) closeRegionProperties()
-          }}
-        >
+        <div className="node-modal-overlay">
           <div className="node-modal map-editor-region-modal" onPointerDown={(event) => event.stopPropagation()}>
             <div className="node-modal-header">
               <div className="node-modal-header-left">
@@ -513,12 +514,7 @@ export default function MapEditorPage() {
         </div>
       )}
       {isEditMode && editingCardRegionId && (
-        <div
-          className="node-modal-overlay"
-          onPointerDown={(event) => {
-            if (event.target === event.currentTarget) closeCardProperties()
-          }}
-        >
+        <div className="node-modal-overlay">
           <div className="node-modal map-editor-region-modal" onPointerDown={(event) => event.stopPropagation()}>
             <div className="node-modal-header">
               <div className="node-modal-header-left">

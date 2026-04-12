@@ -36,12 +36,7 @@ export default function MapPropertiesModal({ open, onClose }) {
   if (!open) return null
 
   return createPortal(
-    <div
-      className="node-modal-overlay"
-      onPointerDown={(event) => {
-        if (event.target === event.currentTarget) onClose()
-      }}
-    >
+    <div className="node-modal-overlay">
       <div className="node-modal map-properties-modal" onPointerDown={(event) => event.stopPropagation()}>
         <div className="node-modal-header">
           <div className="node-modal-header-left">
