@@ -25,6 +25,7 @@ export default function DiagramPage() {
   const [selectedConnId, setSelectedConnId] = useState(null)
   const [isReroutingConn, setIsReroutingConn] = useState(false)
   const [isEditingConnLabel, setIsEditingConnLabel] = useState(false)
+  const [isPanelOpen, setIsPanelOpen] = useState(false)
   const [past, setPast] = useState([])
   const [future, setFuture] = useState([])
 
@@ -119,11 +120,11 @@ export default function DiagramPage() {
     const shape = {
       id: uuidv4(),
       type,
-      x: Math.round((x - 80) / 10) * 10,
-      y: Math.round((y - 40) / 10) * 10,
+      x: Math.round(x / 20) * 20,
+      y: Math.round(y / 20) * 20,
       width: isRegion ? 320 : isNote ? 200 : isOr ? 200 : 160,
       height: isRegion ? 240 : isNote ? 160 : isOr ? 40 : 80,
-      label: isRegion ? 'Region' : isOr ? 'OR' : (isNote ? '' : 'Object'),
+      label: isRegion ? 'Region' : isOr ? 'OR' : (isNote ? '' : type === 'shape' ? 'Container' : 'Object'),
       noteText: '',
       objectType: 'Standard',
     }
@@ -164,7 +165,10 @@ export default function DiagramPage() {
         onToggleEditMode={() => {
           setIsEditMode((prev) => {
             const next = !prev
-            if (!next) setSelectedConnId(null)
+            if (!next) {
+              setSelectedConnId(null)
+              setIsPanelOpen(false)
+            }
             return next
           })
         }}
@@ -209,6 +213,7 @@ export default function DiagramPage() {
               }}
               onSelectShape={(id) => { setSelectedId(id); if (id != null) setSelectedConnId(null) }}
               onSelectConn={(id) => { setSelectedConnId(id); if (id != null) setSelectedId(null) }}
+              onOpenPanel={() => setIsPanelOpen(true)}
               onUpdateConn={(id, updates) => setConnections((prev) => prev.map((c) => (c.id === id ? { ...c, ...updates } : c)))}
               onUpdateConnWaypoints={(id, waypoints) => setConnections((prev) => prev.map((c) => (c.id === id ? { ...c, waypoints } : c)))}
               onUpdateConnLabelOffset={(id, end, offset) => setConnections((prev) => prev.map((c) => (c.id === id ? { ...c, [end === 'from' ? 'fromLabelOffset' : 'toLabelOffset']: offset } : c)))}
@@ -226,10 +231,11 @@ export default function DiagramPage() {
             shapes={shapes}
             onUpdateShape={(id, updates) => { pushHistory(); setShapes((prev) => prev.map((s) => (s.id === id ? { ...s, ...updates } : s))) }}
             onUpdateConn={(id, updates) => { pushHistory(); setConnections((prev) => prev.map((c) => (c.id === id ? { ...c, ...updates } : c))) }}
-            onClose={() => { setSelectedId(null); setSelectedConnId(null) }}
-            onDeleteShape={(id) => { pushHistory(); setShapes((prev) => prev.filter((s) => s.id !== id)); setConnections((prev) => prev.filter((c) => c.fromShapeId !== id && c.toShapeId !== id)); setSelectedId(null) }}
-            onDeleteConn={(id) => { pushHistory(); setConnections((prev) => prev.filter((c) => c.id !== id)); setSelectedConnId(null) }}
+            onClose={() => { setSelectedId(null); setSelectedConnId(null); setIsPanelOpen(false) }}
+            onDeleteShape={(id) => { pushHistory(); setShapes((prev) => prev.filter((s) => s.id !== id)); setConnections((prev) => prev.filter((c) => c.fromShapeId !== id && c.toShapeId !== id)); setSelectedId(null); setIsPanelOpen(false) }}
+            onDeleteConn={(id) => { pushHistory(); setConnections((prev) => prev.filter((c) => c.id !== id)); setSelectedConnId(null); setIsPanelOpen(false) }}
             suspendOpen={isReroutingConn || isEditingConnLabel}
+            panelOpen={isPanelOpen}
             isEditMode={isEditMode}
           />
         </div>

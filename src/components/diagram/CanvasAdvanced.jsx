@@ -106,7 +106,7 @@ export default function CanvasAdvanced({
   onAddShape, onUpdateShape, onDeleteShape,
   onAddStandaloneRelationship, onUpdateConnection, onSelectShape,
   onSelectConn, onUpdateConnWaypoints, onDeleteConn, onReverseConn,
-  onBeginHistoryStep, onUpdateConn, onUpdateConnLabelOffset, onRerouteStateChange, onLabelEditStateChange, fitOnMount = false, isEditMode = true,
+  onBeginHistoryStep, onUpdateConn, onUpdateConnLabelOffset, onRerouteStateChange, onLabelEditStateChange, onOpenPanel, fitOnMount = false, isEditMode = true,
 }) {
   const svgRef = useRef(null)
   const containerRef = useRef(null)
@@ -120,8 +120,6 @@ export default function CanvasAdvanced({
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 })
   const [hoveredShapeId, setHoveredShapeId] = useState(null)
   const [borderSnap, setBorderSnap] = useState(null)
-  const [editingId, setEditingId] = useState(null)
-  const [editingLabel, setEditingLabel] = useState('')
   const [draggingWp, setDraggingWp] = useState(null)
   const [contextMenu, setContextMenu] = useState(null)
   const [view, setViewState] = useState({ x: 0, y: 0, scale: 1 })
@@ -136,6 +134,7 @@ export default function CanvasAdvanced({
   const [editingConnLabel, setEditingConnLabel] = useState(null)
   const [selectedConnLabel, setSelectedConnLabel] = useState(null)
   const [hoveredConnId, setHoveredConnId] = useState(null)
+  const [paletteDrag, setPaletteDrag] = useState(null) // { type, x, y } in world coords, or null
 
   useEffect(() => {
     onRerouteStateChange?.(!!reroutingConn)
@@ -151,7 +150,7 @@ export default function CanvasAdvanced({
 
   useEffect(() => {
     const onKey = (e) => {
-      if (editingId || editingConnLabel) return
+      if (editingConnLabel) return
       const target = e.target
       const isEditingField =
         target instanceof HTMLElement &&
@@ -165,7 +164,7 @@ export default function CanvasAdvanced({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [selectedId, selectedConnId, editingId, editingConnLabel, onDeleteShape, onDeleteConn, multiSelectedIds])
+  }, [selectedId, selectedConnId, editingConnLabel, onDeleteShape, onDeleteConn, multiSelectedIds])
 
   useEffect(() => {
     const closeContextMenu = () => setContextMenu(null)
@@ -173,24 +172,67 @@ export default function CanvasAdvanced({
     return () => window.removeEventListener('mousedown', closeContextMenu)
   }, [])
 
-  const handleDrop = useCallback((e) => {
-    if (!isEditMode) return
-    e.preventDefault()
-    e.stopPropagation()
-    const type = e.dataTransfer.getData('shapeType')
-    if (!type) return
-    const pt = getSVGPoint(svgRef.current, e)
-    const world = screenToWorld(pt, view)
-    if (type === 'relationship') {
-      const snappedX = Math.round(world.x / 20) * 20
-      const snappedY = Math.round(world.y / 20) * 20
-      onAddStandaloneRelationship(snappedX, snappedY)
-      return
+  // Stable refs so the palette-drop listener never goes stale
+  const isEditModeRef = useRef(isEditMode)
+  const onAddShapeRef = useRef(onAddShape)
+  const onAddStandaloneRelationshipRef = useRef(onAddStandaloneRelationship)
+  useEffect(() => { isEditModeRef.current = isEditMode }, [isEditMode])
+  useEffect(() => { onAddShapeRef.current = onAddShape }, [onAddShape])
+  useEffect(() => { onAddStandaloneRelationshipRef.current = onAddStandaloneRelationship }, [onAddStandaloneRelationship])
+
+  useEffect(() => {
+    const handlePaletteDrop = (event) => {
+      if (!isEditModeRef.current) return
+      const container = containerRef.current
+      if (!container) return
+      const { type, clientX, clientY } = event.detail || {}
+      if (!type) return
+      const rect = container.getBoundingClientRect()
+      const inside =
+        clientX >= rect.left &&
+        clientX <= rect.right &&
+        clientY >= rect.top &&
+        clientY <= rect.bottom
+      if (!inside) return
+      const world = screenToWorld({ x: clientX - rect.left, y: clientY - rect.top }, viewRef.current)
+      if (type === 'relationship') {
+        onAddStandaloneRelationshipRef.current(Math.round(world.x / 20) * 20, Math.round(world.y / 20) * 20)
+      } else {
+        // Compute shape dimensions here so we can center on the cursor before addShape snaps to grid
+        const isNote = type === 'note'
+        const isRegion = type === 'region'
+        const isOr = type === 'or-annotation'
+        const w = isRegion ? 320 : isNote ? 200 : isOr ? 200 : 160
+        const h = isRegion ? 240 : isNote ? 160 : isOr ? 40 : 80
+        onAddShapeRef.current(type, world.x - w / 2, world.y - h / 2)
+      }
     }
-    const x = Math.max(0, world.x - 80)
-    const y = Math.max(0, world.y - 40)
-    onAddShape(type, Math.round(x / 20) * 20, Math.round(y / 20) * 20)
-  }, [isEditMode, onAddShape, onAddStandaloneRelationship, view])
+    window.addEventListener('diagram-palette-drop', handlePaletteDrop)
+    return () => window.removeEventListener('diagram-palette-drop', handlePaletteDrop)
+  }, []) // mount/unmount only — all values accessed via refs
+
+  // Ghost preview while dragging from palette
+  useEffect(() => {
+    const updateGhost = (clientX, clientY, type) => {
+      const container = containerRef.current
+      if (!container) { setPaletteDrag(null); return }
+      const rect = container.getBoundingClientRect()
+      const inside = clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom
+      if (!inside) { setPaletteDrag(null); return }
+      const world = screenToWorld({ x: clientX - rect.left, y: clientY - rect.top }, viewRef.current)
+      setPaletteDrag({ type, x: world.x, y: world.y })
+    }
+    const onMove = (e) => { const { type, clientX, clientY } = e.detail || {}; if (type) updateGhost(clientX, clientY, type) }
+    const onEnd = () => setPaletteDrag(null)
+    window.addEventListener('diagram-palette-drag-move', onMove)
+    window.addEventListener('diagram-palette-drag-end', onEnd)
+    window.addEventListener('diagram-palette-drop', onEnd)
+    return () => {
+      window.removeEventListener('diagram-palette-drag-move', onMove)
+      window.removeEventListener('diagram-palette-drag-end', onEnd)
+      window.removeEventListener('diagram-palette-drop', onEnd)
+    }
+  }, [])
 
   const handleSVGMouseMove = useCallback((e) => {
     if (panning) {
@@ -336,16 +378,11 @@ export default function CanvasAdvanced({
   }, [isEditMode, onSelectShape, onSelectConn, view])
 
   const handleDoubleClick = useCallback((e, shape) => {
-    if (!isEditMode) return
-    e.stopPropagation(); setEditingId(shape.id); setEditingLabel(shape.type === 'note' ? (shape.noteText || '') : (shape.label || ''))
-  }, [isEditMode])
-  const commitEdit = useCallback(() => {
-    if (!editingId) return
-    const editingShape = shapes.find((s) => s.id === editingId)
-    if (editingShape?.type === 'note') onUpdateShape(editingId, { noteText: editingLabel })
-    else onUpdateShape(editingId, { label: editingLabel || 'Label' })
-    setEditingId(null)
-  }, [editingId, editingLabel, onUpdateShape, shapes])
+    e.stopPropagation()
+    onSelectShape(shape.id)
+    onSelectConn(null)
+    onOpenPanel?.()
+  }, [onSelectShape, onSelectConn, onOpenPanel])
   const commitConnLabelEdit = useCallback(() => {
     if (!editingConnLabel) return
     onBeginHistoryStep()
@@ -556,13 +593,10 @@ export default function CanvasAdvanced({
   }, [setView])
 
   return (
-    <div ref={containerRef} className="diagram-canvas-wrap" onDragOver={(e) => e.preventDefault()} onDrop={handleDrop}>
+    <div ref={containerRef} className="diagram-canvas-wrap">
       <svg
         ref={svgRef}
         className="diagram-canvas"
-        onDragEnter={(e) => e.preventDefault()}
-        onDragOver={(e) => e.preventDefault()}
-        onDrop={handleDrop}
         onMouseMove={handleSVGMouseMove}
         onMouseUp={handleSVGMouseUp}
         onMouseDown={handleSVGMouseDown}
@@ -639,6 +673,11 @@ export default function CanvasAdvanced({
                   setSelectedConnLabel(null)
                   onSelectConn(conn.id)
                   onSelectShape(null)
+                }} onDoubleClick={(e) => {
+                  e.stopPropagation()
+                  onSelectConn(conn.id)
+                  onSelectShape(null)
+                  onOpenPanel?.()
                 }} onContextMenu={(e) => openConnectionMenu(e, conn.id)} />
                 <path d={d} fill="none" stroke={stroke} strokeWidth={sel ? 3 : hovered ? 2.75 : 2}
                   style={hovered && !sel ? { filter: 'drop-shadow(0 0 4px rgba(91, 141, 238, 0.45))' } : undefined}
@@ -783,24 +822,18 @@ export default function CanvasAdvanced({
               <g key={shape.id} onMouseEnter={() => setHoveredShapeId(shape.id)} onMouseLeave={() => { setHoveredShapeId(null); setBorderSnap(null) }}>
                 <rect
                   x={sx} y={sy} width={sw} height={sh}
-                  rx={shape.type === 'note' ? 4 : 10}
-                  fill={shape.type === 'note' ? '#fefce8' : (OBJECT_TYPE_FILLS[shape.objectType] || OBJECT_TYPE_FILLS.Standard)}
-                  stroke={stroke}
+                  rx={shape.type === 'note' ? 4 : shape.type === 'shape' ? 3 : 10}
+                  fill={shape.type === 'note' ? '#fefce8' : shape.type === 'shape' ? '#ffffff' : (OBJECT_TYPE_FILLS[shape.objectType] || OBJECT_TYPE_FILLS.Standard)}
+                  stroke={shape.type === 'shape' ? (isSelected ? '#374151' : isHovered ? '#6b7280' : '#9ca3af') : stroke}
                   strokeWidth={strokeWidth}
                   style={{ filter: isHovered || isSelected ? 'drop-shadow(0 2px 8px rgba(37, 99, 235, 0.12))' : undefined }}
                   onMouseDown={(e) => handleShapeMouseDown(e, shape)}
                   onMouseUp={(e) => handleShapeMouseUp(e, shape)}
                   onDoubleClick={(e) => handleDoubleClick(e, shape)}
                 />
-                {editingId === shape.id ? (
-                  <foreignObject x={sx + 8} y={sy + 8} width={Math.max(0, sw - 16)} height={Math.max(0, sh - 16)}>
-                    <textarea xmlns="http://www.w3.org/1999/xhtml" className="diagram-inline-input" autoFocus value={editingLabel} onChange={(e) => setEditingLabel(e.target.value)} onBlur={commitEdit} />
-                  </foreignObject>
-                ) : (
-                  <text x={sx + sw / 2} y={sy + sh / 2} textAnchor="middle" dominantBaseline="middle" fill="#1e3a8a" fontSize="12">
-                    {shape.type === 'note' ? (shape.noteText || 'Note') : (shape.label || 'Object')}
-                  </text>
-                )}
+                <text x={sx + sw / 2} y={sy + sh / 2} textAnchor="middle" dominantBaseline="middle" fill={shape.type === 'shape' ? '#374151' : '#1e3a8a'} fontSize="12" style={{ pointerEvents: 'none', userSelect: 'none' }}>
+                  {shape.type === 'note' ? (shape.noteText || 'Note') : (shape.label || (shape.type === 'shape' ? 'Container' : 'Object'))}
+                </text>
                 {isEditMode && isSelected && !reroutingConn && [
                   { h: 'nw', cx: sx,        cy: sy },
                   { h: 'n',  cx: sx + sw/2,  cy: sy },
@@ -829,6 +862,43 @@ export default function CanvasAdvanced({
               </g>
             )
           })}
+          {paletteDrag && isEditMode && (() => {
+            const { type, x, y } = paletteDrag
+            const isNote = type === 'note'
+            const isRegion = type === 'region'
+            const isOr = type === 'or-annotation'
+            const w = isRegion ? 320 : isNote ? 200 : isOr ? 200 : 160
+            const h = isRegion ? 240 : isNote ? 160 : isOr ? 40 : 80
+            // Match addShape's 20px snap, centered on cursor
+            const px = Math.round((x - w / 2) / 20) * 20
+            const py = Math.round((y - h / 2) / 20) * 20
+            const isShapeType = type === 'shape'
+            const fill = isNote ? '#fefce8' : isRegion ? 'rgba(160,175,210,0.08)' : isShapeType ? '#ffffff' : '#eef3fd'
+            const strokeColor = isRegion ? '#9aa7c4' : isShapeType ? '#6b7280' : '#5b8dee'
+            const rx = isNote ? 4 : isShapeType ? 3 : 10
+            const label = isNote ? 'Note' : isRegion ? 'Region' : isOr ? 'OR' : isShapeType ? 'Container' : 'Object'
+            return (
+              <g style={{ pointerEvents: 'none', opacity: 0.75 }}>
+                <rect
+                  x={px} y={py} width={w} height={h}
+                  rx={rx}
+                  fill={fill}
+                  stroke={strokeColor}
+                  strokeWidth={2}
+                  strokeDasharray="6 3"
+                />
+                <text
+                  x={px + w / 2} y={py + h / 2}
+                  textAnchor="middle" dominantBaseline="middle"
+                  fill={isShapeType ? '#374151' : '#1e3a8a'}
+                  fontSize="12"
+                  style={{ userSelect: 'none' }}
+                >
+                  {label}
+                </text>
+              </g>
+            )
+          })()}
         </g>
       </svg>
       {contextMenu && (

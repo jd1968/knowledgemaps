@@ -16,11 +16,12 @@ export default function DiagramDetailsPanel({
   onDeleteShape,
   onDeleteConn,
   suspendOpen = false,
+  panelOpen = false,
   isEditMode = true,
 }) {
   const fromShape = selectedConn ? shapes.find((s) => s.id === selectedConn.fromShapeId) : null
   const toShape = selectedConn ? shapes.find((s) => s.id === selectedConn.toShapeId) : null
-  const open = !isEditMode && !suspendOpen && (!!selectedShape || !!selectedConn)
+  const open = !suspendOpen && (!!selectedShape || !!selectedConn) && (panelOpen || !isEditMode)
   const title = selectedShape ? 'Shape Properties' : selectedConn ? 'Connector Properties' : 'Properties'
   const footer = !isEditMode ? (
     <button className="btn btn--secondary btn--sm" onClick={onClose}>Close</button>
